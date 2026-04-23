@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { supabase } from "./supabase";
 
 // ─── GLOBAL STYLES ─────────────────────────────────────────────
 function GlobalStyles() {
@@ -32,11 +33,9 @@ function GlobalStyles() {
       .upload-zone.has{border-style:solid}
       .card-h{transition:border-color .18s,box-shadow .18s;cursor:pointer}
       .card-h:hover{border-color:#16A34A!important;box-shadow:0 4px 16px rgba(22,163,74,.08)}
-      .tab-btn{flex:1;padding:12px;border:none;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:#64748B;border-bottom:2px solid transparent;transition:all .15s;font-family:'General Sans',sans-serif}
-      .tab-btn.active{color:#16A34A;border-bottom-color:#16A34A;font-weight:700}
-      .admin-sidebar-item{display:flex;align-items:center;gap:11px;padding:11px 16px;cursor:pointer;border-radius:9px;margin:2px 8px;transition:all .15s}
-      .admin-sidebar-item:hover,.admin-sidebar-item.active{background:#F0FDF4;color:#16A34A}
-      .admin-sidebar-item.active span{color:#16A34A;font-weight:600}
+      .admin-item{display:flex;align-items:center;gap:11px;padding:10px 14px;cursor:pointer;border-radius:9px;margin:2px 8px;transition:all .15s}
+      .admin-item:hover,.admin-item.active{background:#F0FDF4}
+      .admin-item.active span{color:#16A34A;font-weight:600}
       .status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
       @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
       @keyframes popIn{0%{transform:scale(.88);opacity:0}70%{transform:scale(1.03)}100%{transform:scale(1);opacity:1}}
@@ -62,7 +61,6 @@ const C = {
   blue:"#2563EB", blueBg:"#EFF6FF", blueBorder:"#BFDBFE",
   red:"#DC2626", redBg:"#FEF2F2", redBorder:"#FECACA",
   amber:"#D97706", amberBg:"#FFFBEB", amberBorder:"#FDE68A",
-  purple:"#7C3AED", purpleBg:"#F5F3FF",
   text:"#0A1628", sub:"#475569", muted:"#94A3B8",
 };
 const H = { fontFamily:"'Cabinet Grotesk', sans-serif" };
@@ -82,7 +80,11 @@ const validateCPF = cpf => {
   s=0; for(let i=0;i<10;i++) s+=parseInt(d[i])*(11-i);
   r=11-(s%11); if(r>=10)r=0; return r===parseInt(d[10]);
 };
-const validateAge = ds => { if(!ds) return false; const b=new Date(ds),t=new Date(); return t.getFullYear()-b.getFullYear()-(t<new Date(t.getFullYear(),b.getMonth(),b.getDate())?1:0)>=18; };
+const validateAge = ds => {
+  if(!ds) return false;
+  const b=new Date(ds),t=new Date();
+  return t.getFullYear()-b.getFullYear()-(t<new Date(t.getFullYear(),b.getMonth(),b.getDate())?1:0)>=18;
+};
 
 const lookupCEP = async cep => {
   const d = cep.replace(/\D/g,"");
@@ -92,9 +94,9 @@ const lookupCEP = async cep => {
 };
 
 // ─── PRIMITIVES ────────────────────────────────────────────────
-const Btn = ({ label, onClick, disabled, variant="primary", size="md", full=false, loading=false, icon }) => {
+const Btn = ({ label, onClick, disabled, variant="primary", size="md", full=false, loading=false }) => {
   const vs = {
-    primary: { background:disabled?"#CBD5E1":C.green, color:"#fff", border:"none" },
+    primary: { background:disabled||loading?"#CBD5E1":C.green, color:"#fff", border:"none" },
     ghost:   { background:"transparent", color:C.sub, border:`1.5px solid ${C.border2}` },
     outline: { background:"transparent", color:C.green, border:`1.5px solid ${C.green}` },
     navy:    { background:C.navy, color:"#fff", border:"none" },
@@ -113,13 +115,13 @@ const Btn = ({ label, onClick, disabled, variant="primary", size="md", full=fals
     <button onClick={!disabled&&!loading?onClick:undefined}
       style={{ ...H, fontWeight:700, cursor:disabled||loading?"default":"pointer", display:"inline-flex", alignItems:"center", justifyContent:full?"center":undefined, gap:8, width:full?"100%":"auto", whiteSpace:"nowrap", transition:"opacity .15s", ...vs, ...ss }}>
       {loading&&<span style={{width:13,height:13,borderRadius:7,border:"2px solid rgba(255,255,255,.3)",borderTopColor:"#fff",animation:"spin .7s linear infinite",display:"inline-block"}} />}
-      {icon&&<span>{icon}</span>}{label}
+      {label}
     </button>
   );
 };
 
-const Field = ({ label, placeholder, value, onChange, type="text", hint, maxLength, required, helper, disabled, span }) => (
-  <div style={{ marginBottom:16, gridColumn:span?`span ${span}`:undefined }}>
+const Field = ({ label, placeholder, value, onChange, type="text", hint, maxLength, required, helper, disabled }) => (
+  <div style={{ marginBottom:16 }}>
     {label&&<label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>
       {label}{required&&<span style={{color:C.red,marginLeft:3}}>*</span>}
     </label>}
@@ -141,23 +143,20 @@ const Prog = ({ step, total }) => (
     <span style={{...B,fontSize:12,color:C.muted,marginLeft:8}}>{step} de {total}</span>
   </div>
 );
-
 const Alert = ({ type="info", children }) => {
-  const t = {info:{bg:C.blueBg,border:C.blueBorder,color:C.blue,icon:"ℹ"},warning:{bg:C.amberBg,border:C.amberBorder,color:C.amber,icon:"⚠"},success:{bg:C.greenBg,border:C.greenBorder,color:C.green,icon:"✓"},error:{bg:C.redBg,border:C.redBorder,color:C.red,icon:"✕"}}[type];
-  return <div style={{background:t.bg,border:`1px solid ${t.border}`,borderRadius:10,padding:"12px 16px",display:"flex",gap:10,marginBottom:14}}><span style={{color:t.color,fontWeight:700,flexShrink:0}}>{t.icon}</span><div style={{...B,fontSize:13,color:t.color,lineHeight:1.65}}>{children}</div></div>;
+  const t={info:{bg:C.blueBg,border:C.blueBorder,color:C.blue,icon:"ℹ"},warning:{bg:C.amberBg,border:C.amberBorder,color:C.amber,icon:"⚠"},success:{bg:C.greenBg,border:C.greenBorder,color:C.green,icon:"✓"},error:{bg:C.redBg,border:C.redBorder,color:C.red,icon:"✕"}}[type];
+  return <div style={{background:t.bg,border:`1px solid ${t.border}`,borderRadius:10,padding:"12px 16px",display:"flex",gap:10,marginBottom:14,marginTop:4}}><span style={{color:t.color,fontWeight:700,flexShrink:0}}>{t.icon}</span><div style={{...B,fontSize:13,color:t.color,lineHeight:1.65}}>{children}</div></div>;
 };
-
 const Badge = ({ status }) => {
-  const cfg = {
-    pending:  { label:"Pendente",   bg:C.amberBg, color:C.amber,  icon:"⏳" },
-    approved: { label:"Aprovado",   bg:C.greenBg, color:C.green,  icon:"✓" },
-    rejected: { label:"Reprovado",  bg:C.redBg,   color:C.red,    icon:"✕" },
-    active:   { label:"Ativo",      bg:C.greenBg, color:C.green,  icon:"●" },
-    inactive: { label:"Inativo",    bg:C.bg,      color:C.muted,  icon:"○" },
-    paid:     { label:"Pago",       bg:C.greenBg, color:C.green,  icon:"💳" },
-    overdue:  { label:"Em atraso",  bg:C.redBg,   color:C.red,    icon:"!" },
-    trial:    { label:"Trial",      bg:C.blueBg,  color:C.blue,   icon:"★" },
-  }[status] || { label:status, bg:C.bg, color:C.muted, icon:"?" };
+  const cfg={
+    pending: {label:"Pendente",  bg:C.amberBg, color:C.amber,  icon:"⏳"},
+    approved:{label:"Aprovado",  bg:C.greenBg, color:C.green,  icon:"✓"},
+    rejected:{label:"Reprovado", bg:C.redBg,   color:C.red,    icon:"✕"},
+    trial:   {label:"Trial",     bg:C.blueBg,  color:C.blue,   icon:"★"},
+    paid:    {label:"Pago",      bg:C.greenBg, color:C.green,  icon:"💳"},
+    overdue: {label:"Em atraso", bg:C.redBg,   color:C.red,    icon:"!"},
+    inactive:{label:"Inativo",   bg:C.bg,      color:C.muted,  icon:"○"},
+  }[status]||{label:status,bg:C.bg,color:C.muted,icon:"?"};
   return <span className="status-badge" style={{background:cfg.bg,color:cfg.color}}>{cfg.icon} {cfg.label}</span>;
 };
 
@@ -174,22 +173,107 @@ const SHIFTS = [{id:"manha",icon:"🌅",label:"Manhã",sub:"06h–14h"},{id:"tar
 const SEGS   = ["Supermercado","Atacarejo","Dark Store","Centro de Distribuição","Delivery","Hortifruti","Farmácia","Indústria FMCG","Distribuidor","Outro"];
 const PLANS  = ["Trial (30 dias)","Básico — R$ 299/mês","Profissional — R$ 599/mês","Enterprise — R$ 1.299/mês"];
 
-// ─── MOCK DATA for Admin ────────────────────────────────────────
-const MOCK_COMPANIES = [
-  { id:1, razao:"Supermercados Silva Ltda.", nomeFant:"Supermercado Silva", cnpj:"12.345.678/0001-90", seg:"Supermercado", cidade:"São Paulo", estado:"SP", respNome:"Carlos Silva", respTel:"(11) 99999-0001", respEmail:"carlos@supsilva.com.br", site:"www.supsilva.com.br", status:"pending",  plan:"Trial (30 dias)", payStatus:"trial",  unidades:2, createdAt:"23/04/2025" },
-  { id:2, razao:"Atacarejo Norte S.A.",      nomeFant:"Atacarejo Norte",    cnpj:"98.765.432/0001-10", seg:"Atacarejo",    cidade:"Guarulhos",   estado:"SP", respNome:"Ana Martins",  respTel:"(11) 98888-0002", respEmail:"ana@atanorte.com.br",   site:"www.atanorte.com.br",   status:"approved", plan:"Profissional — R$ 599/mês", payStatus:"paid",    unidades:5, createdAt:"20/04/2025" },
-  { id:3, razao:"Dark Store Express Ltda.",  nomeFant:"DSE",                cnpj:"11.222.333/0001-44", seg:"Dark Store",   cidade:"São Paulo",   estado:"SP", respNome:"Pedro Costa",  respTel:"(11) 97777-0003", respEmail:"pedro@dse.com.br",      site:"",                      status:"pending",  plan:"Trial (30 dias)", payStatus:"trial",  unidades:1, createdAt:"22/04/2025" },
-  { id:4, razao:"CD Logística Total Ltda.", nomeFant:"LogTotal",            cnpj:"55.666.777/0001-88", seg:"Distribuidor", cidade:"Osasco",      estado:"SP", respNome:"Bianca Rocha", respTel:"(11) 96666-0004", respEmail:"bianca@logtotal.com.br", site:"www.logtotal.com.br",   status:"rejected", plan:"—",               payStatus:"inactive",unidades:3, createdAt:"18/04/2025" },
-  { id:5, razao:"Hortifruti Verde Ltda.",    nomeFant:"Verde Hortifrutti",  cnpj:"33.444.555/0001-22", seg:"Hortifruti",   cidade:"Santo André", estado:"SP", respNome:"João Lima",    respTel:"(11) 95555-0005", respEmail:"joao@verdehort.com.br",  site:"",                      status:"approved", plan:"Básico — R$ 299/mês",       payStatus:"overdue",unidades:2, createdAt:"15/04/2025" },
-];
+// ─── SUPABASE FUNCTIONS ────────────────────────────────────────
+const saveCompany = async (data) => {
+  const { data: company, error } = await supabase
+    .from("companies")
+    .insert({
+      cnpj: data.cnpj, razao: data.razao, nome_fant: data.nomeFant,
+      site: data.site, seg: data.seg,
+      cep: data.cep, rua: data.rua, numero: data.numero, complemento: data.complemento,
+      bairro: data.bairro, cidade: data.cidade, estado: data.estado,
+      resp_nome: data.respNome, resp_cargo: data.respCargo,
+      resp_tel: data.respTel, resp_email: data.respEmail,
+      email: data.email, status: "pending", pay_status: "trial", plan: "Trial (30 dias)",
+    })
+    .select().single();
+  if(error) throw error;
 
-const MOCK_WORKERS = [
-  { id:1, nome:"Carlos Silva",   cpf:"123.456.789-09", nasc:"1995-03-15", tel:"(11) 91111-0001", cidade:"Lapa",       estado:"SP", specs:["pick","estq","log"], dias:["Seg","Ter","Qua","Sex"], turnos:["manha"], status:"pending",  createdAt:"23/04/2025" },
-  { id:2, nome:"Fernanda Lima",  cpf:"987.654.321-00", nasc:"2000-07-22", tel:"(11) 92222-0002", cidade:"Pinheiros",  estado:"SP", specs:["caixa","rep"],       dias:["Qui","Sex","Sáb"],       turnos:["tarde"],  status:"approved", createdAt:"21/04/2025" },
-  { id:3, nome:"João Santos",    cpf:"111.222.333-44", nasc:"1988-11-08", tel:"(11) 93333-0003", cidade:"Osasco",     estado:"SP", specs:["log","pick","pack"], dias:["Seg","Ter","Qua","Qui","Sex"], turnos:["manha","tarde"], status:"pending",  createdAt:"22/04/2025" },
-  { id:4, nome:"Ana Costa",      cpf:"555.666.777-88", nasc:"2002-05-30", tel:"(11) 94444-0004", cidade:"Vila Madalena", estado:"SP", specs:["rep","hort"],   dias:["Qua","Qui","Sáb"],       turnos:["tarde"],  status:"rejected", createdAt:"19/04/2025" },
-  { id:5, nome:"Marcos Pereira", cpf:"999.888.777-66", nasc:"1992-09-14", tel:"(11) 95555-0005", cidade:"Guarulhos",  estado:"SP", specs:["estq","pick"],      dias:["Seg","Sáb","Dom"],       turnos:["noite"],  status:"approved", createdAt:"17/04/2025" },
-];
+  if(data.unidades.length > 0) {
+    await supabase.from("company_units").insert(
+      data.unidades.map(u => ({
+        company_id: company.id,
+        nome: u.nome, cep: u.cep, rua: u.rua, numero: u.numero,
+        complemento: u.complemento, bairro: u.bairro, cidade: u.cidade, estado: u.estado,
+      }))
+    );
+  }
+  return company;
+};
+
+const saveWorker = async (data) => {
+  const { data: worker, error } = await supabase
+    .from("workers")
+    .insert({
+      nome: data.nome, cpf: data.cpf, nascimento: data.nascimento, telefone: data.telefone,
+      cep: data.cep, rua: data.rua, numero: data.numero, complemento: data.complemento,
+      bairro: data.bairro, cidade: data.cidade, estado: data.estado,
+      specs: data.specs, dias: data.dias, turnos: data.turnos,
+      doc_tipo: data.docTipo, email: data.email, status: "pending",
+    })
+    .select().single();
+  if(error) throw error;
+  return worker;
+};
+
+const fetchCompanies = async () => {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("*, company_units(*)")
+    .order("created_at", { ascending: false });
+  if(error) throw error;
+  return data;
+};
+
+const fetchWorkers = async () => {
+  const { data, error } = await supabase
+    .from("workers")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if(error) throw error;
+  return data;
+};
+
+const updateCompanyDB = async (id, changes) => {
+  const { error } = await supabase.from("companies").update(changes).eq("id", id);
+  if(error) throw error;
+};
+
+const updateWorkerDB = async (id, changes) => {
+  const { error } = await supabase.from("workers").update(changes).eq("id", id);
+  if(error) throw error;
+};
+
+// ─── ADDRESS BLOCK ─────────────────────────────────────────────
+function AddressBlock({ data, setData, loading, setLoading }) {
+  const set = (k,v) => setData(d=>({...d,[k]:v}));
+  const handleCEP = async raw => {
+    const masked = maskCEP(raw);
+    set("cep", masked);
+    if(masked.replace(/\D/g,"").length===8) {
+      setLoading(true);
+      const addr = await lookupCEP(masked);
+      setLoading(false);
+      if(addr) setData(d=>({...d,rua:addr.rua,bairro:addr.bairro,cidade:addr.cidade,estado:addr.estado}));
+    }
+  };
+  return (
+    <>
+      <Field label="CEP" placeholder="00000-000" value={data.cep||""} onChange={handleCEP} maxLength={9} required helper={loading?"🔍 Buscando endereço...":""} />
+      {loading&&<Alert type="info">Preenchendo endereço automaticamente...</Alert>}
+      <Field label="Rua / Avenida" placeholder="Preenchida pelo CEP" value={data.rua||""} onChange={v=>set("rua",v)} required />
+      <div className="g2">
+        <Field label="Número" placeholder="Ex: 1042" value={data.numero||""} onChange={v=>set("numero",v)} required />
+        <Field label="Complemento" placeholder="Sala, Andar, Bloco..." value={data.complemento||""} onChange={v=>set("complemento",v)} />
+      </div>
+      <div className="g3">
+        <Field label="Bairro" placeholder="Centro" value={data.bairro||""} onChange={v=>set("bairro",v)} required />
+        <Field label="Cidade" placeholder="São Paulo" value={data.cidade||""} onChange={v=>set("cidade",v)} required />
+        <Field label="UF" placeholder="SP" value={data.estado||""} onChange={v=>set("estado",v)} maxLength={2} />
+      </div>
+    </>
+  );
+}
 
 // ─── HEADER ────────────────────────────────────────────────────
 function Header({ onNav, user, type }) {
@@ -207,7 +291,6 @@ function Header({ onNav, user, type }) {
               <Btn label="Cadastro Negócio" variant="primary" size="sm" onClick={()=>onNav("company-register")} />
               <Btn label="Admin" variant="white" size="sm" onClick={()=>onNav("admin-login")} />
             </>:<>
-              {type==="admin"&&<Badge status="active" />}
               <span style={{...B,fontSize:13,color:C.sub}}>Olá, {user}</span>
               <Btn label="Sair" variant="ghost" size="sm" onClick={()=>onNav("home")} />
             </>}
@@ -215,39 +298,6 @@ function Header({ onNav, user, type }) {
         </div>
       </div>
     </header>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ADDRESS BLOCK (reusable — fixed layout)
-// ═══════════════════════════════════════════════════════════════
-function AddressBlock({ data, setData, loading, setLoading, label="Endereço" }) {
-  const set = (k,v) => setData(d=>({...d,[k]:v}));
-  const handleCEP = async raw => {
-    const masked = maskCEP(raw);
-    set("cep", masked);
-    if(masked.replace(/\D/g,"").length===8) {
-      setLoading(true);
-      const addr = await lookupCEP(masked);
-      setLoading(false);
-      if(addr) setData(d=>({...d,rua:addr.rua,bairro:addr.bairro,cidade:addr.cidade,estado:addr.estado}));
-    }
-  };
-  return (
-    <>
-      <Field label="CEP" placeholder="00000-000" value={data.cep} onChange={handleCEP} maxLength={9} required helper={loading?"🔍 Buscando endereço...":""} />
-      {loading && <Alert type="info">Preenchendo endereço automaticamente...</Alert>}
-      <Field label="Rua / Avenida" placeholder="Preenchida automaticamente pelo CEP" value={data.rua} onChange={v=>set("rua",v)} required />
-      <div className="g2">
-        <Field label="Número" placeholder="Ex: 1042" value={data.numero} onChange={v=>set("numero",v)} required />
-        <Field label="Complemento" placeholder="Sala, Andar, Bloco..." value={data.complemento} onChange={v=>set("complemento",v)} />
-      </div>
-      <div className="g3">
-        <Field label="Bairro" placeholder="Centro" value={data.bairro} onChange={v=>set("bairro",v)} required />
-        <Field label="Cidade" placeholder="São Paulo" value={data.cidade} onChange={v=>set("cidade",v)} required />
-        <Field label="UF" placeholder="SP" value={data.estado} onChange={v=>set("estado",v)} maxLength={2} />
-      </div>
-    </>
   );
 }
 
@@ -287,6 +337,8 @@ function CompanyRegister({ onDone, onBack }) {
   const [step, setStep] = useState(1);
   const [cepLoading, setCepLoading] = useState(false);
   const [uCepLoading, setUCepLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [data, setData] = useState({
     cnpj:"", razao:"", nomeFant:"", site:"", seg:"",
     cep:"", rua:"", numero:"", complemento:"", bairro:"", cidade:"", estado:"",
@@ -296,7 +348,6 @@ function CompanyRegister({ onDone, onBack }) {
   });
   const [newUnit, setNewUnit] = useState({nome:"",cep:"",rua:"",numero:"",complemento:"",bairro:"",cidade:"",estado:""});
   const set = (k,v) => setData(d=>({...d,[k]:v}));
-  const setU = (k,v) => setNewUnit(u=>({...u,[k]:v}));
   const senhaError = data.confirma&&data.senha!==data.confirma?"Senhas não coincidem":"";
 
   const addUnit = () => {
@@ -306,15 +357,26 @@ function CompanyRegister({ onDone, onBack }) {
   };
 
   const canNext = {
-    1: data.cnpj.replace(/\D/g,"").length===14 && data.razao && data.seg,
+    1: data.cnpj.replace(/\D/g,"").length===14&&data.razao&&data.seg,
     2: data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade,
     3: data.respNome&&data.respCargo&&data.respTel.replace(/\D/g,"").length>=10&&data.respEmail,
-    4: true,
-    5: true,
+    4: true, 5: true,
     6: data.email&&data.senha.length>=8&&!senhaError,
   }[step];
 
-  const next = () => step<6?setStep(s=>s+1):onDone(data);
+  const next = async () => {
+    if(step < 6) { setStep(s=>s+1); return; }
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const saved = await saveCompany(data);
+      onDone({ ...data, id: saved.id });
+    } catch(e) {
+      setSubmitError(e.message || "Erro ao salvar. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
   const back = () => step>1?setStep(s=>s-1):onBack();
   const LABELS = ["Dados corporativos","Endereço da sede","Responsável","Unidades de trabalho","Como funciona","Criar conta"];
 
@@ -337,7 +399,7 @@ function CompanyRegister({ onDone, onBack }) {
               <Field label="Nome fantasia" placeholder="Como aparece no sistema" value={data.nomeFant} onChange={v=>set("nomeFant",v)} />
             </div>
             <Field label="Razão social" placeholder="Nome Fantasia Ltda." value={data.razao} onChange={v=>set("razao",v)} required />
-            <Field label="Site" placeholder="https://www.suaempresa.com.br" value={data.site} onChange={v=>set("site",v)} helper="Opcional — aumenta a credibilidade do seu cadastro" />
+            <Field label="Site" placeholder="https://www.suaempresa.com.br" value={data.site} onChange={v=>set("site",v)} helper="Opcional — aumenta a credibilidade do cadastro" />
             <div>
               <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:8}}>Segmento <span style={{color:C.red}}>*</span></label>
               <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
@@ -354,55 +416,48 @@ function CompanyRegister({ onDone, onBack }) {
 
           {step===3&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Responsável pelas contratações</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quem vai gerenciar as vagas e contratações. Pode ser o dono, gerente de RH ou de operações.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quem vai gerenciar as vagas e contratações.</p>
             <Field label="Nome completo" placeholder="Maria Souza" value={data.respNome} onChange={v=>set("respNome",v)} required />
             <Field label="Cargo" placeholder="Gerente de Operações" value={data.respCargo} onChange={v=>set("respCargo",v)} required />
             <div className="g2">
-              <Field label="WhatsApp" placeholder="(11) 99999-9999" value={data.respTel} onChange={v=>set("respTel",maskPhone(v))} type="tel" maxLength={15} required helper="Para comunicação urgente sobre turnos" />
+              <Field label="WhatsApp" placeholder="(11) 99999-9999" value={data.respTel} onChange={v=>set("respTel",maskPhone(v))} type="tel" maxLength={15} required />
               <Field label="E-mail direto" placeholder="maria@empresa.com.br" value={data.respEmail} onChange={v=>set("respEmail",v)} type="email" required />
             </div>
-            <Alert type="info">Esse contato ficará vinculado à conta e receberá notificações de candidaturas e confirmações.</Alert>
+            <Alert type="info">Este contato receberá notificações de candidaturas e confirmações de turno.</Alert>
           </>}
 
           {step===4&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Unidades de trabalho</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:20,lineHeight:1.65}}>Cada vaga será vinculada a uma unidade. O colaborador verá a distância exata até aquele endereço.</p>
-
-            {data.unidades.map((u,i)=>(
-              <div key={u.id} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:12,padding:"16px 20px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            {data.unidades.map(u=>(
+              <div key={u.id} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:12,padding:"14px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{u.nome}</div>
-                  <div style={{...B,fontSize:13,color:C.sub,marginTop:3}}>{u.rua}, {u.numero} {u.complemento&&`— ${u.complemento}`}</div>
-                  <div style={{...B,fontSize:12,color:C.muted,marginTop:2}}>{u.bairro}, {u.cidade}/{u.estado}</div>
+                  <div style={{...B,fontSize:12,color:C.sub,marginTop:2}}>{u.rua}, {u.numero} — {u.cidade}/{u.estado}</div>
                 </div>
                 <button onClick={()=>setData(d=>({...d,unidades:d.unidades.filter(x=>x.id!==u.id)}))}
                   style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",...B,fontSize:12,color:C.red}}>Remover</button>
               </div>
             ))}
-
             <div style={{background:C.bg,border:`1.5px dashed ${C.border2}`,borderRadius:14,padding:22}}>
-              <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:16}}>
-                {data.unidades.length===0?"Adicionar primeira unidade":"+ Nova unidade"}
-              </div>
-              <Field label="Nome da unidade" placeholder="Ex: Loja Lapa, CD Guarulhos, Filial Centro" value={newUnit.nome} onChange={v=>setU("nome",v)} />
+              <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>{data.unidades.length===0?"Adicionar primeira unidade":"+ Nova unidade"}</div>
+              <Field label="Nome da unidade" placeholder="Ex: Loja Lapa, CD Guarulhos" value={newUnit.nome} onChange={v=>setNewUnit(u=>({...u,nome:v}))} />
               <AddressBlock data={newUnit} setData={setNewUnit} loading={uCepLoading} setLoading={setUCepLoading} />
-              <Btn label="+ Adicionar unidade" variant={newUnit.nome&&newUnit.cep&&newUnit.rua&&newUnit.numero?"primary":"ghost"} size="md"
-                onClick={addUnit} disabled={!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero} />
+              <Btn label="+ Adicionar unidade" variant={newUnit.nome&&newUnit.cep&&newUnit.rua&&newUnit.numero?"primary":"ghost"} size="md" onClick={addUnit} disabled={!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero} />
             </div>
-
-            {data.unidades.length===0&&<Alert type="warning" style={{marginTop:14}}>Adicione ao menos uma unidade. Você pode adicionar mais depois pelo painel.</Alert>}
-            {data.unidades.length>0&&<Alert type="success" style={{marginTop:14}}>{data.unidades.length} unidade{data.unidades.length>1?"s":""} cadastrada{data.unidades.length>1?"s":""}. Pode adicionar mais depois.</Alert>}
+            {data.unidades.length===0&&<Alert type="warning" style={{marginTop:14}}>Adicione ao menos uma unidade. Pode adicionar mais depois pelo painel.</Alert>}
+            {data.unidades.length>0&&<Alert type="success" style={{marginTop:14}}>{data.unidades.length} unidade{data.unidades.length>1?"s":""} cadastrada{data.unidades.length>1?"s":""}.</Alert>}
           </>}
 
           {step===5&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Como o Giobbi's funciona</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Entenda como a plataforma funciona antes de finalizar seu cadastro.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Entenda como a plataforma funciona antes de finalizar.</p>
             {[
-              {icon:"👁",t:"Você escolhe quem trabalha",d:"No Talent Browser você vê perfis verificados disponíveis na sua região, filtra por especialidade e convida quem quiser."},
-              {icon:"📋",t:"Publique vagas por unidade",d:"Cada vaga é vinculada a uma de suas unidades. Colaboradores veem a distância exata até aquele local."},
-              {icon:"🔒",t:"Perfis verificados pela Giobbi's",d:"Todos os colaboradores têm documentos e identidade conferidos pela equipe Giobbi's antes de aparecerem na plataforma."},
-              {icon:"⭐",t:"Avaliação bidirecional",d:"Ao final de cada turno, empresa e colaborador se avaliam. Isso garante qualidade crescente nos dois lados."},
-              {icon:"⚖️",t:"Você é o contratante",d:"O Giobbi's é um marketplace de conexão. O vínculo de trabalho é diretamente entre sua empresa e o colaborador."},
+              {icon:"👁",t:"Você escolhe quem trabalha",d:"No Talent Browser você vê perfis verificados na sua região, filtra por especialidade e convida diretamente."},
+              {icon:"📋",t:"Publique vagas por unidade",d:"Cada vaga é vinculada a uma de suas unidades. Colaboradores veem a distância exata."},
+              {icon:"🔒",t:"Perfis verificados pela Giobbi's",d:"Todos os colaboradores têm documentos conferidos antes de aparecerem na plataforma."},
+              {icon:"⭐",t:"Avaliação bidirecional",d:"Ao final de cada turno, empresa e colaborador se avaliam mutuamente."},
+              {icon:"⚖️",t:"Você é o contratante",d:"O Giobbi's é um marketplace de conexão. O vínculo de trabalho é entre sua empresa e o colaborador."},
             ].map(({icon,t,d})=>(
               <div key={t} style={{display:"flex",gap:14,marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
                 <div style={{width:40,height:40,borderRadius:10,background:C.greenBg,border:`1px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
@@ -414,7 +469,7 @@ function CompanyRegister({ onDone, onBack }) {
           {step===6&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Criar conta</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Dados de acesso ao painel da empresa no Giobbi's.</p>
-            <Field label="E-mail de acesso" placeholder="acesso@empresa.com.br" value={data.email} onChange={v=>set("email",v)} type="email" required helper="Pode ser diferente do e-mail do responsável" />
+            <Field label="E-mail de acesso" placeholder="acesso@empresa.com.br" value={data.email} onChange={v=>set("email",v)} type="email" required />
             <div className="g2">
               <Field label="Senha" placeholder="Mínimo 8 caracteres" value={data.senha} onChange={v=>set("senha",v)} type="password" required />
               <Field label="Confirmar senha" placeholder="Repita a senha" value={data.confirma} onChange={v=>set("confirma",v)} type="password" hint={senhaError} required />
@@ -423,19 +478,20 @@ function CompanyRegister({ onDone, onBack }) {
             <div style={{...B,fontSize:11,color:C.muted,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:12}}>Resumo do cadastro</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 24px"}}>
               {[["Empresa",data.nomeFant||data.razao],["CNPJ",data.cnpj],["Segmento",data.seg],["Sede",`${data.cidade}/${data.estado}`],["Responsável",data.respNome],["WhatsApp",data.respTel],["Unidades",`${data.unidades.length} cadastrada${data.unidades.length!==1?"s":""}`],["Site",data.site||"—"]].map(([k,v])=>(
-                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{...B,fontSize:12,color:C.muted}}>{k}</span>
                   <span style={{...B,fontSize:12,color:C.navy,fontWeight:600}}>{v||"—"}</span>
                 </div>
               ))}
             </div>
+            {submitError&&<Alert type="error" style={{marginTop:14}}>{submitError}</Alert>}
             <Alert type="info" style={{marginTop:14}}>Ao criar a conta você concorda com os <strong>Termos de Uso</strong> e a <strong>Política de Privacidade</strong> do Giobbi's.</Alert>
           </>}
         </div>
 
         <div style={{marginTop:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{...B,fontSize:13,color:C.sub}}>Já tem conta? <span onClick={onBack} style={{color:C.green,cursor:"pointer",fontWeight:600}}>Fazer login</span></span>
-          <Btn label={step===6?"Cadastrar empresa →":"Continuar →"} variant="primary" size="lg" onClick={next} disabled={!canNext} />
+          <Btn label={step===6?"Cadastrar empresa →":"Continuar →"} variant="primary" size="lg" onClick={next} disabled={!canNext} loading={submitting} />
         </div>
       </div>
     </div>
@@ -448,12 +504,13 @@ function CompanyRegister({ onDone, onBack }) {
 function WorkerRegister({ onDone, onBack }) {
   const [step, setStep] = useState(1);
   const [cepLoading, setCepLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [data, setData] = useState({
     nome:"", cpf:"", nascimento:"", telefone:"",
     cep:"", rua:"", numero:"", complemento:"", bairro:"", cidade:"", estado:"",
     specs:[], dias:[], turnos:[],
-    fotoRosto:null,
-    docTipo:"", selfieDoc:null,
+    fotoRosto:null, docTipo:"", selfieDoc:null,
     email:"", senha:"", confirma:"",
   });
   const photoRef = useRef(); const selfieRef = useRef();
@@ -461,9 +518,9 @@ function WorkerRegister({ onDone, onBack }) {
   const toggleArr = (k,v) => setData(d=>({...d,[k]:d[k].includes(v)?d[k].filter(x=>x!==v):[...d[k],v]}));
   const readFile = (file,key) => { const r=new FileReader(); r.onload=e=>set(key,e.target.result); r.readAsDataURL(file); };
 
-  const cpfError  = data.cpf&&data.cpf.replace(/\D/g,"").length===11&&!validateCPF(data.cpf)?"CPF inválido":"";
-  const ageError  = data.nascimento&&!validateAge(data.nascimento)?"É necessário ter 18 anos ou mais":"";
-  const senhaError= data.confirma&&data.senha!==data.confirma?"Senhas não coincidem":"";
+  const cpfError   = data.cpf&&data.cpf.replace(/\D/g,"").length===11&&!validateCPF(data.cpf)?"CPF inválido":"";
+  const ageError   = data.nascimento&&!validateAge(data.nascimento)?"É necessário ter 18 anos ou mais":"";
+  const senhaError = data.confirma&&data.senha!==data.confirma?"Senhas não coincidem":"";
 
   const canNext = {
     1: data.nome&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&data.nascimento&&validateAge(data.nascimento)&&data.telefone.replace(/\D/g,"").length>=10,
@@ -475,7 +532,19 @@ function WorkerRegister({ onDone, onBack }) {
     7: data.email&&data.senha.length>=8&&!senhaError,
   }[step];
 
-  const next = ()=>step<7?setStep(s=>s+1):onDone(data);
+  const next = async () => {
+    if(step < 7) { setStep(s=>s+1); return; }
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const saved = await saveWorker(data);
+      onDone({ ...data, id: saved.id });
+    } catch(e) {
+      setSubmitError(e.message || "Erro ao salvar. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
   const back = ()=>step>1?setStep(s=>s-1):onBack();
   const LABELS = ["Dados pessoais","Endereço","Especialidades","Disponibilidade","Foto de perfil","Documento","Criar conta"];
 
@@ -498,19 +567,19 @@ function WorkerRegister({ onDone, onBack }) {
               <Field label="CPF" placeholder="000.000.000-00" value={data.cpf} onChange={v=>set("cpf",maskCPF(v))} maxLength={14} hint={cpfError} required helper="Será validado pelo sistema" />
               <Field label="Data de nascimento" value={data.nascimento} onChange={v=>set("nascimento",v)} type="date" hint={ageError} required helper="Mínimo 18 anos" />
             </div>
-            <Field label="WhatsApp" placeholder="(11) 99999-9999" value={data.telefone} onChange={v=>set("telefone",maskPhone(v))} type="tel" maxLength={15} required helper="Usado para comunicação sobre seus turnos" />
-            <Alert type="info">Todos os dados são tratados com sigilo e usados apenas para verificação de identidade.</Alert>
+            <Field label="WhatsApp" placeholder="(11) 99999-9999" value={data.telefone} onChange={v=>set("telefone",maskPhone(v))} type="tel" maxLength={15} required />
+            <Alert type="info">Todos os dados são tratados com sigilo e usados apenas para verificação.</Alert>
           </>}
 
           {step===2&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Seu endereço</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Usado para mostrar vagas próximas com a distância exata de cada oportunidade.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Usado para mostrar vagas próximas com a distância exata.</p>
             <AddressBlock data={data} setData={setData} loading={cepLoading} setLoading={setCepLoading} />
           </>}
 
           {step===3&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Suas especialidades</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Selecione tudo o que você já sabe fazer. Empresas filtram por especialidade ao buscar colaboradores.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Selecione tudo o que você já sabe fazer. Empresas filtram por especialidade.</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:18}}>
               {SPECS.map(s=>{const on=data.specs.includes(s.id);return(
                 <div key={s.id} className={`chip ${on?"on":""}`} onClick={()=>toggleArr("specs",s.id)}>
@@ -520,7 +589,7 @@ function WorkerRegister({ onDone, onBack }) {
                 </div>
               );})}
             </div>
-            {data.specs.length>0?<Alert type="success">{data.specs.length} especialidade{data.specs.length>1?"s":""} selecionada{data.specs.length>1?"s":""}.</Alert>:<Alert type="warning">Selecione ao menos uma especialidade para continuar.</Alert>}
+            {data.specs.length>0?<Alert type="success">{data.specs.length} especialidade{data.specs.length>1?"s":""} selecionada{data.specs.length>1?"s":""}.</Alert>:<Alert type="warning">Selecione ao menos uma especialidade.</Alert>}
           </>}
 
           {step===4&&<>
@@ -550,8 +619,8 @@ function WorkerRegister({ onDone, onBack }) {
 
           {step===5&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto de perfil</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Perfis com foto recebem muito mais convites de empresas.</p>
-            <Alert type="info"><strong>Dicas para uma boa foto:</strong> rosto visível, sem óculos escuros, fundo neutro, boa iluminação, foto recente.</Alert>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Perfis com foto recebem muito mais convites.</p>
+            <Alert type="info">Rosto visível, sem óculos escuros, fundo neutro, boa iluminação.</Alert>
             <div className={`upload-zone ${data.fotoRosto?"has":""}`} onClick={()=>photoRef.current?.click()}>
               {data.fotoRosto
                 ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
@@ -566,7 +635,7 @@ function WorkerRegister({ onDone, onBack }) {
 
           {step===6&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Documento de identidade</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Precisamos de uma selfie sua <strong>segurando o documento aberto</strong> para confirmar sua identidade.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Selfie segurando o documento aberto para confirmar sua identidade.</p>
             <div style={{display:"flex",gap:12,marginBottom:20}}>
               {[["RG","🪪","Identidade"],["CNH","🚗","Habilitação"]].map(([t,ic,sub])=>(
                 <div key={t} onClick={()=>set("docTipo",t)} style={{flex:1,background:data.docTipo===t?C.greenBg:"#fff",borderRadius:12,padding:"16px 14px",border:`2px solid ${data.docTipo===t?C.green:C.border2}`,textAlign:"center",cursor:"pointer",transition:"all .15s"}}>
@@ -580,8 +649,8 @@ function WorkerRegister({ onDone, onBack }) {
               <Alert type="warning">
                 <strong>Como tirar a selfie com {data.docTipo}:</strong><br />
                 1. Segure o {data.docTipo} aberto na altura do rosto<br />
-                2. Seu rosto e o documento devem aparecer na mesma foto<br />
-                3. O documento deve estar legível — sem reflexos<br />
+                2. Rosto e documento visíveis na mesma foto<br />
+                3. Documento legível, sem reflexos<br />
                 4. Boa iluminação, fundo simples
               </Alert>
               <div className={`upload-zone ${data.selfieDoc?"has":""}`} onClick={()=>selfieRef.current?.click()}>
@@ -593,8 +662,8 @@ function WorkerRegister({ onDone, onBack }) {
                    </div>
                   :<div><div style={{fontSize:48,marginBottom:12}}>🤳</div><div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Selfie segurando o {data.docTipo}</div><div style={{...B,fontSize:13,color:C.muted}}>Foto · máx. 10MB</div></div>}
               </div>
-              <input ref={selfieRef} type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"selfieDoc");}} />
-              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginTop:8}}>🔒 Visível apenas à equipe Giobbi's para verificação.</div>
+              <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"selfieDoc");}} />
+              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginTop:8}}>🔒 Visível apenas à equipe Giobbi's.</div>
             </>}
           </>}
 
@@ -609,19 +678,20 @@ function WorkerRegister({ onDone, onBack }) {
             <Div />
             <div style={{...B,fontSize:11,color:C.muted,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:12}}>Resumo</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 24px"}}>
-              {[["Nome",data.nome],["CPF",data.cpf],["Cidade",`${data.cidade}/${data.estado}`],["Especialidades",`${data.specs.length} selecionadas`],["Dias",`${data.dias.length} dias`],["Turnos",data.turnos.map(t=>SHIFTS.find(s=>s.id===t)?.label).join(", ")],["Foto",data.fotoRosto?"✓ Enviada":"—"],["Documento",data.docTipo||"—"]].map(([k,v])=>(
-                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+              {[["Nome",data.nome],["CPF",data.cpf],["Cidade",`${data.cidade}/${data.estado}`],["Especialidades",`${data.specs.length} selecionadas`],["Dias",`${data.dias.length} dias`],["Turnos",data.turnos.map(t=>SHIFTS.find(s=>s.id===t)?.label).join(", ")],["Foto","✓ Enviada"],["Documento",data.docTipo||"—"]].map(([k,v])=>(
+                <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{...B,fontSize:12,color:C.muted}}>{k}</span>
                   <span style={{...B,fontSize:12,color:C.navy,fontWeight:600}}>{v}</span>
                 </div>
               ))}
             </div>
+            {submitError&&<Alert type="error" style={{marginTop:14}}>{submitError}</Alert>}
           </>}
         </div>
 
         <div style={{marginTop:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{...B,fontSize:13,color:C.sub}}>Já tem conta? <span onClick={onBack} style={{color:C.green,cursor:"pointer",fontWeight:600}}>Fazer login</span></span>
-          <Btn label={step===7?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={next} disabled={!canNext} />
+          <Btn label={step===7?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={next} disabled={!canNext} loading={submitting} />
         </div>
       </div>
     </div>
@@ -638,13 +708,14 @@ function CompanySuccess({ data, onEnter }) {
         <div style={{width:96,height:96,borderRadius:48,background:C.greenBg,border:`3px solid ${C.green}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,margin:"0 auto 24px",animation:"popIn .4s ease both"}}>🏢</div>
         <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,lineHeight:1,marginBottom:14}}>Cadastro enviado!</h2>
         <p style={{...B,fontSize:15,color:C.sub,lineHeight:1.75,marginBottom:22}}>
-          <strong style={{color:C.navy}}>{data?.nomeFant||data?.razao}</strong> está em análise. Nossa equipe revisará os dados e entrará em contato em até <strong style={{color:C.green}}>24 horas úteis</strong>.
+          <strong style={{color:C.navy}}>{data?.nomeFant||data?.razao}</strong> está em análise. Nossa equipe entrará em contato em até <strong style={{color:C.green}}>24 horas úteis</strong>.
         </p>
+        <Alert type="success">Cadastro salvo com sucesso no sistema Giobbi's! ✓</Alert>
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 22px",marginBottom:22,textAlign:"left"}}>
           <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:12}}>Unidades cadastradas</div>
           {data?.unidades?.length>0?data.unidades.map((u,i)=>(
-            <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:10,paddingBottom:10,borderBottom:i<data.unidades.length-1?`1px solid ${C.border}`:"none"}}>
-              <span style={{color:C.green,marginTop:1}}>📍</span>
+            <div key={i} style={{display:"flex",gap:10,marginBottom:10,paddingBottom:10,borderBottom:i<data.unidades.length-1?`1px solid ${C.border}`:"none"}}>
+              <span style={{color:C.green}}>📍</span>
               <div>
                 <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{u.nome}</div>
                 <div style={{...B,fontSize:12,color:C.sub}}>{u.rua}, {u.numero} — {u.cidade}/{u.estado}</div>
@@ -667,8 +738,9 @@ function WorkerSuccess({ data, onEnter }) {
         </div>
         <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,lineHeight:1,marginBottom:14}}>Cadastro enviado,<br />{data?.nome?.split(" ")[0]}!</h2>
         <p style={{...B,fontSize:15,color:C.sub,lineHeight:1.75,marginBottom:22}}>
-          Nossa equipe vai revisar seu documento. Em até <strong style={{color:C.green}}>48 horas úteis</strong> você receberá um e-mail confirmando a aprovação.
+          Nossa equipe vai revisar seu documento. Em até <strong style={{color:C.green}}>48 horas úteis</strong> você receberá confirmação por e-mail.
         </p>
+        <Alert type="success">Cadastro salvo com sucesso no sistema Giobbi's! ✓</Alert>
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 22px",marginBottom:22,textAlign:"left"}}>
           {[["1","Análise do documento","Revisamos a selfie com documento enviada"],["2","Aprovação do perfil","Você recebe e-mail confirmando a aprovação"],["3","Acesso às vagas","Seu perfil fica visível e você pode se candidatar"]].map(([n,t,d])=>(
             <div key={n} style={{display:"flex",gap:12,marginBottom:12}}>
@@ -689,19 +761,14 @@ function WorkerSuccess({ data, onEnter }) {
 // ADMIN LOGIN
 // ═══════════════════════════════════════════════════════════════
 function AdminLogin({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
+  const [email,setEmail]=useState(""); const [pass,setPass]=useState(""); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
   const handleLogin = async () => {
     setLoading(true);
-    await new Promise(r=>setTimeout(r,800));
+    await new Promise(r=>setTimeout(r,600));
     setLoading(false);
-    if(email==="admin@giobbis.com" && pass==="giobbis2024") { onLogin(); }
+    if(email==="admin@giobbis.com"&&pass==="giobbis2024") onLogin();
     else setError("E-mail ou senha incorretos.");
   };
-
   return (
     <div style={{minHeight:"75vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",background:C.bg}}>
       <div style={{maxWidth:400,width:"100%"}}>
@@ -716,37 +783,65 @@ function AdminLogin({ onLogin }) {
           {error&&<Alert type="error">{error}</Alert>}
           <Btn label="Acessar painel" variant="navy" size="lg" full onClick={handleLogin} loading={loading} />
         </div>
-        <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginTop:16}}>🔒 Acesso monitorado e registrado</div>
       </div>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ADMIN PANEL
+// ADMIN PANEL — reads real data from Supabase
 // ═══════════════════════════════════════════════════════════════
 function AdminPanel() {
   const [tab, setTab] = useState("dashboard");
-  const [companies, setCompanies] = useState(MOCK_COMPANIES);
-  const [workers, setWorkers] = useState(MOCK_WORKERS);
+  const [companies, setCompanies] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selCompany, setSelCompany] = useState(null);
   const [selWorker, setSelWorker] = useState(null);
   const [rejectModal, setRejectModal] = useState(null);
   const [rejectNote, setRejectNote] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const updateCompany = (id, changes) => { setCompanies(cs=>cs.map(c=>c.id===id?{...c,...changes}:c)); setSelCompany(s=>s?.id===id?{...s,...changes}:s); };
-  const updateWorker  = (id, changes) => { setWorkers(ws=>ws.map(w=>w.id===id?{...w,...changes}:w)); setSelWorker(s=>s?.id===id?{...s,...changes}:s); };
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [cos, wos] = await Promise.all([fetchCompanies(), fetchWorkers()]);
+      setCompanies(cos || []);
+      setWorkers(wos || []);
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const updateCo = async (id, changes) => {
+    setSaving(true);
+    await updateCompanyDB(id, changes);
+    setCompanies(cs=>cs.map(c=>c.id===id?{...c,...changes}:c));
+    setSelCompany(s=>s?.id===id?{...s,...changes}:s);
+    setSaving(false);
+  };
+
+  const updateWo = async (id, changes) => {
+    setSaving(true);
+    await updateWorkerDB(id, changes);
+    setWorkers(ws=>ws.map(w=>w.id===id?{...w,...changes}:w));
+    setSelWorker(s=>s?.id===id?{...s,...changes}:s);
+    setSaving(false);
+  };
 
   const pending_co = companies.filter(c=>c.status==="pending").length;
   const pending_wo = workers.filter(w=>w.status==="pending").length;
   const approved_co = companies.filter(c=>c.status==="approved").length;
-  const overdue = companies.filter(c=>c.payStatus==="overdue").length;
+  const overdue = companies.filter(c=>c.pay_status==="overdue").length;
+
+  const fmtDate = iso => iso ? new Date(iso).toLocaleDateString("pt-BR") : "—";
 
   const NAV = [
-    {id:"dashboard", icon:"📊", label:"Dashboard"},
-    {id:"companies", icon:"🏢", label:`Empresas${pending_co>0?` (${pending_co})`:""}` },
-    {id:"workers",   icon:"👥", label:`Colaboradores${pending_wo>0?` (${pending_wo})`:""}` },
-    {id:"billing",   icon:"💳", label:"Cobranças"},
+    {id:"dashboard",icon:"📊",label:"Dashboard"},
+    {id:"companies",icon:"🏢",label:`Empresas${pending_co>0?` (${pending_co})`:""}`},
+    {id:"workers",  icon:"👥",label:`Colaboradores${pending_wo>0?` (${pending_wo})`:""}`},
+    {id:"billing",  icon:"💳",label:"Cobranças"},
   ];
 
   const RejectModal = () => (
@@ -755,16 +850,17 @@ function AdminPanel() {
         <h3 style={{...H,fontSize:20,fontWeight:800,color:C.navy,marginBottom:6}}>Reprovar cadastro</h3>
         <p style={{...B,fontSize:14,color:C.sub,marginBottom:16,lineHeight:1.65}}>Informe o motivo. Será enviado por e-mail ao cadastrante.</p>
         <div style={{marginBottom:16}}>
-          <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>Motivo da reprovação *</label>
-          <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)} placeholder="Ex: Documento ilegível. Por favor envie uma nova selfie com melhor iluminação."
+          <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>Motivo *</label>
+          <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)}
+            placeholder="Ex: Documento ilegível. Por favor envie uma nova selfie com melhor iluminação."
             style={{width:"100%",padding:"11px 14px",borderRadius:8,border:`1.5px solid ${C.border2}`,...B,fontSize:14,color:C.text,minHeight:100,resize:"vertical"}} />
         </div>
         <div style={{display:"flex",gap:10}}>
           <Btn label="Cancelar" variant="ghost" size="md" full onClick={()=>{setRejectModal(null);setRejectNote("");}} />
-          <Btn label="Confirmar reprovação" variant="danger" size="md" full disabled={!rejectNote}
-            onClick={()=>{
-              if(rejectModal.type==="company") updateCompany(rejectModal.id,{status:"rejected",rejectNote,payStatus:"inactive"});
-              else updateWorker(rejectModal.id,{status:"rejected",rejectNote});
+          <Btn label="Confirmar reprovação" variant="danger" size="md" full disabled={!rejectNote} loading={saving}
+            onClick={async()=>{
+              if(rejectModal.type==="company") await updateCo(rejectModal.id,{status:"rejected",reject_note:rejectNote,pay_status:"inactive"});
+              else await updateWo(rejectModal.id,{status:"rejected",reject_note:rejectNote});
               setRejectModal(null); setRejectNote("");
             }} />
         </div>
@@ -772,28 +868,36 @@ function AdminPanel() {
     </div>
   );
 
+  if(loading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh",flexDirection:"column",gap:16}}>
+      <span style={{width:36,height:36,borderRadius:18,border:`3px solid ${C.border2}`,borderTopColor:C.green,animation:"spin .8s linear infinite",display:"block"}} />
+      <div style={{...B,fontSize:14,color:C.muted}}>Carregando dados do Supabase...</div>
+    </div>
+  );
+
   return (
     <div style={{display:"grid",gridTemplateColumns:"220px 1fr",minHeight:"calc(100vh - 60px)"}}>
-      {rejectModal && <RejectModal />}
+      {rejectModal&&<RejectModal />}
 
       {/* Sidebar */}
       <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
-        <div style={{padding:"0 16px 20px",borderBottom:`1px solid ${C.border}`,marginBottom:12}}>
-          <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>Painel Interno</div>
+        <div style={{padding:"0 16px 18px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
+          <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Painel Interno</div>
           <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Equipe Giobbi's</div>
+          <button onClick={load} style={{...B,fontSize:11,color:C.green,background:"none",border:"none",cursor:"pointer",marginTop:6,fontWeight:600}}>↻ Atualizar</button>
         </div>
         {NAV.map(n=>(
-          <div key={n.id} className={`admin-sidebar-item ${tab===n.id?"active":""}`} onClick={()=>{setTab(n.id);setSelCompany(null);setSelWorker(null);}}>
-            <span style={{fontSize:17}}>{n.icon}</span>
+          <div key={n.id} className={`admin-item ${tab===n.id?"active":""}`} onClick={()=>{setTab(n.id);setSelCompany(null);setSelWorker(null);}}>
+            <span style={{fontSize:16}}>{n.icon}</span>
             <span style={{...B,fontSize:13,color:tab===n.id?C.green:C.sub}}>{n.label}</span>
           </div>
         ))}
         <Div />
-        <div style={{padding:"0 16px"}}>
-          <div style={{...B,fontSize:11,color:C.muted,fontWeight:600,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>Alertas</div>
-          {pending_co>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,padding:"10px 12px",marginBottom:8,...B,fontSize:12,color:C.amber}}>⏳ {pending_co} empresa{pending_co>1?"s":""} aguardando aprovação</div>}
-          {pending_wo>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,padding:"10px 12px",marginBottom:8,...B,fontSize:12,color:C.amber}}>⏳ {pending_wo} colaborador{pending_wo>1?"es":""} aguardando aprovação</div>}
-          {overdue>0&&<div style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:9,padding:"10px 12px",...B,fontSize:12,color:C.red}}>! {overdue} empresa{overdue>1?"s":""} em atraso</div>}
+        <div style={{padding:"0 14px"}}>
+          {pending_co>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,padding:"10px 12px",marginBottom:8,...B,fontSize:12,color:C.amber}}>⏳ {pending_co} empresa{pending_co>1?"s":""} pendente{pending_co>1?"s":""}</div>}
+          {pending_wo>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,padding:"10px 12px",marginBottom:8,...B,fontSize:12,color:C.amber}}>⏳ {pending_wo} colaborador{pending_wo>1?"es":""} pendente{pending_wo>1?"s":""}</div>}
+          {overdue>0&&<div style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:9,padding:"10px 12px",...B,fontSize:12,color:C.red}}>! {overdue} em atraso</div>}
+          {pending_co===0&&pending_wo===0&&overdue===0&&<div style={{...B,fontSize:12,color:C.green}}>✓ Tudo em dia</div>}
         </div>
       </aside>
 
@@ -804,55 +908,52 @@ function AdminPanel() {
         {tab==="dashboard"&&(
           <div>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Dashboard</h2>
-            <p style={{...B,fontSize:14,color:C.muted,marginBottom:28}}>Visão geral da plataforma Giobbi's</p>
-
+            <p style={{...B,fontSize:14,color:C.muted,marginBottom:24}}>Visão geral da plataforma Giobbi's</p>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:28}}>
               {[
                 {v:companies.length,l:"Empresas total",c:C.navy,icon:"🏢",sub:`${pending_co} pendentes`},
-                {v:workers.length,l:"Colaboradores",c:C.blue,icon:"👥",sub:`${pending_wo} pendentes`},
-                {v:`R$ ${approved_co*299}`,l:"MRR estimado",c:C.green,icon:"💰",sub:"Receita mensal recorrente"},
-                {v:overdue,l:"Em atraso",c:C.red,icon:"⚠",sub:"Empresas inadimplentes"},
+                {v:workers.length,  l:"Colaboradores", c:C.blue,icon:"👥",sub:`${pending_wo} pendentes`},
+                {v:approved_co,     l:"Empresas ativas",c:C.green,icon:"✓",sub:"aprovadas"},
+                {v:overdue,         l:"Em atraso",     c:C.red, icon:"⚠",sub:"inadimplentes"},
               ].map(({v,l,c,icon,sub})=>(
                 <div key={l} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"20px 18px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                    <span style={{fontSize:24}}>{icon}</span>
-                    <div style={{...H,fontSize:28,fontWeight:900,color:c}}>{v}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                    <span style={{fontSize:22}}>{icon}</span>
+                    <div style={{...H,fontSize:30,fontWeight:900,color:c}}>{v}</div>
                   </div>
                   <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{l}</div>
-                  <div style={{...B,fontSize:11,color:C.muted,marginTop:3}}>{sub}</div>
+                  <div style={{...B,fontSize:11,color:C.muted,marginTop:2}}>{sub}</div>
                 </div>
               ))}
             </div>
-
-            {/* Pending queues */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
-                <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Empresas pendentes</div>
                   <Badge status="pending" />
                 </div>
                 {companies.filter(c=>c.status==="pending").length===0
                   ?<div style={{padding:32,textAlign:"center",...B,fontSize:13,color:C.muted}}>Nenhuma pendente ✓</div>
                   :companies.filter(c=>c.status==="pending").map(co=>(
-                  <div key={co.id} className="card-h" onClick={()=>{setTab("companies");setSelCompany(co);}} style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:2}}>{co.nomeFant||co.razao}</div>
-                    <div style={{...B,fontSize:12,color:C.muted}}>{co.seg} · {co.cidade}/{co.estado} · {co.createdAt}</div>
-                  </div>
-                ))}
+                    <div key={co.id} className="card-h" onClick={()=>{setTab("companies");setSelCompany(co);}} style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{co.nome_fant||co.razao}</div>
+                      <div style={{...B,fontSize:12,color:C.muted}}>{co.seg} · {co.cidade}/{co.estado} · {fmtDate(co.created_at)}</div>
+                    </div>
+                  ))}
               </div>
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
-                <div style={{padding:"16px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Colaboradores pendentes</div>
                   <Badge status="pending" />
                 </div>
                 {workers.filter(w=>w.status==="pending").length===0
                   ?<div style={{padding:32,textAlign:"center",...B,fontSize:13,color:C.muted}}>Nenhum pendente ✓</div>
                   :workers.filter(w=>w.status==="pending").map(wo=>(
-                  <div key={wo.id} className="card-h" onClick={()=>{setTab("workers");setSelWorker(wo);}} style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:2}}>{wo.nome}</div>
-                    <div style={{...B,fontSize:12,color:C.muted}}>{wo.cidade}/{wo.estado} · {wo.specs.length} especialidades · {wo.createdAt}</div>
-                  </div>
-                ))}
+                    <div key={wo.id} className="card-h" onClick={()=>{setTab("workers");setSelWorker(wo);}} style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{wo.nome}</div>
+                      <div style={{...B,fontSize:12,color:C.muted}}>{wo.cidade}/{wo.estado} · {wo.specs?.length||0} especialidades · {fmtDate(wo.created_at)}</div>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
@@ -861,29 +962,24 @@ function AdminPanel() {
         {/* ── COMPANIES ── */}
         {tab==="companies"&&!selCompany&&(
           <div>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Empresas</h2>
-            <div style={{display:"flex",gap:8,marginBottom:20}}>
-              {[["Todas",companies.length],["Pendentes",pending_co],["Aprovadas",approved_co],["Reprovadas",companies.filter(c=>c.status==="rejected").length]].map(([l,n])=>(
-                <div key={l} style={{...B,fontSize:13,padding:"6px 14px",borderRadius:20,background:C.white,border:`1px solid ${C.border}`,color:C.sub,cursor:"pointer"}}>
-                  {l} <strong style={{color:C.navy}}>{n}</strong>
-                </div>
-              ))}
-            </div>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:20}}>Empresas</h2>
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,background:C.bg}}>
                 {["Empresa","Segmento","Unidades","Status","Pagamento"].map(h=><div key={h} style={{...B,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>{h}</div>)}
               </div>
-              {companies.map(co=>(
+              {companies.length===0
+                ?<div style={{padding:48,textAlign:"center",...B,fontSize:14,color:C.muted}}>Nenhuma empresa cadastrada ainda.</div>
+                :companies.map(co=>(
                 <div key={co.id} className="card-h" onClick={()=>setSelCompany(co)}
                   style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",padding:"14px 20px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
                   <div>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{co.nomeFant||co.razao}</div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{co.nome_fant||co.razao}</div>
                     <div style={{...B,fontSize:12,color:C.muted}}>{co.cnpj} · {co.cidade}/{co.estado}</div>
                   </div>
                   <div style={{...B,fontSize:13,color:C.sub}}>{co.seg}</div>
-                  <div style={{...B,fontSize:13,color:C.sub}}>{co.unidades} unidades</div>
+                  <div style={{...B,fontSize:13,color:C.sub}}>{co.company_units?.length||0} unidade{(co.company_units?.length||0)!==1?"s":""}</div>
                   <Badge status={co.status} />
-                  <Badge status={co.payStatus} />
+                  <Badge status={co.pay_status} />
                 </div>
               ))}
             </div>
@@ -893,19 +989,19 @@ function AdminPanel() {
         {/* Company detail */}
         {tab==="companies"&&selCompany&&(
           <div>
-            <button onClick={()=>setSelCompany(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:22}}>← Voltar para empresas</button>
+            <button onClick={()=>setSelCompany(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:22}}>← Voltar</button>
             <div style={{display:"grid",gridTemplateColumns:"1fr 280px",gap:20,alignItems:"start"}}>
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:22}}>
                   <div>
-                    <h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>{selCompany.nomeFant||selCompany.razao}</h3>
+                    <h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>{selCompany.nome_fant||selCompany.razao}</h3>
                     <div style={{...B,fontSize:13,color:C.muted}}>{selCompany.razao}</div>
                   </div>
-                  <div style={{display:"flex",gap:8}}><Badge status={selCompany.status} /><Badge status={selCompany.payStatus} /></div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><Badge status={selCompany.status} /><Badge status={selCompany.pay_status} /></div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px",marginBottom:20}}>
-                  {[["CNPJ",selCompany.cnpj],["Segmento",selCompany.seg],["Cidade",`${selCompany.cidade}/${selCompany.estado}`],["Site",selCompany.site||"—"],["Unidades",`${selCompany.unidades} cadastradas`],["Cadastro",selCompany.createdAt]].map(([k,v])=>(
-                    <div key={k} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                  {[["CNPJ",selCompany.cnpj],["Segmento",selCompany.seg],["Site",selCompany.site||"—"],["Cadastro",fmtDate(selCompany.created_at)],["CEP",selCompany.cep],["Cidade",`${selCompany.cidade}/${selCompany.estado}`]].map(([k,v])=>(
+                    <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
                       <div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div>
                       <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v}</div>
                     </div>
@@ -913,58 +1009,66 @@ function AdminPanel() {
                 </div>
                 <Div />
                 <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Responsável</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px"}}>
-                  {[["Nome",selCompany.respNome],["Cargo",selCompany.respCargo],["WhatsApp",selCompany.respTel],["E-mail",selCompany.respEmail]].map(([k,v])=>(
-                    <div key={k} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px",marginBottom:20}}>
+                  {[["Nome",selCompany.resp_nome],["Cargo",selCompany.resp_cargo],["WhatsApp",selCompany.resp_tel],["E-mail",selCompany.resp_email]].map(([k,v])=>(
+                    <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
                       <div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div>
-                      <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v}</div>
+                      <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v||"—"}</div>
                     </div>
                   ))}
                 </div>
-                {selCompany.rejectNote&&<><Div /><Alert type="error"><strong>Motivo da reprovação:</strong> {selCompany.rejectNote}</Alert></>}
+                {selCompany.company_units?.length>0&&<>
+                  <Div />
+                  <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Unidades</div>
+                  {selCompany.company_units.map(u=>(
+                    <div key={u.id} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"12px 16px",marginBottom:8}}>
+                      <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{u.nome}</div>
+                      <div style={{...B,fontSize:12,color:C.sub,marginTop:2}}>{u.rua}, {u.numero} — {u.bairro}, {u.cidade}/{u.estado}</div>
+                    </div>
+                  ))}
+                </>}
+                {selCompany.reject_note&&<><Div /><Alert type="error"><strong>Motivo da reprovação:</strong> {selCompany.reject_note}</Alert></>}
               </div>
 
-              {/* Actions */}
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                {selCompany.status==="pending"&&<>
+                {selCompany.status==="pending"&&(
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Decisão de aprovação</div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Decisão</div>
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <Btn label="✓ Aprovar empresa" variant="approve" size="md" full onClick={()=>updateCompany(selCompany.id,{status:"approved",payStatus:"trial",plan:"Trial (30 dias)"})} />
+                      <Btn label="✓ Aprovar empresa" variant="approve" size="md" full loading={saving} onClick={()=>updateCo(selCompany.id,{status:"approved",pay_status:"trial",plan:"Trial (30 dias)"})} />
                       <Btn label="✕ Reprovar" variant="danger" size="md" full onClick={()=>setRejectModal({id:selCompany.id,type:"company"})} />
                     </div>
                   </div>
-                </>}
+                )}
                 {selCompany.status==="approved"&&<>
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Plano ativo</div>
-                    <div style={{...B,fontSize:13,color:C.sub,marginBottom:12}}>{selCompany.plan}</div>
-                    <div style={{...B,fontSize:11,color:C.muted,fontWeight:600,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Alterar plano</div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Plano</div>
+                    <div style={{...B,fontSize:13,color:C.sub,marginBottom:10}}>{selCompany.plan}</div>
                     {PLANS.map(p=>(
-                      <div key={p} onClick={()=>updateCompany(selCompany.id,{plan:p})} style={{padding:"9px 12px",borderRadius:8,cursor:"pointer",border:`1.5px solid ${selCompany.plan===p?C.green:C.border2}`,background:selCompany.plan===p?C.greenBg:"transparent",...B,fontSize:12,color:selCompany.plan===p?C.green:C.sub,marginBottom:6,transition:"all .15s"}}>
+                      <div key={p} onClick={()=>updateCo(selCompany.id,{plan:p})} style={{padding:"8px 12px",borderRadius:7,cursor:"pointer",border:`1.5px solid ${selCompany.plan===p?C.green:C.border2}`,background:selCompany.plan===p?C.greenBg:"transparent",...B,fontSize:12,color:selCompany.plan===p?C.green:C.sub,marginBottom:5,transition:"all .15s"}}>
                         {selCompany.plan===p?"✓ ":""}{p}
                       </div>
                     ))}
                   </div>
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Status de pagamento</div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Pagamento</div>
                     <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      <Btn label="✓ Marcar como pago" variant="approve" size="sm" full onClick={()=>updateCompany(selCompany.id,{payStatus:"paid"})} />
-                      <Btn label="! Marcar em atraso" variant="danger" size="sm" full onClick={()=>updateCompany(selCompany.id,{payStatus:"overdue"})} />
-                      <Btn label="Suspender acesso" variant="ghost" size="sm" full onClick={()=>updateCompany(selCompany.id,{status:"rejected",payStatus:"inactive"})} />
+                      <Btn label="✓ Marcar como pago" variant="approve" size="sm" full loading={saving} onClick={()=>updateCo(selCompany.id,{pay_status:"paid"})} />
+                      <Btn label="! Marcar em atraso" variant="danger" size="sm" full onClick={()=>updateCo(selCompany.id,{pay_status:"overdue"})} />
+                      <Btn label="Suspender acesso" variant="ghost" size="sm" full onClick={()=>updateCo(selCompany.id,{status:"rejected",pay_status:"inactive"})} />
                     </div>
                   </div>
                 </>}
-                {selCompany.status==="rejected"&&<>
+                {selCompany.status==="rejected"&&(
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Reativar cadastro</div>
-                    <Btn label="↩ Reabrir para análise" variant="amber" size="sm" full onClick={()=>updateCompany(selCompany.id,{status:"pending",rejectNote:"",payStatus:"trial"})} />
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Reativar</div>
+                    <Btn label="↩ Reabrir para análise" variant="amber" size="sm" full loading={saving} onClick={()=>updateCo(selCompany.id,{status:"pending",reject_note:"",pay_status:"trial"})} />
                   </div>
-                </>}
+                )}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                  <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:10}}>Contato rápido</div>
-                  <div style={{...B,fontSize:13,color:C.sub,marginBottom:8}}>📱 {selCompany.respTel}</div>
-                  <div style={{...B,fontSize:13,color:C.sub}}>✉️ {selCompany.respEmail}</div>
+                  <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:10}}>Contato</div>
+                  <div style={{...B,fontSize:13,color:C.sub,marginBottom:6}}>📱 {selCompany.resp_tel}</div>
+                  <div style={{...B,fontSize:13,color:C.sub}}>✉️ {selCompany.resp_email}</div>
                 </div>
               </div>
             </div>
@@ -974,27 +1078,22 @@ function AdminPanel() {
         {/* ── WORKERS ── */}
         {tab==="workers"&&!selWorker&&(
           <div>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Colaboradores</h2>
-            <div style={{display:"flex",gap:8,marginBottom:20}}>
-              {[["Todos",workers.length],["Pendentes",pending_wo],["Aprovados",workers.filter(w=>w.status==="approved").length],["Reprovados",workers.filter(w=>w.status==="rejected").length]].map(([l,n])=>(
-                <div key={l} style={{...B,fontSize:13,padding:"6px 14px",borderRadius:20,background:C.white,border:`1px solid ${C.border}`,color:C.sub,cursor:"pointer"}}>
-                  {l} <strong style={{color:C.navy}}>{n}</strong>
-                </div>
-              ))}
-            </div>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:20}}>Colaboradores</h2>
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,background:C.bg}}>
                 {["Colaborador","Especialidades","Disponibilidade","Status"].map(h=><div key={h} style={{...B,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>{h}</div>)}
               </div>
-              {workers.map(wo=>(
+              {workers.length===0
+                ?<div style={{padding:48,textAlign:"center",...B,fontSize:14,color:C.muted}}>Nenhum colaborador cadastrado ainda.</div>
+                :workers.map(wo=>(
                 <div key={wo.id} className="card-h" onClick={()=>setSelWorker(wo)}
                   style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"14px 20px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
                   <div>
                     <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{wo.nome}</div>
-                    <div style={{...B,fontSize:12,color:C.muted}}>{wo.cpf} · {wo.cidade}/{wo.estado} · {wo.createdAt}</div>
+                    <div style={{...B,fontSize:12,color:C.muted}}>{wo.cpf} · {wo.cidade}/{wo.estado} · {fmtDate(wo.created_at)}</div>
                   </div>
-                  <div style={{...B,fontSize:12,color:C.sub}}>{wo.specs.length} especialidade{wo.specs.length!==1?"s":""}</div>
-                  <div style={{...B,fontSize:12,color:C.sub}}>{wo.dias.length}d · {wo.turnos.map(t=>SHIFTS.find(s=>s.id===t)?.label).join(", ")}</div>
+                  <div style={{...B,fontSize:12,color:C.sub}}>{wo.specs?.length||0} especialidade{(wo.specs?.length||0)!==1?"s":""}</div>
+                  <div style={{...B,fontSize:12,color:C.sub}}>{wo.dias?.length||0}d · {wo.turnos?.map(t=>SHIFTS.find(s=>s.id===t)?.label).join(", ")||"—"}</div>
                   <Badge status={wo.status} />
                 </div>
               ))}
@@ -1005,79 +1104,72 @@ function AdminPanel() {
         {/* Worker detail */}
         {tab==="workers"&&selWorker&&(
           <div>
-            <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:22}}>← Voltar para colaboradores</button>
+            <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:22}}>← Voltar</button>
             <div style={{display:"grid",gridTemplateColumns:"1fr 260px",gap:20,alignItems:"start"}}>
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:22}}>
-                  <div>
-                    <h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>{selWorker.nome}</h3>
-                    <div style={{...B,fontSize:13,color:C.muted}}>{selWorker.cidade}/{selWorker.estado}</div>
-                  </div>
+                  <div><h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>{selWorker.nome}</h3><div style={{...B,fontSize:13,color:C.muted}}>{selWorker.cidade}/{selWorker.estado}</div></div>
                   <Badge status={selWorker.status} />
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px",marginBottom:20}}>
-                  {[["CPF",selWorker.cpf],["Nascimento",selWorker.nasc],["WhatsApp",selWorker.tel],["Cadastro",selWorker.createdAt]].map(([k,v])=>(
-                    <div key={k} style={{padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                  {[["CPF",selWorker.cpf],["Nascimento",selWorker.nascimento],["WhatsApp",selWorker.telefone],["E-mail",selWorker.email],["Documento",selWorker.doc_tipo||"—"],["Cadastro",fmtDate(selWorker.created_at)]].map(([k,v])=>(
+                    <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
                       <div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div>
-                      <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v}</div>
+                      <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v||"—"}</div>
                     </div>
                   ))}
                 </div>
                 <Div />
                 <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Especialidades</div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:20}}>
-                  {SPECS.filter(s=>selWorker.specs.includes(s.id)).map(s=>(
-                    <div key={s.id} style={{display:"flex",alignItems:"center",gap:7,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"7px 12px"}}>
-                      <span style={{fontSize:16}}>{s.icon}</span><span style={{...B,fontSize:13,fontWeight:600,color:C.green}}>{s.label}</span>
+                  {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>(
+                    <div key={s.id} style={{display:"flex",alignItems:"center",gap:7,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"6px 12px"}}>
+                      <span style={{fontSize:15}}>{s.icon}</span><span style={{...B,fontSize:13,fontWeight:600,color:C.green}}>{s.label}</span>
                     </div>
                   ))}
+                  {(!selWorker.specs||selWorker.specs.length===0)&&<div style={{...B,fontSize:13,color:C.muted}}>Nenhuma especialidade</div>}
                 </div>
                 <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Disponibilidade</div>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-                  {DAYS.map(d=>{const on=selWorker.dias.includes(d);return <div key={d} style={{padding:"6px 12px",borderRadius:7,background:on?C.greenBg:C.bg,border:`1px solid ${on?C.greenBorder:C.border}`}}><span style={{...B,fontSize:12,fontWeight:600,color:on?C.green:C.muted}}>{d}</span></div>;})}
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                  {DAYS.map(d=>{const on=selWorker.dias?.includes(d);return <div key={d} style={{padding:"6px 12px",borderRadius:7,background:on?C.greenBg:C.bg,border:`1px solid ${on?C.greenBorder:C.border}`}}><span style={{...B,fontSize:12,fontWeight:600,color:on?C.green:C.muted}}>{d}</span></div>;})}
                 </div>
-                <div style={{display:"flex",gap:10}}>
-                  {selWorker.turnos.map(t=>{const sh=SHIFTS.find(s=>s.id===t);return sh?<div key={t} style={{display:"flex",alignItems:"center",gap:6,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"7px 14px"}}><span>{sh.icon}</span><span style={{...B,fontSize:13,fontWeight:600,color:C.green}}>{sh.label}</span></div>:null;})}
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  {selWorker.turnos?.map(t=>{const sh=SHIFTS.find(s=>s.id===t);return sh?<div key={t} style={{display:"flex",alignItems:"center",gap:6,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"6px 14px"}}><span>{sh.icon}</span><span style={{...B,fontSize:13,fontWeight:600,color:C.green}}>{sh.label}</span></div>:null;})}
                 </div>
-                {selWorker.rejectNote&&<><Div /><Alert type="error"><strong>Motivo da reprovação:</strong> {selWorker.rejectNote}</Alert></>}
-
-                {/* Selfie area */}
+                {selWorker.reject_note&&<><Div /><Alert type="error"><strong>Motivo da reprovação:</strong> {selWorker.reject_note}</Alert></>}
                 <Div />
                 <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Documentos enviados</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                  {[{label:"Foto de perfil",icon:"📷"},{label:"Selfie com documento",icon:"🤳"}].map(({label,icon})=>(
-                    <div key={label} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"28px 16px",textAlign:"center"}}>
-                      <div style={{fontSize:36,marginBottom:8}}>{icon}</div>
+                  {[{label:"Foto de perfil",icon:"📷"},{label:`Selfie com ${selWorker.doc_tipo||"documento"}`,icon:"🤳"}].map(({label,icon})=>(
+                    <div key={label} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"24px 16px",textAlign:"center"}}>
+                      <div style={{fontSize:34,marginBottom:8}}>{icon}</div>
                       <div style={{...B,fontSize:12,color:C.muted}}>{label}</div>
                       <div style={{...B,fontSize:11,color:C.green,marginTop:6,fontWeight:600}}>✓ Enviado</div>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Actions */}
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
                 {selWorker.status==="pending"&&(
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Decisão de aprovação</div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Decisão</div>
                     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      <Btn label="✓ Aprovar perfil" variant="approve" size="md" full onClick={()=>updateWorker(selWorker.id,{status:"approved"})} />
+                      <Btn label="✓ Aprovar perfil" variant="approve" size="md" full loading={saving} onClick={()=>updateWo(selWorker.id,{status:"approved"})} />
                       <Btn label="✕ Reprovar" variant="danger" size="md" full onClick={()=>setRejectModal({id:selWorker.id,type:"worker"})} />
                     </div>
-                    <div style={{...B,fontSize:11,color:C.muted,marginTop:12,lineHeight:1.6}}>Verifique os documentos antes de aprovar. O colaborador receberá um e-mail com o resultado.</div>
+                    <div style={{...B,fontSize:11,color:C.muted,marginTop:12,lineHeight:1.6}}>Verifique os documentos antes de aprovar.</div>
                   </div>
                 )}
                 {selWorker.status==="approved"&&(
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Perfil aprovado</div>
-                    <Alert type="success">Colaborador ativo na plataforma e visível para empresas.</Alert>
-                    <Btn label="Suspender perfil" variant="danger" size="sm" full onClick={()=>updateWorker(selWorker.id,{status:"rejected",rejectNote:"Perfil suspenso pela equipe Giobbi's."})} />
+                    <Alert type="success">Colaborador ativo na plataforma.</Alert>
+                    <Btn label="Suspender perfil" variant="danger" size="sm" full loading={saving} onClick={()=>updateWo(selWorker.id,{status:"rejected",reject_note:"Perfil suspenso."})} />
                   </div>
                 )}
                 {selWorker.status==="rejected"&&(
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Reativar perfil</div>
-                    <Btn label="↩ Reabrir para análise" variant="amber" size="sm" full onClick={()=>updateWorker(selWorker.id,{status:"pending",rejectNote:""})} />
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Reativar</div>
+                    <Btn label="↩ Reabrir para análise" variant="amber" size="sm" full loading={saving} onClick={()=>updateWo(selWorker.id,{status:"pending",reject_note:""})} />
                   </div>
                 )}
               </div>
@@ -1090,36 +1182,36 @@ function AdminPanel() {
           <div>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Cobranças</h2>
             <p style={{...B,fontSize:14,color:C.muted,marginBottom:22}}>Gestão de planos e pagamentos das empresas parceiras.</p>
-
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:28}}>
               {[
-                {v:`R$ ${companies.filter(c=>c.payStatus==="paid").length*299}`,l:"Receita confirmada",c:C.green,icon:"💰"},
-                {v:companies.filter(c=>c.payStatus==="trial").length,l:"Em período trial",c:C.blue,icon:"⏱"},
-                {v:companies.filter(c=>c.payStatus==="overdue").length,l:"Em atraso",c:C.red,icon:"⚠"},
+                {v:companies.filter(c=>c.pay_status==="paid").length,l:"Pagamentos confirmados",c:C.green,icon:"💰"},
+                {v:companies.filter(c=>c.pay_status==="trial").length,l:"Em período trial",c:C.blue,icon:"⏱"},
+                {v:companies.filter(c=>c.pay_status==="overdue").length,l:"Em atraso",c:C.red,icon:"⚠"},
               ].map(({v,l,c,icon})=>(
                 <div key={l} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"20px 18px"}}>
-                  <div style={{fontSize:26,marginBottom:8}}>{icon}</div>
-                  <div style={{...H,fontSize:28,fontWeight:900,color:c}}>{v}</div>
+                  <div style={{fontSize:24,marginBottom:8}}>{icon}</div>
+                  <div style={{...H,fontSize:30,fontWeight:900,color:c}}>{v}</div>
                   <div style={{...B,fontSize:13,color:C.sub,marginTop:3}}>{l}</div>
                 </div>
               ))}
             </div>
-
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
               <div style={{display:"grid",gridTemplateColumns:"2fr 2fr 1fr 1fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,background:C.bg}}>
                 {["Empresa","Plano","Pagamento","Ações"].map(h=><div key={h} style={{...B,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>{h}</div>)}
               </div>
-              {companies.filter(c=>c.status==="approved").map(co=>(
+              {companies.filter(c=>c.status==="approved").length===0
+                ?<div style={{padding:48,textAlign:"center",...B,fontSize:14,color:C.muted}}>Nenhuma empresa aprovada ainda.</div>
+                :companies.filter(c=>c.status==="approved").map(co=>(
                 <div key={co.id} style={{display:"grid",gridTemplateColumns:"2fr 2fr 1fr 1fr",padding:"14px 20px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
                   <div>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{co.nomeFant||co.razao}</div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{co.nome_fant||co.razao}</div>
                     <div style={{...B,fontSize:12,color:C.muted}}>{co.seg} · {co.cidade}</div>
                   </div>
                   <div style={{...B,fontSize:13,color:C.sub}}>{co.plan}</div>
-                  <Badge status={co.payStatus} />
+                  <Badge status={co.pay_status} />
                   <div style={{display:"flex",gap:6}}>
-                    <button onClick={()=>updateCompany(co.id,{payStatus:"paid"})} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",...B,fontSize:11,color:C.green,fontWeight:600}}>✓ Pago</button>
-                    <button onClick={()=>updateCompany(co.id,{payStatus:"overdue"})} style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:6,padding:"5px 10px",cursor:"pointer",...B,fontSize:11,color:C.red,fontWeight:600}}>! Atraso</button>
+                    <button onClick={()=>updateCo(co.id,{pay_status:"paid"})} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",...B,fontSize:11,color:C.green,fontWeight:600}}>✓</button>
+                    <button onClick={()=>updateCo(co.id,{pay_status:"overdue"})} style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:6,padding:"5px 9px",cursor:"pointer",...B,fontSize:11,color:C.red,fontWeight:600}}>!</button>
                   </div>
                 </div>
               ))}
@@ -1134,12 +1226,11 @@ function AdminPanel() {
 // ─── AUTH SCREEN ────────────────────────────────────────────────
 function AuthScreen({ type, onLogin, onRegister, onBack }) {
   const [email,setEmail]=useState(""); const [pass,setPass]=useState("");
-  const isW=type==="worker";
   return (
     <div style={{minHeight:"75vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",background:C.bg}}>
       <div style={{maxWidth:420,width:"100%"}}>
         <button onClick={onBack} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:24}}>← Voltar</button>
-        <SL>{isW?"Área do Colaborador":"Área da Empresa"}</SL>
+        <SL>{type==="worker"?"Área do Colaborador":"Área da Empresa"}</SL>
         <h2 style={{...H,fontSize:32,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:28}}>Bem-vindo<br />de volta.</h2>
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
           <Field label="E-mail" placeholder="seu@email.com" value={email} onChange={setEmail} type="email" />
@@ -1148,7 +1239,7 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
           <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0"}}>
             <div style={{flex:1,height:1,background:C.border}} /><span style={{...B,fontSize:12,color:C.muted}}>ou</span><div style={{flex:1,height:1,background:C.border}} />
           </div>
-          <Btn label={isW?"Criar conta gratuitamente →":"Cadastrar minha empresa →"} variant="ghost" size="lg" full onClick={onRegister} />
+          <Btn label={type==="worker"?"Criar conta →":"Cadastrar minha empresa →"} variant="ghost" size="lg" full onClick={onRegister} />
         </div>
       </div>
     </div>
@@ -1159,31 +1250,30 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
 // ROOT
 // ═══════════════════════════════════════════════════════════════
 export default function GiobbisApp() {
-  const [screen, setScreen] = useState("home");
-  const [wData,  setWData]  = useState(null);
-  const [cData,  setCData]  = useState(null);
-  const [admin,  setAdmin]  = useState(false);
+  const [screen,  setScreen]  = useState("home");
+  const [wData,   setWData]   = useState(null);
+  const [cData,   setCData]   = useState(null);
+  const [admin,   setAdmin]   = useState(false);
 
-  const userType = admin?"admin":screen==="worker-app"?"worker":screen==="company-app"?"company":null;
-  const userName = admin?"Admin":userType==="worker"?wData?.nome?.split(" ")[0]:userType==="company"?(cData?.nomeFant||cData?.razao):null;
-
-  const onNav = s => { if(s==="home"){ setAdmin(false); } setScreen(s); };
+  const userType = admin?"admin":null;
+  const userName = admin?"Admin":null;
+  const onNav = s => { if(s==="home") setAdmin(false); setScreen(s); };
 
   return (
     <>
       <GlobalStyles />
       <Header onNav={onNav} user={userName} type={userType} />
-      {!admin && screen==="home"             && <Landing          onNav={onNav} />}
-      {!admin && screen==="worker-auth"      && <AuthScreen       type="worker"  onBack={()=>onNav("home")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
-      {!admin && screen==="worker-register"  && <WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
-      {!admin && screen==="worker-success"   && <WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
-      {!admin && screen==="worker-app"       && <Landing          onNav={onNav} />}
-      {!admin && screen==="company-auth"     && <AuthScreen       type="company" onBack={()=>onNav("home")} onLogin={()=>onNav("company-app")} onRegister={()=>onNav("company-register")} />}
-      {!admin && screen==="company-register" && <CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
-      {!admin && screen==="company-success"  && <CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
-      {!admin && screen==="company-app"      && <Landing          onNav={onNav} />}
-      {!admin && screen==="admin-login"      && <AdminLogin       onLogin={()=>setAdmin(true)} />}
-      {admin                                 && <AdminPanel />}
+      {!admin&&screen==="home"             &&<Landing          onNav={onNav} />}
+      {!admin&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("home")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
+      {!admin&&screen==="worker-register"  &&<WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
+      {!admin&&screen==="worker-success"   &&<WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
+      {!admin&&screen==="worker-app"       &&<Landing          onNav={onNav} />}
+      {!admin&&screen==="company-auth"     &&<AuthScreen       type="company" onBack={()=>onNav("home")} onLogin={()=>onNav("company-app")} onRegister={()=>onNav("company-register")} />}
+      {!admin&&screen==="company-register" &&<CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
+      {!admin&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
+      {!admin&&screen==="company-app"      &&<Landing          onNav={onNav} />}
+      {!admin&&screen==="admin-login"      &&<AdminLogin       onLogin={()=>setAdmin(true)} />}
+      {admin                               &&<AdminPanel />}
     </>
   );
 }
