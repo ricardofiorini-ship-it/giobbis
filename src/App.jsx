@@ -224,6 +224,14 @@ const saveCompany = async (data) => {
 };
 
 const saveWorker = async (data) => {
+  // Check for duplicate CPF
+  const { data: existCPF } = await supabase.from("workers").select("id").eq("cpf", data.cpf).maybeSingle();
+  if(existCPF) throw new Error("Já existe um cadastro com esse CPF. Se já tem conta, faça login.");
+
+  // Check for duplicate email
+  const { data: existEmail } = await supabase.from("workers").select("id").eq("email", data.email).maybeSingle();
+  if(existEmail) throw new Error("Já existe um cadastro com esse e-mail. Se já tem conta, faça login.");
+
   const { data: worker, error } = await supabase.from("workers").insert({
     nome:data.nome, cpf:data.cpf, nascimento:data.nascimento, telefone:data.telefone,
     cep:data.cep, rua:data.rua, numero:data.numero, complemento:data.complemento,
@@ -236,7 +244,6 @@ const saveWorker = async (data) => {
     disponibilidade: data.disponibilidade,
     equipamentos:data.equipamentos,
     trabalho_equipe:data.trabalhoEquipe, atend_cliente:data.atendCliente, tipo_trabalho:data.tipoTrabalho,
-    tem_pix:data.temPix, chave_pix:data.chavePix,
     pcd:data.pcd, pcd_tipo:data.pcdTipo,
     doc_tipo:data.docTipo, email:data.email, status:"pending",
   }).select().single();
@@ -289,9 +296,22 @@ function AddressBlock({ data, setData, loading, setLoading }) {
 
 // ─── LEVEL SELECTOR ────────────────────────────────────────────
 function LevelSelector({ spec, levels, onChange }) {
-  const sl = levels[spec.id] || { nivel: 0, experiencia: "" };
+  const sl = levels[spec.id] || { nivel:0, experiencia:"", empresas:[] };
+  const [newEmp, setNewEmp] = useState("");
   const levelColors = ["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
   const levelWidth  = [0,25,50,75,100];
+
+  const addEmpresa = () => {
+    if(!newEmp.trim()) return;
+    const empresas = [...(sl.empresas||[]), newEmp.trim()];
+    onChange(spec.id, {...sl, empresas});
+    setNewEmp("");
+  };
+  const removeEmpresa = (i) => {
+    const empresas = (sl.empresas||[]).filter((_,idx)=>idx!==i);
+    onChange(spec.id, {...sl, empresas});
+  };
+
   return (
     <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:18,marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
@@ -309,26 +329,40 @@ function LevelSelector({ spec, levels, onChange }) {
           </div>
         ))}
       </div>
-      {sl.nivel > 0 && (
-        <div className="level-bar" style={{marginBottom:14}}>
-          <div className="level-fill" style={{width:`${levelWidth[sl.nivel]}%`,background:levelColors[sl.nivel]}} />
-        </div>
-      )}
+      {sl.nivel>0&&<div className="level-bar" style={{marginBottom:14}}><div className="level-fill" style={{width:`${levelWidth[sl.nivel]}%`,background:levelColors[sl.nivel]}} /></div>}
 
-      {/* Tempo de experiência */}
-      {sl.nivel > 0 && (
-        <>
-          <div style={{...B,fontSize:11,fontWeight:600,color:C.sub,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Tempo na função</div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {EXP_TIMES.map(exp=>(
-              <div key={exp} onClick={()=>onChange(spec.id,{...sl,experiencia:exp})}
-                style={{padding:"7px 12px",borderRadius:8,cursor:"pointer",border:`1.5px solid ${sl.experiencia===exp?C.green:C.border2}`,background:sl.experiencia===exp?C.greenBg:"transparent",...B,fontSize:12,fontWeight:sl.experiencia===exp?600:400,color:sl.experiencia===exp?C.green:C.sub,transition:"all .15s"}}>
-                {exp}
+      {sl.nivel>0&&<>
+        {/* Tempo */}
+        <div style={{...B,fontSize:11,fontWeight:600,color:C.sub,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Tempo na função</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+          {EXP_TIMES.map(exp=>(
+            <div key={exp} onClick={()=>onChange(spec.id,{...sl,experiencia:exp})}
+              style={{padding:"7px 12px",borderRadius:8,cursor:"pointer",border:`1.5px solid ${sl.experiencia===exp?C.green:C.border2}`,background:sl.experiencia===exp?C.greenBg:"transparent",...B,fontSize:12,fontWeight:sl.experiencia===exp?600:400,color:sl.experiencia===exp?C.green:C.sub,transition:"all .15s"}}>
+              {exp}
+            </div>
+          ))}
+        </div>
+
+        {/* Empresas */}
+        <div style={{...B,fontSize:11,fontWeight:600,color:C.sub,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Onde trabalhou nessa função</div>
+        {(sl.empresas||[]).length>0&&(
+          <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
+            {(sl.empresas||[]).map((emp,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:6,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"5px 12px"}}>
+                <span style={{...B,fontSize:12,fontWeight:600,color:C.green}}>{emp}</span>
+                <span onClick={()=>removeEmpresa(i)} style={{cursor:"pointer",color:C.red,fontWeight:700,fontSize:13,lineHeight:1}}>×</span>
               </div>
             ))}
           </div>
-        </>
-      )}
+        )}
+        <div style={{display:"flex",gap:8}}>
+          <input placeholder="Nome da empresa..." value={newEmp} onChange={e=>setNewEmp(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&addEmpresa()}
+            style={{flex:1,padding:"9px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,color:C.text,outline:"none"}} />
+          <button onClick={addEmpresa} style={{padding:"9px 16px",borderRadius:8,background:C.green,border:"none",color:"#fff",...B,fontSize:13,fontWeight:600,cursor:"pointer"}}>+ Adicionar</button>
+        </div>
+        <div style={{...B,fontSize:11,color:C.muted,marginTop:6}}>Pressione Enter ou clique em Adicionar. Pode informar mais de uma empresa.</div>
+      </>}
     </div>
   );
 }
@@ -341,7 +375,7 @@ function Header({ onNav, user, type }) {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div onClick={()=>onNav("home")} style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
             <div style={{width:32,height:32,background:C.green,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚡</div>
-            <span style={{...H,fontSize:19,fontWeight:900,color:C.navy,letterSpacing:-.4}}>UORKY</span>
+            <span style={{...H,fontSize:19,fontWeight:900,color:C.navy,letterSpacing:-.4}}>VORKY</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {!user?<>
@@ -441,7 +475,7 @@ function WorkerRegister({ onDone, onBack }) {
     5:  true,
     6:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
     7:  !!data.tipoTrabalho,
-    8:  data.temPix?(!!data.chavePix):true,
+    8:  true,
     9:  !!data.fotoRosto,
     10: data.email&&data.senha.length>=8&&!senhaError&&!!data.docTipo&&!!data.selfieDoc,
   }[step];
@@ -475,7 +509,7 @@ function WorkerRegister({ onDone, onBack }) {
           {/* ── STEP 1: Dados pessoais ── */}
           {step===1&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Dados pessoais</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Preencha com seus dados reais. Serão verificados pela equipe UORKY.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Preencha com seus dados reais. Serão verificados pela equipe VORKY.</p>
             <Field label="Nome completo" placeholder="João da Silva" value={data.nome} onChange={v=>set("nome",v)} required />
             <div className="g2">
               <Field label="CPF" placeholder="000.000.000-00" value={data.cpf} onChange={v=>set("cpf",maskCPF(v))} maxLength={14} hint={cpfError} required helper="Será validado pelo sistema" />
@@ -655,25 +689,10 @@ function WorkerRegister({ onDone, onBack }) {
 
           {/* ── STEP 8: Documentação ── */}
           {step===8&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Documentação</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Informações necessárias para receber pagamentos e acessibilidade.</p>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Informações adicionais</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Última etapa antes da foto e documento.</p>
 
-            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Chave PIX para receber</div>
-            <div style={{display:"flex",gap:10,marginBottom:16}}>
-              {[{v:true,l:"Tenho chave PIX"},{v:false,l:"Não tenho ainda"}].map(({v,l})=>(
-                <div key={String(v)} onClick={()=>set("temPix",v)}
-                  style={{flex:1,padding:"12px 16px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${data.temPix===v?C.green:C.border2}`,background:data.temPix===v?C.greenBg:"transparent",textAlign:"center",...B,fontSize:13,fontWeight:data.temPix===v?600:400,color:data.temPix===v?C.green:C.sub,transition:"all .15s"}}>
-                  {l}
-                </div>
-              ))}
-            </div>
-            {data.temPix&&(
-              <Field label="Qual é sua chave PIX?" placeholder="CPF, e-mail, telefone ou chave aleatória" value={data.chavePix} onChange={v=>set("chavePix",v)} helper="Usada pelas empresas para pagar após o turno" />
-            )}
-            {!data.temPix&&<Alert type="warning">Você precisará de uma chave PIX para receber pelos turnos realizados. Crie pelo seu banco antes de começar.</Alert>}
-
-            <Div />
-            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Pessoa com deficiência (PCD)?</div>
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:12}}>Pessoa com deficiência (PCD)?</div>
             <div style={{display:"flex",gap:10,marginBottom:14}}>
               {[{v:true,l:"Sim, sou PCD"},{v:false,l:"Não"}].map(({v,l})=>(
                 <div key={String(v)} onClick={()=>set("pcd",v)}
@@ -685,6 +704,7 @@ function WorkerRegister({ onDone, onBack }) {
             {data.pcd&&(
               <Field label="Tipo de deficiência (opcional)" placeholder="Ex: Auditiva, Visual, Física, Intelectual..." value={data.pcdTipo} onChange={v=>set("pcdTipo",v)} helper="Permite que empresas com cotas PCD priorizem seu perfil" />
             )}
+            <Alert type="info">Informação usada para conectar com empresas que possuem cotas PCD.</Alert>
           </>}
 
           {/* ── STEP 9: Foto ── */}
@@ -737,7 +757,7 @@ function WorkerRegister({ onDone, onBack }) {
                   :<div><div style={{fontSize:48,marginBottom:12}}>🤳</div><div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Selfie segurando o {data.docTipo}</div><div style={{...B,fontSize:13,color:C.muted}}>Foto · máx. 10MB</div></div>}
               </div>
               <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"selfieDoc");}} />
-              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:18}}>🔒 Visível apenas à equipe UORKY.</div>
+              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:18}}>🔒 Visível apenas à equipe VORKY.</div>
             </>}
 
             <Div />
@@ -868,14 +888,14 @@ function CompanyRegister({ onDone, onBack }) {
             {data.unidades.length>0&&<Alert type="success" style={{marginTop:14}}>{data.unidades.length} unidade{data.unidades.length>1?"s":""} cadastrada{data.unidades.length>1?"s":""}.</Alert>}
           </>}
           {step===5&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Como o UORKY funciona</h2>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Como o VORKY funciona</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Entenda antes de finalizar.</p>
             {[
               {icon:"👁",t:"Você escolhe quem trabalha",d:"No Talent Browser você vê perfis verificados, filtra por especialidade e nível, e convida diretamente."},
               {icon:"📋",t:"Publique vagas por unidade",d:"Cada vaga é vinculada a uma de suas unidades. Colaboradores veem a distância exata."},
               {icon:"🔒",t:"Perfis verificados",d:"Documentos conferidos antes de aparecerem na plataforma."},
               {icon:"⭐",t:"Avaliação bidirecional",d:"Empresa e colaborador se avaliam ao final de cada turno."},
-              {icon:"⚖️",t:"Você é o contratante",d:"O UORKY conecta. O vínculo é entre sua empresa e o colaborador."},
+              {icon:"⚖️",t:"Você é o contratante",d:"O VORKY conecta. O vínculo é entre sua empresa e o colaborador."},
             ].map(({icon,t,d})=>(
               <div key={t} style={{display:"flex",gap:14,marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
                 <div style={{width:40,height:40,borderRadius:10,background:C.greenBg,border:`1px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
@@ -923,7 +943,7 @@ function CompanySuccess({ data, onEnter }) {
         <div style={{width:96,height:96,borderRadius:48,background:C.greenBg,border:`3px solid ${C.green}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,margin:"0 auto 24px",animation:"popIn .4s ease both"}}>🏢</div>
         <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,lineHeight:1,marginBottom:14}}>Cadastro enviado!</h2>
         <p style={{...B,fontSize:15,color:C.sub,lineHeight:1.75,marginBottom:22}}><strong style={{color:C.navy}}>{data?.nomeFant||data?.razao}</strong> está em análise. Retorno em até <strong style={{color:C.green}}>24 horas úteis</strong>.</p>
-        <Alert type="success">Cadastro salvo com sucesso no sistema UORKY! ✓</Alert>
+        <Alert type="success">Cadastro salvo com sucesso no sistema VORKY! ✓</Alert>
         <Btn label="Voltar ao início" variant="primary" size="xl" full onClick={onEnter} />
       </div>
     </div>
@@ -953,7 +973,7 @@ function AdminLogin({ onLogin }) {
   const [email,setEmail]=useState(""); const [pass,setPass]=useState(""); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
   const handleLogin = async () => {
     setLoading(true); await new Promise(r=>setTimeout(r,600)); setLoading(false);
-    if(email==="admin@uorky.com"&&pass==="uorky2024") onLogin();
+    if(email==="admin@vorky.com"&&pass==="vorky2024") onLogin();
     else setError("E-mail ou senha incorretos.");
   };
   return (
@@ -961,11 +981,11 @@ function AdminLogin({ onLogin }) {
       <div style={{maxWidth:400,width:"100%"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{width:56,height:56,background:C.navy,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:26}}>🔐</div>
-          <h2 style={{...H,fontSize:28,fontWeight:900,color:C.navy,marginBottom:6}}>Admin UORKY</h2>
+          <h2 style={{...H,fontSize:28,fontWeight:900,color:C.navy,marginBottom:6}}>Admin VORKY</h2>
           <p style={{...B,fontSize:14,color:C.muted}}>Acesso restrito à equipe interna</p>
         </div>
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
-          <Field label="E-mail" placeholder="admin@uorky.com" value={email} onChange={setEmail} type="email" />
+          <Field label="E-mail" placeholder="admin@vorky.com" value={email} onChange={setEmail} type="email" />
           <Field label="Senha" placeholder="••••••••" value={pass} onChange={setPass} type="password" />
           {error&&<Alert type="error">{error}</Alert>}
           <Btn label="Acessar painel" variant="navy" size="lg" full onClick={handleLogin} loading={loading} />
@@ -1050,7 +1070,7 @@ function AdminPanel() {
       <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
         <div style={{padding:"0 16px 18px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
           <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Painel Interno</div>
-          <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Equipe UORKY</div>
+          <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Equipe VORKY</div>
           <button onClick={load} style={{...B,fontSize:11,color:C.green,background:"none",border:"none",cursor:"pointer",marginTop:6,fontWeight:600}}>↻ Atualizar</button>
         </div>
         {NAV.map(n=>(
@@ -1227,7 +1247,7 @@ function AdminPanel() {
                     <Badge status={selWorker.status} />
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px"}}>
-                    {[["CPF",selWorker.cpf],["Nascimento",selWorker.nascimento],["WhatsApp",selWorker.telefone],["E-mail",selWorker.email],["Deslocamento",selWorker.deslocamento||"—"],["PIX",selWorker.tem_pix?selWorker.chave_pix||"Sim":"Não"],["PCD",selWorker.pcd?(selWorker.pcd_tipo||"Sim"):"Não"],["Documento",selWorker.doc_tipo||"—"]].map(([k,v])=>(
+                    {[["CPF",selWorker.cpf],["Nascimento",selWorker.nascimento],["WhatsApp",selWorker.telefone],["E-mail",selWorker.email],["Deslocamento",selWorker.deslocamento||"—"],["PCD",selWorker.pcd?(selWorker.pcd_tipo||"Sim"):"Não"],["Documento",selWorker.doc_tipo||"—"]].map(([k,v])=>(
                       <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}><div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div><div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v||"—"}</div></div>
                     ))}
                   </div>
@@ -1235,7 +1255,7 @@ function AdminPanel() {
 
                 {/* Especialidades com nível */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
-                  <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Especialidades e nível</div>
+                  <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Especialidades e experiência</div>
                   {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
                     const sl = selWorker.spec_levels?.[s.id];
                     const nivel = sl?.nivel||0;
@@ -1248,7 +1268,15 @@ function AdminPanel() {
                             {sl?.experiencia&&<span style={{...B,fontSize:11,color:C.muted}}>· {sl.experiencia}</span>}
                           </div>
                         </div>
-                        <div className="level-bar"><div className="level-fill" style={{width:`${levelWidth[nivel]}%`,background:levelColors[nivel]}} /></div>
+                        <div className="level-bar" style={{marginBottom:sl?.empresas?.length>0?8:0}}><div className="level-fill" style={{width:`${levelWidth[nivel]}%`,background:levelColors[nivel]}} /></div>
+                        {sl?.empresas?.length>0&&(
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
+                            <span style={{...B,fontSize:11,color:C.muted}}>Trabalhou em:</span>
+                            {sl.empresas.map((emp,i)=>(
+                              <span key={i} style={{...B,fontSize:11,fontWeight:600,color:C.navy,background:C.bg,border:`1px solid ${C.border2}`,borderRadius:5,padding:"2px 8px"}}>{emp}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1393,7 +1421,7 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
 // ═══════════════════════════════════════════════════════════════
 // ROOT
 // ═══════════════════════════════════════════════════════════════
-export default function UORKYApp() {
+export default function VORKYApp() {
   const [screen, setScreen] = useState("home");
   const [wData,  setWData]  = useState(null);
   const [cData,  setCData]  = useState(null);
