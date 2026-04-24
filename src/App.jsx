@@ -193,7 +193,12 @@ const EXP_TIMES = [
   "Menos de 6 meses","6 meses a 1 ano","1 a 3 anos","3 a 5 anos","Mais de 5 anos"
 ];
 const DAYS   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
-const SHIFTS = [{id:"manha",icon:"🌅",label:"Manhã",sub:"06h–14h"},{id:"tarde",icon:"☀️",label:"Tarde",sub:"14h–22h"},{id:"noite",icon:"🌙",label:"Noite",sub:"22h–06h"}];
+const SHIFTS = [
+  {id:"manha",    label:"Manhã",     color:"#F59E0B"},
+  {id:"tarde",    label:"Tarde",     color:"#3B82F6"},
+  {id:"noite",    label:"Noite",     color:"#6366F1"},
+  {id:"madrugada",label:"Madrugada", color:"#374151"},
+];
 const SEGS   = ["Supermercado","Atacarejo","Dark Store","Centro de Distribuição","Delivery","Hortifruti","Farmácia","Indústria FMCG","Distribuidor","Outro"];
 const PLANS  = ["Trial (30 dias)","Básico — R$ 299/mês","Profissional — R$ 599/mês","Enterprise — R$ 1.299/mês"];
 const EQUIP  = ["Paleteira manual","Paleteira elétrica","Empilhadeira","Leitor de código de barras","Coletor de dados","Impressora de etiquetas","SAP","Totvs"];
@@ -226,7 +231,9 @@ const saveWorker = async (data) => {
     raio_km:data.raioKm, deslocamento:data.deslocamento,
     specs:data.specs,
     spec_levels:data.specLevels,
-    dias:data.dias, turnos:data.turnos,
+    dias: Object.keys(data.disponibilidade).filter(d=>data.disponibilidade[d].length>0),
+    turnos: [...new Set(Object.values(data.disponibilidade).flat())],
+    disponibilidade: data.disponibilidade,
     equipamentos:data.equipamentos,
     trabalho_equipe:data.trabalhoEquipe, atend_cliente:data.atendCliente, tipo_trabalho:data.tipoTrabalho,
     tem_pix:data.temPix, chave_pix:data.chavePix,
@@ -334,7 +341,7 @@ function Header({ onNav, user, type }) {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div onClick={()=>onNav("home")} style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
             <div style={{width:32,height:32,background:C.green,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚡</div>
-            <span style={{...H,fontSize:19,fontWeight:900,color:C.navy,letterSpacing:-.4}}>Giobbi's</span>
+            <span style={{...H,fontSize:19,fontWeight:900,color:C.navy,letterSpacing:-.4}}>UORKY</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {!user?<>
@@ -401,8 +408,8 @@ function WorkerRegister({ onDone, onBack }) {
     specLevels:{},
     // 5 — Equipamentos
     equipamentos:[],
-    // 6 — Disponibilidade
-    dias:[], turnos:[],
+    // 6 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... })
+    disponibilidade:{},
     // 7 — Perfil comportamental
     trabalhoEquipe:false, atendCliente:false, tipoTrabalho:"",
     // 8 — Documentação
@@ -432,7 +439,7 @@ function WorkerRegister({ onDone, onBack }) {
     3:  data.specs.length>=1,
     4:  allLevelsFilled,
     5:  true,
-    6:  data.dias.length>=1&&data.turnos.length>=1,
+    6:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
     7:  !!data.tipoTrabalho,
     8:  data.temPix?(!!data.chavePix):true,
     9:  !!data.fotoRosto,
@@ -468,7 +475,7 @@ function WorkerRegister({ onDone, onBack }) {
           {/* ── STEP 1: Dados pessoais ── */}
           {step===1&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Dados pessoais</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Preencha com seus dados reais. Serão verificados pela equipe Giobbi's.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Preencha com seus dados reais. Serão verificados pela equipe UORKY.</p>
             <Field label="Nome completo" placeholder="João da Silva" value={data.nome} onChange={v=>set("nome",v)} required />
             <div className="g2">
               <Field label="CPF" placeholder="000.000.000-00" value={data.cpf} onChange={v=>set("cpf",maskCPF(v))} maxLength={14} hint={cpfError} required helper="Será validado pelo sistema" />
@@ -546,34 +553,67 @@ function WorkerRegister({ onDone, onBack }) {
           {/* ── STEP 6: Disponibilidade ── */}
           {step===6&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Disponibilidade</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Informe quais dias e turnos você está disponível para trabalhar. Pode atualizar a qualquer momento.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Marque os turnos disponíveis em cada dia. Deixe em branco os dias que não quer trabalhar.</p>
 
-            <div style={{...B,fontSize:12,fontWeight:600,color:C.sub,textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Dias disponíveis</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:28}}>
-              {DAYS.map(d=>{const on=data.dias.includes(d); return(
-                <div key={d} className={`day-chip ${on?"on":""}`} onClick={()=>toggleArr("dias",d)}>
-                  <span style={{...B,fontSize:13,fontWeight:600,color:on?C.green:C.sub}}>{d}</span>
-                  {on&&<span style={{fontSize:10,color:C.green}}>✓</span>}
-                </div>
-              );})}
+            {/* Grid header */}
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:"4px"}}>
+                <thead>
+                  <tr>
+                    <th style={{...B,fontSize:12,fontWeight:600,color:C.muted,textAlign:"left",padding:"6px 8px",minWidth:48}}></th>
+                    {SHIFTS.map(sh=>(
+                      <th key={sh.id} style={{...B,fontSize:12,fontWeight:700,color:sh.color,textAlign:"center",padding:"6px 8px",minWidth:90}}>
+                        {sh.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DAYS.map(day=>{
+                    const dayShifts = data.disponibilidade[day]||[];
+                    const hasAny = dayShifts.length>0;
+                    const toggle = (shiftId) => {
+                      const curr = data.disponibilidade[day]||[];
+                      const next = curr.includes(shiftId)?curr.filter(s=>s!==shiftId):[...curr,shiftId];
+                      setData(d=>({...d,disponibilidade:{...d.disponibilidade,[day]:next}}));
+                    };
+                    return (
+                      <tr key={day}>
+                        <td style={{...H,fontSize:13,fontWeight:700,color:hasAny?C.navy:C.muted,padding:"4px 8px",whiteSpace:"nowrap"}}>{day}</td>
+                        {SHIFTS.map(sh=>{
+                          const on = dayShifts.includes(sh.id);
+                          return (
+                            <td key={sh.id} style={{padding:"4px"}}>
+                              <div onClick={()=>toggle(sh.id)}
+                                style={{padding:"10px 8px",borderRadius:9,cursor:"pointer",border:`1.5px solid ${on?sh.color:C.border2}`,background:on?sh.color+"18":"transparent",textAlign:"center",transition:"all .15s",userSelect:"none"}}>
+                                <span style={{...B,fontSize:12,fontWeight:on?700:400,color:on?sh.color:C.muted}}>{on?"✓":""}</span>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{...B,fontSize:12,fontWeight:600,color:C.sub,textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Turnos de preferência</div>
-            <div style={{display:"flex",gap:12,marginBottom:20}}>
-              {SHIFTS.map(sh=>{const on=data.turnos.includes(sh.id); return(
-                <div key={sh.id} className={`shift-chip ${on?"on":""}`} onClick={()=>toggleArr("turnos",sh.id)}>
-                  <span style={{fontSize:28}}>{sh.icon}</span>
-                  <span style={{...H,fontSize:15,fontWeight:700,color:on?C.green:C.navy}}>{sh.label}</span>
-                  <span style={{...B,fontSize:12,color:C.muted}}>{sh.sub}</span>
-                  {on&&<span style={{...B,fontSize:11,color:C.green,fontWeight:600}}>✓ Selecionado</span>}
-                </div>
-              );})}
-            </div>
-
-            {data.dias.length>0&&data.turnos.length>0&&(
-              <Alert type="success">
-                Disponível {data.dias.join(", ")} — turnos: {data.turnos.map(t=>SHIFTS.find(s=>s.id===t)?.label).join(", ")}
-              </Alert>
+            {/* Summary */}
+            {Object.values(data.disponibilidade).some(t=>t.length>0)&&(
+              <div style={{marginTop:16,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"12px 16px"}}>
+                <div style={{...B,fontSize:12,fontWeight:600,color:C.green,marginBottom:8}}>✓ Disponibilidade selecionada</div>
+                {DAYS.filter(d=>(data.disponibilidade[d]||[]).length>0).map(d=>(
+                  <div key={d} style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
+                    <span style={{...H,fontSize:12,fontWeight:700,color:C.navy,minWidth:32}}>{d}</span>
+                    <div style={{display:"flex",gap:5}}>
+                      {(data.disponibilidade[d]||[]).map(sid=>{
+                        const sh=SHIFTS.find(s=>s.id===sid);
+                        return sh?<span key={sid} style={{...B,fontSize:11,fontWeight:600,color:sh.color,background:sh.color+"15",padding:"2px 8px",borderRadius:5}}>{sh.label}</span>:null;
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </>}
 
@@ -697,7 +737,7 @@ function WorkerRegister({ onDone, onBack }) {
                   :<div><div style={{fontSize:48,marginBottom:12}}>🤳</div><div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Selfie segurando o {data.docTipo}</div><div style={{...B,fontSize:13,color:C.muted}}>Foto · máx. 10MB</div></div>}
               </div>
               <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"selfieDoc");}} />
-              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:18}}>🔒 Visível apenas à equipe Giobbi's.</div>
+              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:18}}>🔒 Visível apenas à equipe UORKY.</div>
             </>}
 
             <Div />
@@ -828,14 +868,14 @@ function CompanyRegister({ onDone, onBack }) {
             {data.unidades.length>0&&<Alert type="success" style={{marginTop:14}}>{data.unidades.length} unidade{data.unidades.length>1?"s":""} cadastrada{data.unidades.length>1?"s":""}.</Alert>}
           </>}
           {step===5&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Como o Giobbi's funciona</h2>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Como o UORKY funciona</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Entenda antes de finalizar.</p>
             {[
               {icon:"👁",t:"Você escolhe quem trabalha",d:"No Talent Browser você vê perfis verificados, filtra por especialidade e nível, e convida diretamente."},
               {icon:"📋",t:"Publique vagas por unidade",d:"Cada vaga é vinculada a uma de suas unidades. Colaboradores veem a distância exata."},
               {icon:"🔒",t:"Perfis verificados",d:"Documentos conferidos antes de aparecerem na plataforma."},
               {icon:"⭐",t:"Avaliação bidirecional",d:"Empresa e colaborador se avaliam ao final de cada turno."},
-              {icon:"⚖️",t:"Você é o contratante",d:"O Giobbi's conecta. O vínculo é entre sua empresa e o colaborador."},
+              {icon:"⚖️",t:"Você é o contratante",d:"O UORKY conecta. O vínculo é entre sua empresa e o colaborador."},
             ].map(({icon,t,d})=>(
               <div key={t} style={{display:"flex",gap:14,marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
                 <div style={{width:40,height:40,borderRadius:10,background:C.greenBg,border:`1px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
@@ -883,7 +923,7 @@ function CompanySuccess({ data, onEnter }) {
         <div style={{width:96,height:96,borderRadius:48,background:C.greenBg,border:`3px solid ${C.green}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,margin:"0 auto 24px",animation:"popIn .4s ease both"}}>🏢</div>
         <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,lineHeight:1,marginBottom:14}}>Cadastro enviado!</h2>
         <p style={{...B,fontSize:15,color:C.sub,lineHeight:1.75,marginBottom:22}}><strong style={{color:C.navy}}>{data?.nomeFant||data?.razao}</strong> está em análise. Retorno em até <strong style={{color:C.green}}>24 horas úteis</strong>.</p>
-        <Alert type="success">Cadastro salvo com sucesso no sistema Giobbi's! ✓</Alert>
+        <Alert type="success">Cadastro salvo com sucesso no sistema UORKY! ✓</Alert>
         <Btn label="Voltar ao início" variant="primary" size="xl" full onClick={onEnter} />
       </div>
     </div>
@@ -913,7 +953,7 @@ function AdminLogin({ onLogin }) {
   const [email,setEmail]=useState(""); const [pass,setPass]=useState(""); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
   const handleLogin = async () => {
     setLoading(true); await new Promise(r=>setTimeout(r,600)); setLoading(false);
-    if(email==="admin@giobbis.com"&&pass==="giobbis2024") onLogin();
+    if(email==="admin@uorky.com"&&pass==="uorky2024") onLogin();
     else setError("E-mail ou senha incorretos.");
   };
   return (
@@ -921,11 +961,11 @@ function AdminLogin({ onLogin }) {
       <div style={{maxWidth:400,width:"100%"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{width:56,height:56,background:C.navy,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",fontSize:26}}>🔐</div>
-          <h2 style={{...H,fontSize:28,fontWeight:900,color:C.navy,marginBottom:6}}>Admin Giobbi's</h2>
+          <h2 style={{...H,fontSize:28,fontWeight:900,color:C.navy,marginBottom:6}}>Admin UORKY</h2>
           <p style={{...B,fontSize:14,color:C.muted}}>Acesso restrito à equipe interna</p>
         </div>
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
-          <Field label="E-mail" placeholder="admin@giobbis.com" value={email} onChange={setEmail} type="email" />
+          <Field label="E-mail" placeholder="admin@uorky.com" value={email} onChange={setEmail} type="email" />
           <Field label="Senha" placeholder="••••••••" value={pass} onChange={setPass} type="password" />
           {error&&<Alert type="error">{error}</Alert>}
           <Btn label="Acessar painel" variant="navy" size="lg" full onClick={handleLogin} loading={loading} />
@@ -1010,7 +1050,7 @@ function AdminPanel() {
       <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
         <div style={{padding:"0 16px 18px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
           <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Painel Interno</div>
-          <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Equipe Giobbi's</div>
+          <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Equipe UORKY</div>
           <button onClick={load} style={{...B,fontSize:11,color:C.green,background:"none",border:"none",cursor:"pointer",marginTop:6,fontWeight:600}}>↻ Atualizar</button>
         </div>
         {NAV.map(n=>(
@@ -1217,13 +1257,26 @@ function AdminPanel() {
 
                 {/* Equipamentos + Disponibilidade + Perfil */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
-                  <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Disponibilidade</div>
-                  <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
-                    {["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"].map(d=>{const on=selWorker.dias?.includes(d);return <div key={d} style={{padding:"6px 12px",borderRadius:7,background:on?C.greenBg:C.bg,border:`1px solid ${on?C.greenBorder:C.border}`}}><span style={{...B,fontSize:12,fontWeight:600,color:on?C.green:C.muted}}>{d}</span></div>;})}
-                  </div>
-                  <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:20}}>
-                    {selWorker.turnos?.map(t=>{const sh=SHIFTS.find(s=>s.id===t);return sh?<div key={t} style={{display:"flex",alignItems:"center",gap:6,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"6px 14px"}}><span>{sh.icon}</span><span style={{...B,fontSize:13,fontWeight:600,color:C.green}}>{sh.label} ({sh.sub})</span></div>:null;})}
-                  </div>
+                  <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:14}}>Disponibilidade</div>
+                  {selWorker.disponibilidade&&Object.keys(selWorker.disponibilidade).filter(d=>selWorker.disponibilidade[d]?.length>0).length>0?(
+                    <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:16}}>
+                      {DAYS.filter(d=>(selWorker.disponibilidade[d]||[]).length>0).map(d=>(
+                        <div key={d} style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{...H,fontSize:12,fontWeight:700,color:C.navy,minWidth:32}}>{d}</span>
+                          <div style={{display:"flex",gap:5}}>
+                            {(selWorker.disponibilidade[d]||[]).map(sid=>{
+                              const sh=SHIFTS.find(s=>s.id===sid);
+                              return sh?<span key={sid} style={{...B,fontSize:11,fontWeight:600,color:sh.color,background:sh.color+"15",padding:"2px 9px",borderRadius:5}}>{sh.label}</span>:null;
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ):(
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+                      {DAYS.map(d=>{const on=selWorker.dias?.includes(d);return <div key={d} style={{padding:"5px 11px",borderRadius:7,background:on?C.greenBg:C.bg,border:`1px solid ${on?C.greenBorder:C.border}`}}><span style={{...B,fontSize:12,fontWeight:600,color:on?C.green:C.muted}}>{d}</span></div>;})}
+                    </div>
+                  )}
                   {selWorker.equipamentos?.length>0&&<>
                     <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:10}}>Equipamentos</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:16}}>
@@ -1340,7 +1393,7 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
 // ═══════════════════════════════════════════════════════════════
 // ROOT
 // ═══════════════════════════════════════════════════════════════
-export default function GiobbisApp() {
+export default function UORKYApp() {
   const [screen, setScreen] = useState("home");
   const [wData,  setWData]  = useState(null);
   const [cData,  setCData]  = useState(null);
