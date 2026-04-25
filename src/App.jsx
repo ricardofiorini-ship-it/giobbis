@@ -206,6 +206,12 @@ const DESLOCAMENTOS = ["Transporte público","Moto própria","Carro próprio","B
 
 // ─── SUPABASE FUNCTIONS ────────────────────────────────────────
 const saveCompany = async (data) => {
+  // Check duplicates
+  const { data: existCNPJ } = await supabase.from("companies").select("id").eq("cnpj", data.cnpj).maybeSingle();
+  if(existCNPJ) throw new Error("CNPJ já cadastrado. Se já tem conta, faça login.");
+  const { data: existEmail } = await supabase.from("companies").select("id").eq("email", data.email).maybeSingle();
+  if(existEmail) throw new Error("E-mail já cadastrado. Se já tem conta, faça login.");
+
   const { data: company, error } = await supabase.from("companies").insert({
     cnpj:data.cnpj, razao:data.razao, nome_fant:data.nomeFant, site:data.site, seg:data.seg,
     cep:data.cep, rua:data.rua, numero:data.numero, complemento:data.complemento,
@@ -221,6 +227,31 @@ const saveCompany = async (data) => {
     })));
   }
   return company;
+};
+
+const addUnitToDB = async (companyId, unit) => {
+  const { data, error } = await supabase.from("company_units").insert({
+    company_id:companyId, nome:unit.nome, cep:unit.cep, rua:unit.rua, numero:unit.numero,
+    complemento:unit.complemento, bairro:unit.bairro, cidade:unit.cidade, estado:unit.estado,
+  }).select().single();
+  if(error) throw error;
+  return data;
+};
+
+const deleteUnitFromDB = async (unitId) => {
+  const { error } = await supabase.from("company_units").delete().eq("id", unitId);
+  if(error) throw error;
+};
+
+const deleteCompanyDB = async (id) => {
+  await supabase.from("company_units").delete().eq("company_id", id);
+  const { error } = await supabase.from("companies").delete().eq("id", id);
+  if(error) throw error;
+};
+
+const deleteWorkerDB = async (id) => {
+  const { error } = await supabase.from("workers").delete().eq("id", id);
+  if(error) throw error;
 };
 
 const saveWorker = async (data) => {
@@ -913,8 +944,9 @@ function CompanyRegister({ onDone, onBack }) {
   const [uCepLoading, setUCepLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [cnpjChecking, setCnpjChecking] = useState(false);
   const [data, setData] = useState({
-    cnpj:"", razao:"", nomeFant:"", site:"", seg:"",
+    cnpj:"", cnpjExists:false, razao:"", nomeFant:"", site:"", seg:"",
     cep:"", rua:"", numero:"", complemento:"", bairro:"", cidade:"", estado:"",
     respNome:"", respCargo:"", respTel:"", respEmail:"",
     unidades:[],
@@ -924,6 +956,15 @@ function CompanyRegister({ onDone, onBack }) {
   const set = (k,v) => setData(d=>({...d,[k]:v}));
   const senhaError = data.confirma&&data.senha!==data.confirma?"Senhas não coincidem":"";
 
+  const checkCNPJ = async (cnpj) => {
+    const raw = cnpj.replace(/\D/g,"");
+    if(raw.length!==14) return;
+    setCnpjChecking(true);
+    const { data: existing } = await supabase.from("companies").select("id").eq("cnpj", cnpj).maybeSingle();
+    setCnpjChecking(false);
+    set("cnpjExists", !!existing);
+  };
+
   const addUnit = () => {
     if(!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero) return;
     setData(d=>({...d,unidades:[...d.unidades,{...newUnit,id:Date.now()}]}));
@@ -931,7 +972,7 @@ function CompanyRegister({ onDone, onBack }) {
   };
 
   const canNext = {
-    1: data.cnpj.replace(/\D/g,"").length===14&&data.razao&&data.seg,
+    1: data.cnpj.replace(/\D/g,"").length===14&&!data.cnpjExists&&data.razao&&data.seg,
     2: data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade,
     3: data.respNome&&data.respCargo&&data.respTel.replace(/\D/g,"").length>=10&&data.respEmail,
     4: true, 5: true,
@@ -962,7 +1003,16 @@ function CompanyRegister({ onDone, onBack }) {
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Dados da empresa</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Usaremos o CNPJ para verificar sua empresa na Receita Federal.</p>
             <div className="g2">
-              <Field label="CNPJ" placeholder="00.000.000/0000-00" value={data.cnpj} onChange={v=>set("cnpj",maskCNPJ(v))} maxLength={18} required />
+              <div>
+                <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>CNPJ <span style={{color:C.red}}>*</span></label>
+                <input placeholder="00.000.000/0000-00" value={data.cnpj} maxLength={18}
+                  onChange={e=>{ set("cnpjExists",false); set("cnpj",maskCNPJ(e.target.value)); }}
+                  onBlur={()=>checkCNPJ(data.cnpj)}
+                  style={{width:"100%",padding:"11px 14px",borderRadius:8,border:`1.5px solid ${data.cnpjExists?C.red:C.border2}`,background:"#fff",...B,fontSize:14,color:C.text,outline:"none"}} />
+                {cnpjChecking&&<div style={{...B,fontSize:11,color:C.muted,marginTop:5}}>🔍 Verificando CNPJ...</div>}
+                {data.cnpjExists&&<div style={{...B,fontSize:11,color:C.red,marginTop:5}}>⚠ CNPJ já cadastrado — se já tem conta, faça login.</div>}
+                {!data.cnpjExists&&!cnpjChecking&&data.cnpj.replace(/\D/g,"").length===14&&<div style={{...B,fontSize:11,color:C.green,marginTop:5}}>✓ CNPJ disponível</div>}
+              </div>
               <Field label="Nome fantasia" placeholder="Como aparece no sistema" value={data.nomeFant} onChange={v=>set("nomeFant",v)} />
             </div>
             <Field label="Razão social" placeholder="Nome Fantasia Ltda." value={data.razao} onChange={v=>set("razao",v)} required />
@@ -1129,9 +1179,11 @@ function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [selCompany, setSelCompany] = useState(null);
   const [selWorker, setSelWorker] = useState(null);
-  const [rejectModal, setRejectModal] = useState(null);
-  const [rejectNote, setRejectNote] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [rejectModal,  setRejectModal]  = useState(null);
+  const [rejectNote,   setRejectNote]   = useState("");
+  const [deleteModal,  setDeleteModal]  = useState(null);
+  const [saving,  setSaving]  = useState(false);
+  const [search,  setSearch]  = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -1142,6 +1194,17 @@ function AdminPanel() {
 
   const updateCo = async (id,changes) => { setSaving(true); await updateCompanyDB(id,changes); setCompanies(cs=>cs.map(c=>c.id===id?{...c,...changes}:c)); setSelCompany(s=>s?.id===id?{...s,...changes}:s); setSaving(false); };
   const updateWo = async (id,changes) => { setSaving(true); await updateWorkerDB(id,changes); setWorkers(ws=>ws.map(w=>w.id===id?{...w,...changes}:w)); setSelWorker(s=>s?.id===id?{...s,...changes}:s); setSaving(false); };
+
+  const deleteCo = async (id) => {
+    setSaving(true);
+    try { await deleteCompanyDB(id); setCompanies(cs=>cs.filter(c=>c.id!==id)); setSelCompany(null); setDeleteModal(null); }
+    catch(e){ alert("Erro ao excluir."); } finally { setSaving(false); }
+  };
+  const deleteWo = async (id) => {
+    setSaving(true);
+    try { await deleteWorkerDB(id); setWorkers(ws=>ws.filter(w=>w.id!==id)); setSelWorker(null); setDeleteModal(null); }
+    catch(e){ alert("Erro ao excluir."); } finally { setSaving(false); }
+  };
 
   const pending_co  = companies.filter(c=>c.status==="pending").length;
   const pending_wo  = workers.filter(w=>w.status==="pending").length;
@@ -1181,6 +1244,21 @@ function AdminPanel() {
     </div>
   );
 
+  const AdminDeleteModal = () => (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:C.white,borderRadius:16,padding:28,maxWidth:420,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.15)"}}>
+        <h3 style={{...H,fontSize:20,fontWeight:800,color:C.red,marginBottom:8}}>⚠ Excluir permanentemente</h3>
+        <p style={{...B,fontSize:14,color:C.sub,marginBottom:8,lineHeight:1.65}}>Você está prestes a excluir <strong>{deleteModal?.name}</strong>.</p>
+        <Alert type="error">Esta ação é irreversível. Todos os dados serão apagados do sistema.</Alert>
+        <div style={{display:"flex",gap:10,marginTop:8}}>
+          <Btn label="Cancelar" variant="ghost" size="md" full onClick={()=>setDeleteModal(null)} />
+          <Btn label="Excluir definitivamente" variant="danger" size="md" full loading={saving}
+            onClick={()=>deleteModal.type==="company"?deleteCo(deleteModal.id):deleteWo(deleteModal.id)} />
+        </div>
+      </div>
+    </div>
+  );
+
   if(loading) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh",flexDirection:"column",gap:16}}>
       <span style={{width:36,height:36,borderRadius:18,border:`3px solid ${C.border2}`,borderTopColor:C.green,animation:"spin .8s linear infinite",display:"block"}} />
@@ -1191,6 +1269,7 @@ function AdminPanel() {
   return (
     <div style={{display:"grid",gridTemplateColumns:"220px 1fr",minHeight:"calc(100vh - 60px)"}}>
       {rejectModal&&<RejectModal />}
+      {deleteModal&&<AdminDeleteModal />
       <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
         <div style={{padding:"0 16px 18px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
           <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Painel Interno</div>
@@ -1256,12 +1335,16 @@ function AdminPanel() {
 
         {tab==="companies"&&!selCompany&&(
           <div>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:20}}>Empresas</h2>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:16}}>Empresas</h2>
+            <input placeholder="🔍 Buscar por nome ou CNPJ..." value={search} onChange={e=>setSearch(e.target.value)}
+              style={{width:"100%",maxWidth:400,padding:"9px 14px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,marginBottom:16,outline:"none"}} />
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,background:C.bg}}>
                 {["Empresa","Segmento","Unidades","Status","Pagamento"].map(h=><div key={h} style={{...B,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>{h}</div>)}
               </div>
-              {companies.length===0?<div style={{padding:48,textAlign:"center",...B,fontSize:14,color:C.muted}}>Nenhuma empresa cadastrada ainda.</div>:companies.map(co=>(
+              {companies.filter(c=>!search||(c.nome_fant||c.razao||"").toLowerCase().includes(search.toLowerCase())||c.cnpj?.includes(search)).length===0
+                ?<div style={{padding:48,textAlign:"center",...B,fontSize:14,color:C.muted}}>Nenhuma empresa encontrada.</div>
+                :companies.filter(c=>!search||(c.nome_fant||c.razao||"").toLowerCase().includes(search.toLowerCase())||c.cnpj?.includes(search)).map(co=>(
                 <div key={co.id} className="card-h" onClick={()=>setSelCompany(co)} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",padding:"14px 20px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
                   <div><div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{co.nome_fant||co.razao}</div><div style={{...B,fontSize:12,color:C.muted}}>{co.cnpj} · {co.cidade}/{co.estado}</div></div>
                   <div style={{...B,fontSize:13,color:C.sub}}>{co.seg}</div>
@@ -1335,6 +1418,11 @@ function AdminPanel() {
                 {selCompany.status==="rejected"&&(<div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
                   <Btn label="↩ Reabrir para análise" variant="amber" size="sm" full loading={saving} onClick={()=>updateCo(selCompany.id,{status:"pending",reject_note:"",pay_status:"trial"})} />
                 </div>)}
+                <div style={{background:C.white,border:`1px solid ${C.redBorder}`,borderRadius:12,padding:20}}>
+                  <div style={{...H,fontSize:13,fontWeight:700,color:C.red,marginBottom:10}}>Zona de perigo</div>
+                  <Btn label="🗑 Excluir empresa" variant="danger" size="sm" full onClick={()=>setDeleteModal({id:selCompany.id,name:selCompany.nome_fant||selCompany.razao,type:"company"})} />
+                  <div style={{...B,fontSize:11,color:C.muted,marginTop:8}}>Remove permanentemente todos os dados desta empresa.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1342,12 +1430,16 @@ function AdminPanel() {
 
         {tab==="workers"&&!selWorker&&(
           <div>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:20}}>Colaboradores</h2>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:16}}>Colaboradores</h2>
+            <input placeholder="🔍 Buscar por nome ou CPF..." value={search} onChange={e=>setSearch(e.target.value)}
+              style={{width:"100%",maxWidth:400,padding:"9px 14px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,marginBottom:16,outline:"none"}} />
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,background:C.bg}}>
                 {["Colaborador","Especialidades","Disponibilidade","Status"].map(h=><div key={h} style={{...B,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>{h}</div>)}
               </div>
-              {workers.length===0?<div style={{padding:48,textAlign:"center",...B,fontSize:14,color:C.muted}}>Nenhum colaborador cadastrado ainda.</div>:workers.map(wo=>(
+              {workers.filter(w=>!search||w.nome?.toLowerCase().includes(search.toLowerCase())||w.cpf?.includes(search)).length===0
+                ?<div style={{padding:48,textAlign:"center",...B,fontSize:14,color:C.muted}}>Nenhum colaborador encontrado.</div>
+                :workers.filter(w=>!search||w.nome?.toLowerCase().includes(search.toLowerCase())||w.cpf?.includes(search)).map(wo=>(
                 <div key={wo.id} className="card-h" onClick={()=>setSelWorker(wo)} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"14px 20px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
                   <div><div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{wo.nome}</div><div style={{...B,fontSize:12,color:C.muted}}>{wo.cpf} · {wo.cidade} · {fmtDate(wo.created_at)}</div></div>
                   <div style={{...B,fontSize:12,color:C.sub}}>{wo.specs?.length||0} esp.</div>
@@ -1478,6 +1570,11 @@ function AdminPanel() {
                 {selWorker.status==="rejected"&&(<div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
                   <Btn label="↩ Reabrir" variant="amber" size="sm" full loading={saving} onClick={()=>updateWo(selWorker.id,{status:"pending",reject_note:""})} />
                 </div>)}
+                <div style={{background:C.white,border:`1px solid ${C.redBorder}`,borderRadius:12,padding:20}}>
+                  <div style={{...H,fontSize:13,fontWeight:700,color:C.red,marginBottom:10}}>Zona de perigo</div>
+                  <Btn label="🗑 Excluir colaborador" variant="danger" size="sm" full onClick={()=>setDeleteModal({id:selWorker.id,name:selWorker.nome,type:"worker"})} />
+                  <div style={{...B,fontSize:11,color:C.muted,marginTop:8}}>Remove permanentemente todos os dados deste colaborador.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -1596,85 +1693,103 @@ function CompanyLogin({ onLogin, onRegister, onBack }) {
 // ═══════════════════════════════════════════════════════════════
 // TALENT BROWSER
 // ═══════════════════════════════════════════════════════════════
-function TalentBrowser({ company, onLogout }) {
-  const [selUnit,    setSelUnit]    = useState(null);
-  const [workers,    setWorkers]    = useState([]);
-  const [filtered,   setFiltered]   = useState([]);
-  const [loading,    setLoading]    = useState(false);
-  const [calcMsg,    setCalcMsg]    = useState("");
-  const [selWorker,  setSelWorker]  = useState(null);
+function TalentBrowser({ company, onLogout, onUpdateCompany }) {
+  const [tab,       setTab]       = useState("talent");
+  const [selUnit,   setSelUnit]   = useState(null);
+  const [workers,   setWorkers]   = useState([]);
+  const [filtered,  setFiltered]  = useState([]);
+  const [loading,   setLoading]   = useState(false);
+  const [calcMsg,   setCalcMsg]   = useState("");
+  const [selWorker, setSelWorker] = useState(null);
+  const [units,     setUnits]     = useState(company.company_units||[]);
+  const [savingUnit,setSavingUnit]= useState(false);
+  const [uCepLoad,  setUCepLoad]  = useState(false);
+  const [newUnit,   setNewUnit]   = useState({nome:"",cep:"",rua:"",numero:"",complemento:"",bairro:"",cidade:"",estado:""});
+  const [deleteModal, setDeleteModal] = useState(null); // {type, id, name}
 
-  // Filters
-  const [fSpec,  setFSpec]  = useState("all");
-  const [fLevel, setFLevel] = useState(0);
-  const [fDia,   setFDia]   = useState("all");
-  const [fTurno, setFTurno] = useState("all");
+  const fSpec  = useState("all");   const [fSpecV,  setFSpec]  = [fSpec[0],  fSpec[1]];
+  const fLevel = useState(0);       const [fLevelV, setFLevel] = [fLevel[0], fLevel[1]];
+  const fDia   = useState("all");   const [fDiaV,   setFDia]   = [fDia[0],   fDia[1]];
+  const fTurno = useState("all");   const [fTurnoV, setFTurno] = [fTurno[0], fTurno[1]];
 
-  const units = company.company_units || [];
   const levelColors = ["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
   const levelWidth  = [0,25,50,75,100];
 
-  // Load workers when unit selected
-  useEffect(() => {
-    if(!selUnit) return;
-    loadWorkers();
-  }, [selUnit]);
+  useEffect(()=>{ if(selUnit) loadWorkers(); },[selUnit]);
 
-  // Apply filters
-  useEffect(() => {
-    let list = workers;
-    if(fSpec!=="all") list = list.filter(w=>w.specs?.includes(fSpec) && (w.spec_levels?.[fSpec]?.nivel||0) >= fLevel);
-    if(fDia!=="all")  list = list.filter(w=>(w.disponibilidade?.[fDia]||[]).length>0);
-    if(fTurno!=="all") list = list.filter(w=>Object.values(w.disponibilidade||{}).some(t=>t.includes(fTurno)));
+  useEffect(()=>{
+    let list=workers;
+    if(fSpecV!=="all") list=list.filter(w=>w.specs?.includes(fSpecV)&&(w.spec_levels?.[fSpecV]?.nivel||0)>=fLevelV);
+    if(fDiaV!=="all")  list=list.filter(w=>(w.disponibilidade?.[fDiaV]||[]).length>0);
+    if(fTurnoV!=="all") list=list.filter(w=>Object.values(w.disponibilidade||{}).some(t=>t.includes(fTurnoV)));
     setFiltered(list);
-  }, [workers, fSpec, fLevel, fDia, fTurno]);
+  },[workers,fSpecV,fLevelV,fDiaV,fTurnoV]);
 
   const loadWorkers = async () => {
-    setLoading(true);
-    setCalcMsg("Buscando colaboradores aprovados...");
-    setWorkers([]); setFiltered([]);
-
+    setLoading(true); setCalcMsg("Buscando colaboradores aprovados..."); setWorkers([]); setFiltered([]);
     try {
-      const { data: wList } = await supabase
-        .from("workers")
-        .select("*")
-        .eq("status","approved");
-
-      if(!wList||wList.length===0){ setLoading(false); setCalcMsg(""); return; }
-
+      const { data: wList } = await supabase.from("workers").select("*").eq("status","approved");
+      if(!wList||wList.length===0){ setLoading(false); setCalcMsg("Nenhum colaborador aprovado ainda."); return; }
       setCalcMsg(`Calculando distâncias para ${wList.length} colaboradores...`);
-
-      // Get unit coords
       const unitCoords = await cepToCoords(selUnit.cep);
-
-      const withDist = await Promise.all(wList.map(async w => {
+      const withDist = await Promise.all(wList.map(async w=>{
         try {
           const wCoords = await cepToCoords(w.cep);
-          if(!unitCoords||!wCoords) return {...w, distKm:999, distLabel:"—"};
-          const dist = haversine(unitCoords.lat, unitCoords.lng, wCoords.lat, wCoords.lng);
-          const withinRadius = dist <= (w.raio_km||10);
-          return {...w, distKm:dist, distLabel:`${dist.toFixed(1)}km`, withinRadius};
-        } catch { return {...w, distKm:999, distLabel:"—", withinRadius:false}; }
+          if(!unitCoords||!wCoords) return {...w,distKm:999,distLabel:"—",withinRadius:false};
+          const dist = haversine(unitCoords.lat,unitCoords.lng,wCoords.lat,wCoords.lng);
+          return {...w,distKm:dist,distLabel:`${dist.toFixed(1)}km`,withinRadius:dist<=(w.raio_km||10)};
+        } catch { return {...w,distKm:999,distLabel:"—",withinRadius:false}; }
       }));
-
-      const available = withDist
-        .filter(w=>w.withinRadius)
-        .sort((a,b)=>a.distKm-b.distKm);
-
-      setWorkers(available);
-      setFiltered(available);
+      const available = withDist.filter(w=>w.withinRadius).sort((a,b)=>a.distKm-b.distKm);
+      setWorkers(available); setFiltered(available);
       setCalcMsg(`${available.length} colaboradores disponíveis na região`);
-    } catch(e) {
-      setCalcMsg("Erro ao buscar colaboradores.");
-    } finally {
-      setLoading(false);
-    }
+    } catch(e) { setCalcMsg("Erro ao buscar colaboradores."); }
+    finally { setLoading(false); }
+  };
+
+  const addUnit = async () => {
+    if(!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero) return;
+    setSavingUnit(true);
+    try {
+      const saved = await addUnitToDB(company.id, newUnit);
+      const updated = [...units, saved];
+      setUnits(updated);
+      onUpdateCompany({...company, company_units: updated});
+      setNewUnit({nome:"",cep:"",rua:"",numero:"",complemento:"",bairro:"",cidade:"",estado:""});
+    } catch(e){ alert("Erro ao salvar unidade."); }
+    finally { setSavingUnit(false); }
+  };
+
+  const removeUnit = async (unitId) => {
+    try {
+      await deleteUnitFromDB(unitId);
+      const updated = units.filter(u=>u.id!==unitId);
+      setUnits(updated);
+      if(selUnit?.id===unitId){ setSelUnit(null); setWorkers([]); setFiltered([]); }
+    } catch(e){ alert("Erro ao remover unidade."); }
+    finally { setDeleteModal(null); }
   };
 
   const whatsappMsg = (w) => {
     const msg = `Olá ${w.nome.split(" ")[0]}! Sou da empresa *${company.nome_fant||company.razao}* e encontrei seu perfil no VORKY. Temos uma oportunidade de trabalho na nossa unidade *${selUnit?.nome}*. Podemos conversar?`;
     return `https://wa.me/55${w.telefone?.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`;
   };
+
+  // Delete confirmation modal
+  const DeleteModal = () => (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:16,padding:28,maxWidth:400,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,.15)"}}>
+        <h3 style={{...H,fontSize:20,fontWeight:800,color:C.navy,marginBottom:8}}>Remover unidade</h3>
+        <p style={{...B,fontSize:14,color:C.sub,marginBottom:20,lineHeight:1.65}}>Tem certeza que deseja remover a unidade <strong>{deleteModal?.name}</strong>? Esta ação não pode ser desfeita.</p>
+        <div style={{display:"flex",gap:10}}>
+          <Btn label="Cancelar" variant="ghost" size="md" full onClick={()=>setDeleteModal(null)} />
+          <Btn label="Remover" variant="danger" size="md" full onClick={()=>removeUnit(deleteModal.id)} />
+        </div>
+      </div>
+    </div>
+  );
+
+  const TABS = [{id:"talent",icon:"🔍",label:"Talent Browser"},{id:"profile",icon:"🏢",label:"Meu Perfil"}];
 
   // Worker detail modal
   if(selWorker) return (
@@ -1788,45 +1903,68 @@ function TalentBrowser({ company, onLogout }) {
   );
 
   return (
-    <div style={{minHeight:"90vh",padding:"28px 32px",background:C.bg}}>
-      <div style={{maxWidth:1100,margin:"0 auto"}}>
+    <div style={{minHeight:"90vh",background:C.bg}}>
+      {deleteModal&&<DeleteModal />}
 
-        {/* Header */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28,flexWrap:"wrap",gap:16}}>
-          <div>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:4}}>Talent Browser</h2>
-            <div style={{...B,fontSize:13,color:C.muted}}>{company.nome_fant||company.razao} · {company.seg}</div>
-          </div>
+      {/* Header */}
+      <div style={{background:C.white,borderBottom:`1px solid ${C.border}`,padding:"14px 32px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{...H,fontSize:17,fontWeight:900,color:C.navy}}>{company.nome_fant||company.razao}</div>
+          <div style={{...B,fontSize:12,color:C.muted}}>{company.seg} · {company.cidade}/{company.estado}</div>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <Badge status={company.status} />
           <Btn label="Sair" variant="ghost" size="sm" onClick={onLogout} />
         </div>
+      </div>
 
-        {/* Unit selector */}
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,marginBottom:20}}>
-          <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>
-            Selecione a unidade onde precisa de colaboradores
-          </div>
-          {units.length===0
-            ? <Alert type="warning">Nenhuma unidade cadastrada. Acesse seu perfil para adicionar unidades.</Alert>
-            : <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                {units.map(u=>(
-                  <div key={u.id} onClick={()=>setSelUnit(u)}
-                    style={{padding:"12px 18px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${selUnit?.id===u.id?C.green:C.border2}`,background:selUnit?.id===u.id?C.greenBg:"#fff",transition:"all .15s"}}>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:selUnit?.id===u.id?C.green:C.navy}}>{u.nome}</div>
-                    <div style={{...B,fontSize:12,color:C.muted,marginTop:2}}>📍 {u.bairro}, {u.cidade}/{u.estado}</div>
-                    <div style={{...B,fontSize:11,color:C.muted,marginTop:1}}>CEP: {u.cep}</div>
+      {/* Tabs */}
+      <div style={{background:C.white,borderBottom:`1px solid ${C.border}`,display:"flex",padding:"0 32px"}}>
+        {TABS.map(t=>(
+          <button key={t.id} className={`tab-btn ${tab===t.id?"active":""}`} onClick={()=>setTab(t.id)} style={{maxWidth:180}}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 32px"}}>
+
+        {/* ── TAB: TALENT BROWSER ── */}
+        {tab==="talent"&&<>
+          {/* Unit selector */}
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,marginBottom:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Selecione a unidade onde precisa de colaboradores</div>
+              {units.length===0&&<Btn label="+ Adicionar unidade" variant="outline" size="sm" onClick={()=>setTab("profile")} />}
+            </div>
+            {units.length===0
+              ? <div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:10,padding:"16px 20px",display:"flex",alignItems:"center",gap:14}}>
+                  <span style={{fontSize:28}}>⚠️</span>
+                  <div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.amber,marginBottom:4}}>Nenhuma unidade cadastrada</div>
+                    <div style={{...B,fontSize:13,color:C.sub,marginBottom:10}}>Você precisa cadastrar ao menos uma unidade para buscar colaboradores na região.</div>
+                    <Btn label="Ir para Meu Perfil →" variant="amber" size="sm" onClick={()=>setTab("profile")} />
                   </div>
-                ))}
-              </div>
-          }
-        </div>
+                </div>
+              : <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  {units.map(u=>(
+                    <div key={u.id} onClick={()=>{setSelUnit(u);setWorkers([]);setFiltered([]);}}
+                      style={{padding:"12px 18px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${selUnit?.id===u.id?C.green:C.border2}`,background:selUnit?.id===u.id?C.greenBg:"#fff",transition:"all .15s"}}>
+                      <div style={{...H,fontSize:14,fontWeight:700,color:selUnit?.id===u.id?C.green:C.navy}}>{u.nome}</div>
+                      <div style={{...B,fontSize:12,color:C.muted,marginTop:2}}>📍 {u.bairro}, {u.cidade}/{u.estado}</div>
+                      <div style={{...B,fontSize:11,color:C.muted,marginTop:1}}>CEP: {u.cep}</div>
+                    </div>
+                  ))}
+                </div>
+            }
+          </div>
 
-        {/* Filters + results */}
-        {selUnit&&(
-          <>
+          {selUnit&&<>
             {/* Status bar */}
-            <div style={{background:calcMsg&&loading?C.amberBg:C.greenBg,border:`1px solid ${calcMsg&&loading?C.amberBorder:C.greenBorder}`,borderRadius:10,padding:"10px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+            <div style={{background:loading?C.amberBg:C.greenBg,border:`1px solid ${loading?C.amberBorder:C.greenBorder}`,borderRadius:10,padding:"10px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
               {loading&&<span style={{width:14,height:14,borderRadius:7,border:`2px solid ${C.amber}`,borderTopColor:"transparent",animation:"spin .7s linear infinite",display:"inline-block",flexShrink:0}} />}
               <span style={{...B,fontSize:13,fontWeight:600,color:loading?C.amber:C.green}}>{calcMsg||`Unidade: ${selUnit.nome}`}</span>
+              {!loading&&<Btn label="↻ Atualizar" variant="ghost" size="sm" onClick={loadWorkers} />}
             </div>
 
             {/* Filters */}
@@ -1834,16 +1972,16 @@ function TalentBrowser({ company, onLogout }) {
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px 20px",marginBottom:16,display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-end"}}>
                 <div>
                   <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>ESPECIALIDADE</label>
-                  <select value={fSpec} onChange={e=>{setFSpec(e.target.value);setFLevel(0);}}
+                  <select value={fSpecV} onChange={e=>{setFSpec(e.target.value);setFLevel(0);}}
                     style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
                     <option value="all">Todas</option>
                     {SPECS.map(s=><option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
                   </select>
                 </div>
-                {fSpec!=="all"&&(
+                {fSpecV!=="all"&&(
                   <div>
                     <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>NÍVEL MÍNIMO</label>
-                    <select value={fLevel} onChange={e=>setFLevel(parseInt(e.target.value))}
+                    <select value={fLevelV} onChange={e=>setFLevel(parseInt(e.target.value))}
                       style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
                       {LEVELS.map(l=><option key={l.value} value={l.value}>{l.label}</option>)}
                     </select>
@@ -1851,7 +1989,7 @@ function TalentBrowser({ company, onLogout }) {
                 )}
                 <div>
                   <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>DIA</label>
-                  <select value={fDia} onChange={e=>setFDia(e.target.value)}
+                  <select value={fDiaV} onChange={e=>setFDia(e.target.value)}
                     style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
                     <option value="all">Todos os dias</option>
                     {DAYS.map(d=><option key={d} value={d}>{d}</option>)}
@@ -1859,7 +1997,7 @@ function TalentBrowser({ company, onLogout }) {
                 </div>
                 <div>
                   <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>TURNO</label>
-                  <select value={fTurno} onChange={e=>setFTurno(e.target.value)}
+                  <select value={fTurnoV} onChange={e=>setFTurno(e.target.value)}
                     style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
                     <option value="all">Todos os turnos</option>
                     {SHIFTS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
@@ -1871,7 +2009,6 @@ function TalentBrowser({ company, onLogout }) {
               </div>
             )}
 
-            {/* Worker cards */}
             {!loading&&filtered.length===0&&workers.length===0&&(
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:56,textAlign:"center"}}>
                 <div style={{fontSize:48,marginBottom:14}}>🔍</div>
@@ -1879,15 +2016,13 @@ function TalentBrowser({ company, onLogout }) {
                 <div style={{...B,fontSize:14,color:C.muted}}>Não há colaboradores aprovados dentro do raio de cobertura desta unidade ainda.</div>
               </div>
             )}
-
             {!loading&&filtered.length===0&&workers.length>0&&(
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:56,textAlign:"center"}}>
                 <div style={{fontSize:48,marginBottom:14}}>🎯</div>
                 <div style={{...H,fontSize:18,fontWeight:700,color:C.navy,marginBottom:8}}>Nenhum resultado com esses filtros</div>
-                <div style={{...B,fontSize:14,color:C.muted}}>Tente remover alguns filtros para ver mais colaboradores.</div>
+                <div style={{...B,fontSize:14,color:C.muted}}>Tente remover alguns filtros.</div>
               </div>
             )}
-
             {!loading&&filtered.length>0&&(
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
                 {filtered.map(w=>(
@@ -1895,8 +2030,6 @@ function TalentBrowser({ company, onLogout }) {
                     style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20,cursor:"pointer",transition:"all .18s"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green;e.currentTarget.style.boxShadow="0 4px 16px rgba(22,163,74,.1)";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
-
-                    {/* Card header */}
                     <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:14}}>
                       <div style={{width:46,height:46,borderRadius:23,background:C.greenBg,border:`2px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <span style={{...H,fontSize:16,fontWeight:900,color:C.green}}>{w.nome?.[0]}</span>
@@ -1910,29 +2043,18 @@ function TalentBrowser({ company, onLogout }) {
                         <div style={{...B,fontSize:10,color:C.muted}}>distância</div>
                       </div>
                     </div>
-
-                    {/* Especialidades */}
                     <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
                       {SPECS.filter(s=>w.specs?.includes(s.id)).slice(0,3).map(s=>{
                         const nivel=w.spec_levels?.[s.id]?.nivel||0;
-                        return (
-                          <div key={s.id} style={{display:"flex",alignItems:"center",gap:5,background:levelColors[nivel]+"12",border:`1px solid ${levelColors[nivel]}30`,borderRadius:7,padding:"4px 10px"}}>
-                            <span style={{fontSize:13}}>{s.icon}</span>
-                            <span style={{...B,fontSize:11,fontWeight:600,color:levelColors[nivel]}}>{s.label}</span>
-                          </div>
-                        );
+                        return <div key={s.id} style={{display:"flex",alignItems:"center",gap:5,background:levelColors[nivel]+"12",border:`1px solid ${levelColors[nivel]}30`,borderRadius:7,padding:"4px 10px"}}><span style={{fontSize:13}}>{s.icon}</span><span style={{...B,fontSize:11,fontWeight:600,color:levelColors[nivel]}}>{s.label}</span></div>;
                       })}
                       {(w.specs?.length||0)>3&&<span style={{...B,fontSize:11,color:C.muted,padding:"4px 6px"}}>+{w.specs.length-3}</span>}
                     </div>
-
-                    {/* Disponibilidade compacta */}
                     <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,display:"flex",gap:4,flexWrap:"wrap",marginBottom:12}}>
                       {DAYS.filter(d=>(w.disponibilidade?.[d]||[]).length>0).map(d=>(
                         <span key={d} style={{...B,fontSize:10,fontWeight:600,color:C.green,background:C.greenBg,padding:"2px 6px",borderRadius:4}}>{d}</span>
                       ))}
                     </div>
-
-                    {/* CTA */}
                     <div onClick={e=>{e.stopPropagation();window.open(whatsappMsg(w),"_blank");}}
                       style={{background:"#25D366",borderRadius:8,padding:"9px 14px",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
                       <span style={{fontSize:15}}>💬</span>
@@ -1942,8 +2064,58 @@ function TalentBrowser({ company, onLogout }) {
                 ))}
               </div>
             )}
-          </>
-        )}
+          </>}
+        </>}
+
+        {/* ── TAB: MEU PERFIL ── */}
+        {tab==="profile"&&<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"start"}}>
+            {/* Dados da empresa */}
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28}}>
+              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Dados da empresa</div>
+              <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                {[["Razão social",company.razao],["Nome fantasia",company.nome_fant||"—"],["CNPJ",company.cnpj],["Segmento",company.seg],["Site",company.site||"—"],["Cidade",`${company.cidade}/${company.estado}`],["Responsável",company.resp_nome],["WhatsApp",company.resp_tel],["E-mail",company.resp_email]].map(([k,v])=>(
+                  <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <span style={{...B,fontSize:12,color:C.muted}}>{k}</span>
+                    <span style={{...B,fontSize:13,color:C.navy,fontWeight:600,textAlign:"right",maxWidth:"60%"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{marginTop:14}}>
+                <Badge status={company.status} />
+                {company.status==="pending"&&<div style={{...B,fontSize:12,color:C.amber,marginTop:8}}>Seu cadastro está em análise pela equipe VORKY. Em até 24h úteis você receberá retorno.</div>}
+              </div>
+            </div>
+
+            {/* Unidades */}
+            <div>
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
+                <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Unidades de trabalho</div>
+                {units.length===0&&<Alert type="warning">Nenhuma unidade cadastrada. Adicione abaixo para poder usar o Talent Browser.</Alert>}
+                {units.map(u=>(
+                  <div key={u.id} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"14px 16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{u.nome}</div>
+                      <div style={{...B,fontSize:12,color:C.sub,marginTop:3}}>{u.rua}, {u.numero} — {u.bairro}</div>
+                      <div style={{...B,fontSize:12,color:C.muted}}>{u.cidade}/{u.estado} · CEP {u.cep}</div>
+                    </div>
+                    <button onClick={()=>setDeleteModal({id:u.id,name:u.nome})}
+                      style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",...B,fontSize:12,color:C.red,flexShrink:0}}>Remover</button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Adicionar unidade */}
+              <div style={{background:C.bg,border:`1.5px dashed ${C.border2}`,borderRadius:14,padding:22}}>
+                <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>+ Adicionar unidade</div>
+                <Field label="Nome da unidade" placeholder="Ex: Loja Lapa, CD Guarulhos" value={newUnit.nome} onChange={v=>setNewUnit(u=>({...u,nome:v}))} />
+                <AddressBlock data={newUnit} setData={setNewUnit} loading={uCepLoad} setLoading={setUCepLoad} />
+                <Btn label={savingUnit?"Salvando...":"+ Adicionar unidade"} variant={newUnit.nome&&newUnit.cep&&newUnit.rua&&newUnit.numero?"primary":"ghost"} size="md"
+                  onClick={addUnit} disabled={!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero} loading={savingUnit} />
+              </div>
+            </div>
+          </div>
+        </>}
       </div>
     </div>
   );
@@ -2052,7 +2224,7 @@ export default function VORKYApp() {
       {!admin&&!company&&screen==="company-auth"     &&<CompanyLogin     onBack={()=>onNav("auth-choice")} onLogin={handleCompanyLogin} onRegister={()=>onNav("company-register")} />}
       {!admin&&!company&&screen==="company-register" &&<CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
       {!admin&&!company&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
-      {!admin&&company  &&screen==="company-app"     &&<TalentBrowser    company={company} onLogout={handleCompanyLogout} />}
+      {!admin&&company  &&screen==="company-app"     &&<TalentBrowser    company={company} onLogout={handleCompanyLogout} onUpdateCompany={setCompany} />}
       {!admin&&!company&&screen==="admin-login"      &&<AdminLogin       onLogin={()=>setAdmin(true)} />}
       {admin                                         &&<AdminPanel />}
     </>
