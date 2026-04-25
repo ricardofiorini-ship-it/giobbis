@@ -1479,13 +1479,443 @@ function AdminPanel() {
 }
 
 // ─── AUTH ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// CEP → LAT/LNG + HAVERSINE DISTANCE
+// ═══════════════════════════════════════════════════════════════
+const cepToCoords = async (cep) => {
+  const d = cep.replace(/\D/g,"");
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${d}/json/`);
+    const j = await r.json();
+    if(j.erro) return null;
+    const geo = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(j.logradouro+", "+j.localidade+", "+j.uf+", Brasil")}&format=json&limit=1`);
+    const gj = await geo.json();
+    if(gj.length===0) return null;
+    return { lat: parseFloat(gj[0].lat), lng: parseFloat(gj[0].lon) };
+  } catch { return null; }
+};
+
+const haversine = (lat1, lng1, lat2, lng2) => {
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+};
+
+// ═══════════════════════════════════════════════════════════════
+// COMPANY LOGIN (real — loads from Supabase)
+// ═══════════════════════════════════════════════════════════════
+function CompanyLogin({ onLogin, onRegister, onBack }) {
+  const [email, setEmail] = useState("");
+  const [pass,  setPass]  = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if(!email||!pass){ setError("Preencha e-mail e senha."); return; }
+    setLoading(true); setError("");
+    try {
+      const { data: company, error: err } = await supabase
+        .from("companies")
+        .select("*, company_units(*)")
+        .eq("email", email)
+        .maybeSingle();
+
+      if(err||!company) { setError("E-mail não encontrado."); setLoading(false); return; }
+      if(company.status==="pending") { setError("Seu cadastro ainda está em análise. Aguarde a aprovação da equipe VORKY."); setLoading(false); return; }
+      if(company.status==="rejected") { setError("Seu cadastro foi reprovado. Entre em contato com a equipe VORKY."); setLoading(false); return; }
+      onLogin(company);
+    } catch(e) {
+      setError("Erro ao conectar. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{minHeight:"75vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",background:C.bg}}>
+      <div style={{maxWidth:420,width:"100%"}}>
+        <button onClick={onBack} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:24}}>← Voltar</button>
+        <SL>Área da Empresa</SL>
+        <h2 style={{...H,fontSize:32,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:28}}>Bem-vindo de volta.</h2>
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
+          <Field label="E-mail de acesso" placeholder="acesso@empresa.com.br" value={email} onChange={setEmail} type="email" />
+          <Field label="Senha" placeholder="••••••••" value={pass} onChange={setPass} type="password" />
+          {error&&<Alert type="error">{error}</Alert>}
+          <Btn label="Entrar →" variant="primary" size="lg" full onClick={handleLogin} loading={loading} />
+          <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0"}}>
+            <div style={{flex:1,height:1,background:C.border}} /><span style={{...B,fontSize:12,color:C.muted}}>ou</span><div style={{flex:1,height:1,background:C.border}} />
+          </div>
+          <Btn label="Cadastrar minha empresa →" variant="ghost" size="lg" full onClick={onRegister} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TALENT BROWSER
+// ═══════════════════════════════════════════════════════════════
+function TalentBrowser({ company, onLogout }) {
+  const [selUnit,    setSelUnit]    = useState(null);
+  const [workers,    setWorkers]    = useState([]);
+  const [filtered,   setFiltered]   = useState([]);
+  const [loading,    setLoading]    = useState(false);
+  const [calcMsg,    setCalcMsg]    = useState("");
+  const [selWorker,  setSelWorker]  = useState(null);
+
+  // Filters
+  const [fSpec,  setFSpec]  = useState("all");
+  const [fLevel, setFLevel] = useState(0);
+  const [fDia,   setFDia]   = useState("all");
+  const [fTurno, setFTurno] = useState("all");
+
+  const units = company.company_units || [];
+  const levelColors = ["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
+  const levelWidth  = [0,25,50,75,100];
+
+  // Load workers when unit selected
+  useEffect(() => {
+    if(!selUnit) return;
+    loadWorkers();
+  }, [selUnit]);
+
+  // Apply filters
+  useEffect(() => {
+    let list = workers;
+    if(fSpec!=="all") list = list.filter(w=>w.specs?.includes(fSpec) && (w.spec_levels?.[fSpec]?.nivel||0) >= fLevel);
+    if(fDia!=="all")  list = list.filter(w=>(w.disponibilidade?.[fDia]||[]).length>0);
+    if(fTurno!=="all") list = list.filter(w=>Object.values(w.disponibilidade||{}).some(t=>t.includes(fTurno)));
+    setFiltered(list);
+  }, [workers, fSpec, fLevel, fDia, fTurno]);
+
+  const loadWorkers = async () => {
+    setLoading(true);
+    setCalcMsg("Buscando colaboradores aprovados...");
+    setWorkers([]); setFiltered([]);
+
+    try {
+      const { data: wList } = await supabase
+        .from("workers")
+        .select("*")
+        .eq("status","approved");
+
+      if(!wList||wList.length===0){ setLoading(false); setCalcMsg(""); return; }
+
+      setCalcMsg(`Calculando distâncias para ${wList.length} colaboradores...`);
+
+      // Get unit coords
+      const unitCoords = await cepToCoords(selUnit.cep);
+
+      const withDist = await Promise.all(wList.map(async w => {
+        try {
+          const wCoords = await cepToCoords(w.cep);
+          if(!unitCoords||!wCoords) return {...w, distKm:999, distLabel:"—"};
+          const dist = haversine(unitCoords.lat, unitCoords.lng, wCoords.lat, wCoords.lng);
+          const withinRadius = dist <= (w.raio_km||10);
+          return {...w, distKm:dist, distLabel:`${dist.toFixed(1)}km`, withinRadius};
+        } catch { return {...w, distKm:999, distLabel:"—", withinRadius:false}; }
+      }));
+
+      const available = withDist
+        .filter(w=>w.withinRadius)
+        .sort((a,b)=>a.distKm-b.distKm);
+
+      setWorkers(available);
+      setFiltered(available);
+      setCalcMsg(`${available.length} colaboradores disponíveis na região`);
+    } catch(e) {
+      setCalcMsg("Erro ao buscar colaboradores.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const whatsappMsg = (w) => {
+    const msg = `Olá ${w.nome.split(" ")[0]}! Sou da empresa *${company.nome_fant||company.razao}* e encontrei seu perfil no VORKY. Temos uma oportunidade de trabalho na nossa unidade *${selUnit?.nome}*. Podemos conversar?`;
+    return `https://wa.me/55${w.telefone?.replace(/\D/g,"")}?text=${encodeURIComponent(msg)}`;
+  };
+
+  // Worker detail modal
+  if(selWorker) return (
+    <div style={{minHeight:"90vh",padding:"28px 32px",background:C.bg}}>
+      <div style={{maxWidth:780,margin:"0 auto"}}>
+        <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:22}}>← Voltar ao Talent Browser</button>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 260px",gap:20,alignItems:"start"}}>
+          <div>
+            {/* Header */}
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
+              <div style={{display:"flex",gap:18,alignItems:"center",marginBottom:20}}>
+                <div style={{width:72,height:72,borderRadius:36,background:C.greenBg,border:`2px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{...H,fontSize:26,fontWeight:900,color:C.green}}>{selWorker.nome?.[0]}</span>
+                </div>
+                <div>
+                  <h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>{selWorker.nome}</h3>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                    <span style={{...B,fontSize:13,color:C.muted}}>📍 {selWorker.cidade}/{selWorker.estado}</span>
+                    <span style={{...B,fontSize:13,color:C.green,fontWeight:600}}>📏 {selWorker.distLabel} da unidade</span>
+                    <span style={{...B,fontSize:13,color:C.muted}}>🚗 Raio até {selWorker.raio_km||10}km</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px"}}>
+                {[["Deslocamento",selWorker.deslocamento||"—"],["Tipo de trabalho",selWorker.tipo_trabalho||"—"],["Equipe grande",selWorker.trabalho_equipe?"Sim":"Não"],["Atend. ao cliente",selWorker.atend_cliente?"Sim":"Não"],["PCD",selWorker.pcd?(selWorker.pcd_tipo||"Sim"):"Não"]].map(([k,v])=>(
+                  <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div>
+                    <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Especialidades */}
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
+              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Especialidades e experiência</div>
+              {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
+                const sl=selWorker.spec_levels?.[s.id]; const nivel=sl?.nivel||0;
+                return (
+                  <div key={s.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:18}}>{s.icon}</span><span style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{s.label}</span></div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{...B,fontSize:12,fontWeight:600,color:levelColors[nivel]}}>{LEVELS[nivel]?.label||"—"}</span>
+                        {sl?.experiencia&&<span style={{...B,fontSize:11,color:C.muted}}>· {sl.experiencia}</span>}
+                      </div>
+                    </div>
+                    <div className="level-bar"><div className="level-fill" style={{width:`${levelWidth[nivel]}%`,background:levelColors[nivel]}} /></div>
+                    {sl?.empresas?.length>0&&(
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+                        <span style={{...B,fontSize:11,color:C.muted}}>Trabalhou em:</span>
+                        {sl.empresas.map((emp,i)=><span key={i} style={{...B,fontSize:11,fontWeight:600,color:C.navy,background:C.bg,border:`1px solid ${C.border2}`,borderRadius:5,padding:"2px 8px"}}>{emp}</span>)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {selWorker.specs?.includes("custom")&&selWorker.spec_levels?.custom&&(
+                <div style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:18}}>⭐</span><span style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{selWorker.spec_levels.custom.label||"Especialidade própria"}</span></div>
+                    <span style={{...B,fontSize:12,fontWeight:600,color:levelColors[selWorker.spec_levels.custom.nivel||0]}}>{LEVELS[selWorker.spec_levels.custom.nivel||0]?.label}</span>
+                  </div>
+                  <div className="level-bar"><div className="level-fill" style={{width:`${levelWidth[selWorker.spec_levels.custom.nivel||0]}%`,background:levelColors[selWorker.spec_levels.custom.nivel||0]}} /></div>
+                </div>
+              )}
+            </div>
+
+            {/* Disponibilidade */}
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28}}>
+              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Disponibilidade</div>
+              {DAYS.filter(d=>(selWorker.disponibilidade?.[d]||[]).length>0).map(d=>(
+                <div key={d} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                  <span style={{...H,fontSize:13,fontWeight:700,color:C.navy,minWidth:36}}>{d}</span>
+                  <div style={{display:"flex",gap:6}}>
+                    {(selWorker.disponibilidade[d]||[]).map(sid=>{
+                      const sh=SHIFTS.find(s=>s.id===sid);
+                      return sh?<span key={sid} style={{...B,fontSize:12,fontWeight:600,color:sh.color,background:sh.color+"15",padding:"3px 10px",borderRadius:6}}>{sh.label}</span>:null;
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action panel */}
+          <div style={{position:"sticky",top:80}}>
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
+              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:6}}>Convidar {selWorker.nome.split(" ")[0]}</div>
+              <div style={{...B,fontSize:13,color:C.sub,marginBottom:20,lineHeight:1.65}}>
+                Uma mensagem pré-formatada será aberta no WhatsApp com o contato deste colaborador.
+              </div>
+              <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>
+                <div style={{background:"#25D366",borderRadius:10,padding:"14px 20px",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                  <span style={{fontSize:20}}>💬</span>
+                  <span style={{...H,fontSize:15,fontWeight:700,color:"#fff"}}>Convidar pelo WhatsApp</span>
+                </div>
+              </a>
+              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginTop:10,lineHeight:1.6}}>
+                Ao clicar, o WhatsApp abre com uma mensagem pronta. Você edita antes de enviar.
+              </div>
+              <Div />
+              <div style={{...B,fontSize:12,color:C.muted}}>📍 Unidade: <strong style={{color:C.navy}}>{selUnit?.nome}</strong></div>
+              <div style={{...B,fontSize:12,color:C.muted,marginTop:4}}>📏 Distância: <strong style={{color:C.green}}>{selWorker.distLabel}</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{minHeight:"90vh",padding:"28px 32px",background:C.bg}}>
+      <div style={{maxWidth:1100,margin:"0 auto"}}>
+
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28,flexWrap:"wrap",gap:16}}>
+          <div>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:4}}>Talent Browser</h2>
+            <div style={{...B,fontSize:13,color:C.muted}}>{company.nome_fant||company.razao} · {company.seg}</div>
+          </div>
+          <Btn label="Sair" variant="ghost" size="sm" onClick={onLogout} />
+        </div>
+
+        {/* Unit selector */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,marginBottom:20}}>
+          <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>
+            Selecione a unidade onde precisa de colaboradores
+          </div>
+          {units.length===0
+            ? <Alert type="warning">Nenhuma unidade cadastrada. Acesse seu perfil para adicionar unidades.</Alert>
+            : <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                {units.map(u=>(
+                  <div key={u.id} onClick={()=>setSelUnit(u)}
+                    style={{padding:"12px 18px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${selUnit?.id===u.id?C.green:C.border2}`,background:selUnit?.id===u.id?C.greenBg:"#fff",transition:"all .15s"}}>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:selUnit?.id===u.id?C.green:C.navy}}>{u.nome}</div>
+                    <div style={{...B,fontSize:12,color:C.muted,marginTop:2}}>📍 {u.bairro}, {u.cidade}/{u.estado}</div>
+                    <div style={{...B,fontSize:11,color:C.muted,marginTop:1}}>CEP: {u.cep}</div>
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
+
+        {/* Filters + results */}
+        {selUnit&&(
+          <>
+            {/* Status bar */}
+            <div style={{background:calcMsg&&loading?C.amberBg:C.greenBg,border:`1px solid ${calcMsg&&loading?C.amberBorder:C.greenBorder}`,borderRadius:10,padding:"10px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+              {loading&&<span style={{width:14,height:14,borderRadius:7,border:`2px solid ${C.amber}`,borderTopColor:"transparent",animation:"spin .7s linear infinite",display:"inline-block",flexShrink:0}} />}
+              <span style={{...B,fontSize:13,fontWeight:600,color:loading?C.amber:C.green}}>{calcMsg||`Unidade: ${selUnit.nome}`}</span>
+            </div>
+
+            {/* Filters */}
+            {!loading&&workers.length>0&&(
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px 20px",marginBottom:16,display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-end"}}>
+                <div>
+                  <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>ESPECIALIDADE</label>
+                  <select value={fSpec} onChange={e=>{setFSpec(e.target.value);setFLevel(0);}}
+                    style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
+                    <option value="all">Todas</option>
+                    {SPECS.map(s=><option key={s.id} value={s.id}>{s.icon} {s.label}</option>)}
+                  </select>
+                </div>
+                {fSpec!=="all"&&(
+                  <div>
+                    <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>NÍVEL MÍNIMO</label>
+                    <select value={fLevel} onChange={e=>setFLevel(parseInt(e.target.value))}
+                      style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
+                      {LEVELS.map(l=><option key={l.value} value={l.value}>{l.label}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>DIA</label>
+                  <select value={fDia} onChange={e=>setFDia(e.target.value)}
+                    style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
+                    <option value="all">Todos os dias</option>
+                    {DAYS.map(d=><option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>TURNO</label>
+                  <select value={fTurno} onChange={e=>setFTurno(e.target.value)}
+                    style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
+                    <option value="all">Todos os turnos</option>
+                    {SHIFTS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div style={{...B,fontSize:12,color:C.muted,marginLeft:"auto"}}>
+                  {filtered.length} colaborador{filtered.length!==1?"es":""} encontrado{filtered.length!==1?"s":""}
+                </div>
+              </div>
+            )}
+
+            {/* Worker cards */}
+            {!loading&&filtered.length===0&&workers.length===0&&(
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:56,textAlign:"center"}}>
+                <div style={{fontSize:48,marginBottom:14}}>🔍</div>
+                <div style={{...H,fontSize:18,fontWeight:700,color:C.navy,marginBottom:8}}>Nenhum colaborador encontrado</div>
+                <div style={{...B,fontSize:14,color:C.muted}}>Não há colaboradores aprovados dentro do raio de cobertura desta unidade ainda.</div>
+              </div>
+            )}
+
+            {!loading&&filtered.length===0&&workers.length>0&&(
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:56,textAlign:"center"}}>
+                <div style={{fontSize:48,marginBottom:14}}>🎯</div>
+                <div style={{...H,fontSize:18,fontWeight:700,color:C.navy,marginBottom:8}}>Nenhum resultado com esses filtros</div>
+                <div style={{...B,fontSize:14,color:C.muted}}>Tente remover alguns filtros para ver mais colaboradores.</div>
+              </div>
+            )}
+
+            {!loading&&filtered.length>0&&(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
+                {filtered.map(w=>(
+                  <div key={w.id} onClick={()=>setSelWorker(w)}
+                    style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20,cursor:"pointer",transition:"all .18s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green;e.currentTarget.style.boxShadow="0 4px 16px rgba(22,163,74,.1)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
+
+                    {/* Card header */}
+                    <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:14}}>
+                      <div style={{width:46,height:46,borderRadius:23,background:C.greenBg,border:`2px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{...H,fontSize:16,fontWeight:900,color:C.green}}>{w.nome?.[0]}</span>
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{w.nome}</div>
+                        <div style={{...B,fontSize:12,color:C.muted}}>{w.cidade}/{w.estado}</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{...H,fontSize:16,fontWeight:900,color:C.green}}>{w.distLabel}</div>
+                        <div style={{...B,fontSize:10,color:C.muted}}>distância</div>
+                      </div>
+                    </div>
+
+                    {/* Especialidades */}
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+                      {SPECS.filter(s=>w.specs?.includes(s.id)).slice(0,3).map(s=>{
+                        const nivel=w.spec_levels?.[s.id]?.nivel||0;
+                        return (
+                          <div key={s.id} style={{display:"flex",alignItems:"center",gap:5,background:levelColors[nivel]+"12",border:`1px solid ${levelColors[nivel]}30`,borderRadius:7,padding:"4px 10px"}}>
+                            <span style={{fontSize:13}}>{s.icon}</span>
+                            <span style={{...B,fontSize:11,fontWeight:600,color:levelColors[nivel]}}>{s.label}</span>
+                          </div>
+                        );
+                      })}
+                      {(w.specs?.length||0)>3&&<span style={{...B,fontSize:11,color:C.muted,padding:"4px 6px"}}>+{w.specs.length-3}</span>}
+                    </div>
+
+                    {/* Disponibilidade compacta */}
+                    <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,display:"flex",gap:4,flexWrap:"wrap",marginBottom:12}}>
+                      {DAYS.filter(d=>(w.disponibilidade?.[d]||[]).length>0).map(d=>(
+                        <span key={d} style={{...B,fontSize:10,fontWeight:600,color:C.green,background:C.greenBg,padding:"2px 6px",borderRadius:4}}>{d}</span>
+                      ))}
+                    </div>
+
+                    {/* CTA */}
+                    <div onClick={e=>{e.stopPropagation();window.open(whatsappMsg(w),"_blank");}}
+                      style={{background:"#25D366",borderRadius:8,padding:"9px 14px",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+                      <span style={{fontSize:15}}>💬</span>
+                      <span style={{...H,fontSize:13,fontWeight:700,color:"#fff"}}>Convidar pelo WhatsApp</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── AUTH SCREEN (worker only) ─────────────────────────────────
 function AuthScreen({ type, onLogin, onRegister, onBack }) {
   const [email,setEmail]=useState(""); const [pass,setPass]=useState("");
   return (
     <div style={{minHeight:"75vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",background:C.bg}}>
       <div style={{maxWidth:420,width:"100%"}}>
         <button onClick={onBack} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:24}}>← Voltar</button>
-        <SL>{type==="worker"?"Área do Colaborador":"Área da Empresa"}</SL>
+        <SL>Área do Colaborador</SL>
         <h2 style={{...H,fontSize:32,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:28}}>Bem-vindo de volta.</h2>
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
           <Field label="E-mail" placeholder="seu@email.com" value={email} onChange={setEmail} type="email" />
@@ -1494,7 +1924,7 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
           <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0"}}>
             <div style={{flex:1,height:1,background:C.border}} /><span style={{...B,fontSize:12,color:C.muted}}>ou</span><div style={{flex:1,height:1,background:C.border}} />
           </div>
-          <Btn label={type==="worker"?"Criar conta →":"Cadastrar empresa →"} variant="ghost" size="lg" full onClick={onRegister} />
+          <Btn label="Criar conta →" variant="ghost" size="lg" full onClick={onRegister} />
         </div>
       </div>
     </div>
@@ -1505,28 +1935,38 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
 // ROOT
 // ═══════════════════════════════════════════════════════════════
 export default function VORKYApp() {
-  const [screen, setScreen] = useState("home");
-  const [wData,  setWData]  = useState(null);
-  const [cData,  setCData]  = useState(null);
-  const [admin,  setAdmin]  = useState(false);
-  const userType = admin?"admin":null;
-  const userName = admin?"Admin":null;
-  const onNav = s => { if(s==="home") setAdmin(false); setScreen(s); };
+  const [screen,  setScreen]  = useState("home");
+  const [wData,   setWData]   = useState(null);
+  const [cData,   setCData]   = useState(null);
+  const [company, setCompany] = useState(null);
+  const [admin,   setAdmin]   = useState(false);
+
+  const userType = admin?"admin":company?"company":null;
+  const userName = admin?"Admin":company?(company.nome_fant||company.razao):null;
+
+  const onNav = s => {
+    if(s==="home"){ setAdmin(false); if(!company) setScreen("home"); else setScreen("home"); }
+    setScreen(s);
+  };
+
+  const handleCompanyLogin = (co) => { setCompany(co); setScreen("company-app"); };
+  const handleCompanyLogout = () => { setCompany(null); setScreen("home"); };
+
   return (
     <>
       <GlobalStyles />
       <Header onNav={onNav} user={userName} type={userType} />
-      {!admin&&screen==="home"             &&<Landing          onNav={onNav} />}
-      {!admin&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("home")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
-      {!admin&&screen==="worker-register"  &&<WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
-      {!admin&&screen==="worker-success"   &&<WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
-      {!admin&&screen==="worker-app"       &&<Landing          onNav={onNav} />}
-      {!admin&&screen==="company-auth"     &&<AuthScreen       type="company" onBack={()=>onNav("home")} onLogin={()=>onNav("company-app")} onRegister={()=>onNav("company-register")} />}
-      {!admin&&screen==="company-register" &&<CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
-      {!admin&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
-      {!admin&&screen==="company-app"      &&<Landing          onNav={onNav} />}
-      {!admin&&screen==="admin-login"      &&<AdminLogin       onLogin={()=>setAdmin(true)} />}
-      {admin                               &&<AdminPanel />}
+      {!admin&&!company&&screen==="home"             &&<Landing          onNav={onNav} />}
+      {!admin&&!company&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("home")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
+      {!admin&&!company&&screen==="worker-register"  &&<WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
+      {!admin&&!company&&screen==="worker-success"   &&<WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
+      {!admin&&!company&&screen==="worker-app"       &&<Landing          onNav={onNav} />}
+      {!admin&&!company&&screen==="company-auth"     &&<CompanyLogin     onBack={()=>onNav("home")} onLogin={handleCompanyLogin} onRegister={()=>onNav("company-register")} />}
+      {!admin&&!company&&screen==="company-register" &&<CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
+      {!admin&&!company&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
+      {!admin&&company  &&screen==="company-app"     &&<TalentBrowser    company={company} onLogout={handleCompanyLogout} />}
+      {!admin&&!company&&screen==="admin-login"      &&<AdminLogin       onLogin={()=>setAdmin(true)} />}
+      {admin                                         &&<AdminPanel />}
     </>
   );
 }
