@@ -371,19 +371,25 @@ function LevelSelector({ spec, levels, onChange }) {
 
 // ─── HEADER ────────────────────────────────────────────────────
 function Header({ onNav, user, type }) {
+  const [clicks, setClicks] = useState(0);
+  const handleLogoClick = () => {
+    const next = clicks + 1;
+    setClicks(next);
+    if(next >= 5) { setClicks(0); onNav("admin-login"); return; }
+    onNav("home");
+  };
   return (
     <header className="hdr">
       <div className="wrap" style={{width:"100%"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div onClick={()=>onNav("home")} style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
+          <div onClick={handleLogoClick} style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer"}}>
             <div style={{width:32,height:32,background:C.green,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚡</div>
             <span style={{...H,fontSize:19,fontWeight:900,color:C.navy,letterSpacing:-.4}}>VORKY</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {!user?<>
-              <Btn label="Entrar" variant="ghost" size="sm" onClick={()=>onNav("auth-choice")} />
-              <Btn label="Cadastro Negócio" variant="primary" size="sm" onClick={()=>onNav("company-register")} />
-              <Btn label="Admin" variant="white" size="sm" onClick={()=>onNav("admin-login")} />
+              <Btn label="Entre" variant="ghost" size="sm" onClick={()=>onNav("auth-choice")} />
+              <Btn label="Cadastre-se" variant="primary" size="sm" onClick={()=>onNav("auth-choice")} />
             </>:<>
               <span style={{...B,fontSize:13,color:C.sub}}>Olá, {user}</span>
               <Btn label="Sair" variant="ghost" size="sm" onClick={()=>onNav("home")} />
@@ -400,24 +406,59 @@ function Header({ onNav, user, type }) {
 // ═══════════════════════════════════════════════════════════════
 function Landing({ onNav }) {
   return (
-    <div style={{minHeight:"80vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px"}}>
-      <div style={{maxWidth:620,width:"100%",textAlign:"center"}}>
-        <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:1.5,textTransform:"uppercase",marginBottom:16}}>Especialistas em varejo</div>
-        <h1 style={{...H,fontSize:"clamp(38px,6vw,68px)",fontWeight:900,color:C.navy,letterSpacing:-2,lineHeight:.95,marginBottom:20}}>O parceiro certo,<br />no momento certo.</h1>
-        <p style={{...B,fontSize:17,color:C.sub,lineHeight:1.75,marginBottom:44,maxWidth:480,margin:"0 auto 44px"}}>
-          Conectamos empresas de varejo a colaboradores verificados e qualificados, de forma rápida e sem burocracia.
-        </p>
-        <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap"}}>
-          <Btn label="Cadastro Negócio →" variant="primary" size="xl" onClick={()=>onNav("company-register")} />
-          <Btn label="Sou colaborador →"  variant="white"   size="xl" onClick={()=>onNav("worker-register")} />
+    <div>
+      {/* Hero */}
+      <div style={{minHeight:"70vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px"}}>
+        <div style={{maxWidth:620,width:"100%",textAlign:"center"}}>
+          <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:1.5,textTransform:"uppercase",marginBottom:16}}>Especialistas em varejo</div>
+          <h1 style={{...H,fontSize:"clamp(38px,6vw,68px)",fontWeight:900,color:C.navy,letterSpacing:-2,lineHeight:.95,marginBottom:20}}>O parceiro certo,<br />no momento certo.</h1>
+          <p style={{...B,fontSize:17,color:C.sub,lineHeight:1.75,marginBottom:44,maxWidth:480,margin:"0 auto 44px"}}>
+            Conectamos empresas de varejo a colaboradores verificados e qualificados, de forma rápida e sem burocracia.
+          </p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,paddingTop:40,borderTop:`1px solid ${C.border}`}}>
+            {[{v:"+1.000",l:"Estabelecimentos"},{v:"+300k",l:"Horas realizadas"},{v:"+60",l:"Cidades"},{v:"4,9★",l:"Avaliação média"}].map(({v,l})=>(
+              <div key={l} style={{textAlign:"center"}}>
+                <div style={{...H,fontSize:"clamp(22px,3vw,32px)",fontWeight:900,color:C.green}}>{v}</div>
+                <div style={{...B,fontSize:13,color:C.muted,marginTop:4}}>{l}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginTop:56,paddingTop:40,borderTop:`1px solid ${C.border}`}}>
-          {[{v:"+1.000",l:"Estabelecimentos"},{v:"+300k",l:"Horas realizadas"},{v:"+60",l:"Cidades"},{v:"4,9★",l:"Avaliação média"}].map(({v,l})=>(
-            <div key={l} style={{textAlign:"center"}}>
-              <div style={{...H,fontSize:"clamp(22px,3vw,32px)",fontWeight:900,color:C.green}}>{v}</div>
-              <div style={{...B,fontSize:13,color:C.muted,marginTop:4}}>{l}</div>
+      </div>
+
+      {/* Shortcut buttons — abaixo do hero */}
+      <div style={{background:C.white,borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,padding:"32px 20px"}}>
+        <div style={{maxWidth:720,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:24}}>
+            <div style={{...H,fontSize:18,fontWeight:800,color:C.navy}}>Comece agora — é gratuito</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            {/* Empresa */}
+            <div onClick={()=>onNav("company-register")}
+              style={{background:C.greenBg,border:`1.5px solid ${C.greenBorder}`,borderRadius:14,padding:"24px 28px",cursor:"pointer",display:"flex",alignItems:"center",gap:18,transition:"all .18s"}}
+              onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(22,163,74,.15)";}}
+              onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";}}>
+              <div style={{fontSize:42,flexShrink:0}}>🏢</div>
+              <div>
+                <div style={{...H,fontSize:17,fontWeight:900,color:C.navy,marginBottom:4}}>Sou uma empresa</div>
+                <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.5}}>Quero encontrar colaboradores qualificados na minha região</div>
+                <div style={{...H,fontSize:13,fontWeight:700,color:C.green,marginTop:8}}>Cadastrar empresa →</div>
+              </div>
             </div>
-          ))}
+
+            {/* Colaborador */}
+            <div onClick={()=>onNav("worker-register")}
+              style={{background:C.blueBg,border:`1.5px solid ${C.blueBorder}`,borderRadius:14,padding:"24px 28px",cursor:"pointer",display:"flex",alignItems:"center",gap:18,transition:"all .18s"}}
+              onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,.15)";}}
+              onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";}}>
+              <div style={{fontSize:42,flexShrink:0}}>👤</div>
+              <div>
+                <div style={{...H,fontSize:17,fontWeight:900,color:C.navy,marginBottom:4}}>Sou colaborador</div>
+                <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.5}}>Quero ser encontrado por empresas e receber convites de trabalho</div>
+                <div style={{...H,fontSize:13,fontWeight:700,color:C.blue,marginTop:8}}>Criar meu perfil →</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1909,28 +1950,26 @@ function TalentBrowser({ company, onLogout }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AUTH CHOICE
+// AUTH CHOICE — tela de escolha unificada
 // ═══════════════════════════════════════════════════════════════
 function AuthChoice({ onNav }) {
   return (
     <div style={{minHeight:"75vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",background:C.bg}}>
       <div style={{maxWidth:560,width:"100%"}}>
         <div style={{textAlign:"center",marginBottom:40}}>
-          <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:10}}>Quem é você?</h2>
-          <p style={{...B,fontSize:15,color:C.muted}}>Escolha como deseja acessar o VORKY</p>
+          <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:10}}>Bem-vindo ao VORKY</h2>
+          <p style={{...B,fontSize:15,color:C.muted}}>Como deseja acessar?</p>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
           {/* Empresa */}
           <div onClick={()=>onNav("company-auth")}
             style={{background:C.white,border:`1.5px solid ${C.border}`,borderRadius:16,padding:32,cursor:"pointer",textAlign:"center",transition:"all .18s"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green;e.currentTarget.style.boxShadow="0 4px 20px rgba(22,163,74,.1)";}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
-            <div style={{fontSize:52,marginBottom:16}}>🏢</div>
+            <div style={{fontSize:48,marginBottom:14}}>🏢</div>
             <div style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:8}}>Sou uma empresa</div>
-            <div style={{...B,fontSize:14,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse o Talent Browser e encontre colaboradores verificados na sua região.</div>
-            <div style={{background:C.green,borderRadius:9,padding:"11px 20px",...H,fontSize:14,fontWeight:700,color:"#fff"}}>
-              Entrar como empresa →
-            </div>
+            <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse o Talent Browser e encontre colaboradores verificados na sua região.</div>
+            <div style={{background:C.green,borderRadius:9,padding:"11px 20px",...H,fontSize:14,fontWeight:700,color:"#fff"}}>Entrar como empresa →</div>
           </div>
 
           {/* Colaborador */}
@@ -1938,19 +1977,18 @@ function AuthChoice({ onNav }) {
             style={{background:C.white,border:`1.5px solid ${C.border}`,borderRadius:16,padding:32,cursor:"pointer",textAlign:"center",transition:"all .18s"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.boxShadow="0 4px 20px rgba(37,99,235,.1)";}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
-            <div style={{fontSize:52,marginBottom:16}}>👤</div>
+            <div style={{fontSize:48,marginBottom:14}}>👤</div>
             <div style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:8}}>Sou colaborador</div>
-            <div style={{...B,fontSize:14,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse sua conta e aguarde convites de empresas na sua região.</div>
-            <div style={{background:C.blue,borderRadius:9,padding:"11px 20px",...H,fontSize:14,fontWeight:700,color:"#fff"}}>
-              Entrar como colaborador →
-            </div>
+            <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse sua conta e aguarde convites de empresas na sua região.</div>
+            <div style={{background:C.blue,borderRadius:9,padding:"11px 20px",...H,fontSize:14,fontWeight:700,color:"#fff"}}>Entrar como colaborador →</div>
           </div>
         </div>
-        <div style={{textAlign:"center",marginTop:24}}>
-          <span style={{...B,fontSize:13,color:C.muted}}>Ainda não tem conta? </span>
-          <span onClick={()=>onNav("company-register")} style={{...B,fontSize:13,color:C.green,cursor:"pointer",fontWeight:600}}>Cadastrar empresa</span>
-          <span style={{...B,fontSize:13,color:C.muted}}> ou </span>
-          <span onClick={()=>onNav("worker-register")} style={{...B,fontSize:13,color:C.green,cursor:"pointer",fontWeight:600}}>Cadastrar como colaborador</span>
+
+        {/* Cadastro links */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:"18px 24px",display:"flex",justifyContent:"center",gap:32,flexWrap:"wrap"}}>
+          <span style={{...B,fontSize:13,color:C.sub}}>Ainda não tem conta?</span>
+          <span onClick={()=>onNav("company-register")} style={{...B,fontSize:13,color:C.green,cursor:"pointer",fontWeight:600}}>Cadastrar empresa →</span>
+          <span onClick={()=>onNav("worker-register")} style={{...B,fontSize:13,color:C.blue,cursor:"pointer",fontWeight:600}}>Cadastrar como colaborador →</span>
         </div>
       </div>
     </div>
