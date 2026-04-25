@@ -179,7 +179,7 @@ const SPECS = [
   {id:"pick",icon:"📦",label:"Picking"},{id:"rep",icon:"🏪",label:"Reposição"},
   {id:"caixa",icon:"💳",label:"Caixa"},{id:"estq",icon:"🏭",label:"Estoquista"},
   {id:"frios",icon:"❄️",label:"Frios"},{id:"hort",icon:"🥬",label:"Hortifruti"},
-  {id:"log",icon:"🚛",label:"Logística"},{id:"pack",icon:"📫",label:"Embalador"},
+  {id:"pack",icon:"📫",label:"Embalador"},
   {id:"shopper",icon:"🛍",label:"Shopper"},{id:"padaria",icon:"🥖",label:"Padaria"},
 ];
 const LEVELS = [
@@ -224,13 +224,16 @@ const saveCompany = async (data) => {
 };
 
 const saveWorker = async (data) => {
-  // Check for duplicate CPF
   const { data: existCPF } = await supabase.from("workers").select("id").eq("cpf", data.cpf).maybeSingle();
-  if(existCPF) throw new Error("Já existe um cadastro com esse CPF. Se já tem conta, faça login.");
-
-  // Check for duplicate email
+  if(existCPF) throw new Error("CPF já cadastrado — se já tem conta, faça login.");
   const { data: existEmail } = await supabase.from("workers").select("id").eq("email", data.email).maybeSingle();
-  if(existEmail) throw new Error("Já existe um cadastro com esse e-mail. Se já tem conta, faça login.");
+  if(existEmail) throw new Error("E-mail já cadastrado — se já tem conta, faça login.");
+
+  // Merge custom spec into spec_levels label
+  const specLevelsFinal = {...data.specLevels};
+  if(data.specCustom && data.specs.includes("custom")) {
+    specLevelsFinal["custom"] = {...(specLevelsFinal["custom"]||{}), label: data.specCustom};
+  }
 
   const { data: worker, error } = await supabase.from("workers").insert({
     nome:data.nome, cpf:data.cpf, nascimento:data.nascimento, telefone:data.telefone,
@@ -238,11 +241,10 @@ const saveWorker = async (data) => {
     bairro:data.bairro, cidade:data.cidade, estado:data.estado,
     raio_km:data.raioKm, deslocamento:data.deslocamento,
     specs:data.specs,
-    spec_levels:data.specLevels,
+    spec_levels:specLevelsFinal,
     dias: Object.keys(data.disponibilidade).filter(d=>data.disponibilidade[d].length>0),
     turnos: [...new Set(Object.values(data.disponibilidade).flat())],
     disponibilidade: data.disponibilidade,
-    equipamentos:data.equipamentos,
     trabalho_equipe:data.trabalhoEquipe, atend_cliente:data.atendCliente, tipo_trabalho:data.tipoTrabalho,
     pcd:data.pcd, pcd_tipo:data.pcdTipo,
     doc_tipo:data.docTipo, email:data.email, status:"pending",
@@ -433,24 +435,23 @@ function WorkerRegister({ onDone, onBack }) {
   const [data, setData] = useState({
     // 1 — Dados pessoais
     nome:"", cpf:"", nascimento:"", telefone:"",
+    cpfExists: false,
     // 2 — Endereço + deslocamento
     cep:"", rua:"", numero:"", complemento:"", bairro:"", cidade:"", estado:"",
     raioKm: 10, deslocamento:"",
     // 3 — Especialidades
-    specs:[],
+    specs:[], specCustom:"",
     // 4 — Nível por especialidade
     specLevels:{},
-    // 5 — Equipamentos
-    equipamentos:[],
-    // 6 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... })
+    // 5 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... })
     disponibilidade:{},
-    // 7 — Perfil comportamental
+    // 6 — Perfil comportamental
     trabalhoEquipe:false, atendCliente:false, tipoTrabalho:"",
-    // 8 — Documentação
+    // 7 — Documentação
     temPix:false, chavePix:"", pcd:false, pcdTipo:"",
-    // 9 — Foto
+    // 8 — Foto
     fotoRosto:null,
-    // 10 — Documento + Login
+    // 9 — Documento + Login
     docTipo:"", selfieDoc:null,
     email:"", senha:"", confirma:"",
   });
@@ -460,39 +461,95 @@ function WorkerRegister({ onDone, onBack }) {
   const readFile = (file,key) => { const r=new FileReader(); r.onload=e=>set(key,e.target.result); r.readAsDataURL(file); };
   const setSpecLevel = (specId, val) => setData(d=>({...d,specLevels:{...d.specLevels,[specId]:val}}));
 
-  const cpfError   = data.cpf&&data.cpf.replace(/\D/g,"").length===11&&!validateCPF(data.cpf)?"CPF inválido":"";
+  const [cpfChecking, setCpfChecking] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState([]);
+
+  const cpfError   = data.cpf&&data.cpf.replace(/\D/g,"").length===11&&!validateCPF(data.cpf)?"CPF inválido":data.cpfExists?"CPF já cadastrado — se já tem conta, faça login":"";
   const ageError   = data.nascimento&&!validateAge(data.nascimento)?"É necessário ter 18 anos ou mais":"";
   const senhaError = data.confirma&&data.senha!==data.confirma?"Senhas não coincidem":"";
 
-  const selectedSpecs = SPECS.filter(s=>data.specs.includes(s.id));
+  const checkCPF = async (cpf) => {
+    const raw = cpf.replace(/\D/g,"");
+    if(raw.length!==11||!validateCPF(cpf)) return;
+    setCpfChecking(true);
+    const { data: existing } = await supabase.from("workers").select("id").eq("cpf",cpf).maybeSingle();
+    setCpfChecking(false);
+    set("cpfExists", !!existing);
+  };
+  const allSpecs = [...SPECS, ...(data.specCustom?[{id:"custom",icon:"⭐",label:data.specCustom}]:[])];
+  const selectedSpecs = allSpecs.filter(s=>data.specs.includes(s.id));
   const allLevelsFilled = selectedSpecs.every(s=>data.specLevels[s.id]?.nivel>0&&data.specLevels[s.id]?.experiencia);
 
+  const getMissingFields = () => {
+    if(step===1){
+      const m=[];
+      if(!data.nome) m.push("Nome completo");
+      if(data.cpf.replace(/\D/g,"").length<11) m.push("CPF");
+      if(cpfError) m.push("CPF inválido ou já cadastrado");
+      if(!data.nascimento) m.push("Data de nascimento");
+      if(ageError) m.push("Idade mínima de 18 anos");
+      if(data.telefone.replace(/\D/g,"").length<10) m.push("WhatsApp");
+      return m;
+    }
+    if(step===2){
+      const m=[];
+      if(!data.cep) m.push("CEP");
+      if(!data.rua) m.push("Rua/Avenida");
+      if(!data.numero) m.push("Número");
+      if(!data.bairro) m.push("Bairro");
+      if(!data.cidade) m.push("Cidade");
+      if(!data.deslocamento) m.push("Como você se desloca");
+      return m;
+    }
+    if(step===3) return data.specs.length===0?["Selecione ao menos uma especialidade"]:[];
+    if(step===4) return allLevelsFilled?[]:["Preencha o nível e tempo de experiência de todas as especialidades"];
+    if(step===5) return Object.values(data.disponibilidade).some(t=>t.length>0)?[]:["Selecione ao menos um turno disponível"];
+    if(step===6) return data.tipoTrabalho?[]:["Tipo de trabalho preferido"];
+    if(step===8) return data.fotoRosto?[]:["Foto de perfil"];
+    if(step===9){
+      const m=[];
+      if(!data.docTipo) m.push("Tipo de documento (RG ou CNH)");
+      if(!data.selfieDoc) m.push("Selfie com documento");
+      if(!data.email) m.push("E-mail");
+      if(data.senha.length<8) m.push("Senha (mínimo 8 caracteres)");
+      if(senhaError) m.push("Senhas não coincidem");
+      return m;
+    }
+    return [];
+  };
+
   const canNext = {
-    1:  data.nome&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&data.nascimento&&validateAge(data.nascimento)&&data.telefone.replace(/\D/g,"").length>=10,
+    1:  data.nome&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&!data.cpfExists&&data.nascimento&&validateAge(data.nascimento)&&data.telefone.replace(/\D/g,"").length>=10,
     2:  data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade&&data.deslocamento,
     3:  data.specs.length>=1,
     4:  allLevelsFilled,
-    5:  true,
-    6:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
-    7:  !!data.tipoTrabalho,
-    8:  true,
-    9:  !!data.fotoRosto,
-    10: data.email&&data.senha.length>=8&&!senhaError&&!!data.docTipo&&!!data.selfieDoc,
+    5:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
+    6:  !!data.tipoTrabalho,
+    7:  true,
+    8:  !!data.fotoRosto,
+    9:  data.email&&data.senha.length>=8&&!senhaError&&!!data.docTipo&&!!data.selfieDoc,
   }[step];
 
+  const handleNext = () => {
+    const missing = getMissingFields();
+    if(missing.length>0){ setFieldErrors(missing); return; }
+    setFieldErrors([]);
+    next();
+  };
+
   const next = async () => {
-    if(step<10){ setStep(s=>s+1); return; }
+    if(step<9){ setStep(s=>s+1); return; }
     setSubmitting(true); setSubmitError("");
     try { const saved=await saveWorker(data); onDone({...data,id:saved.id}); }
     catch(e){ setSubmitError(e.message||"Erro ao salvar. Tente novamente."); }
     finally { setSubmitting(false); }
   };
-  const back = ()=>step>1?setStep(s=>s-1):onBack();
+  const back = ()=>{ setFieldErrors([]); step>1?setStep(s=>s-1):onBack(); };
 
   const LABELS = [
     "Dados pessoais","Endereço e deslocamento","Especialidades",
-    "Nível por especialidade","Equipamentos","Disponibilidade",
-    "Perfil profissional","Documentação","Foto de perfil","Documento e conta",
+    "Nível por especialidade","Disponibilidade",
+    "Perfil profissional","Informações adicionais","Foto de perfil","Documento e conta",
   ];
 
   return (
@@ -500,7 +557,7 @@ function WorkerRegister({ onDone, onBack }) {
       <div style={{maxWidth:640,margin:"0 auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <button onClick={back} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer"}}>← {step>1?"Voltar":"Cancelar"}</button>
-          <Prog step={step} total={10} />
+          <Prog step={step} total={9} />
         </div>
         <div style={{...B,fontSize:12,color:C.muted,marginBottom:20}}>{LABELS[step-1]}</div>
 
@@ -512,10 +569,19 @@ function WorkerRegister({ onDone, onBack }) {
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Preencha com seus dados reais. Serão verificados pela equipe VORKY.</p>
             <Field label="Nome completo" placeholder="João da Silva" value={data.nome} onChange={v=>set("nome",v)} required />
             <div className="g2">
-              <Field label="CPF" placeholder="000.000.000-00" value={data.cpf} onChange={v=>set("cpf",maskCPF(v))} maxLength={14} hint={cpfError} required helper="Será validado pelo sistema" />
+              <div style={{marginBottom:16}}>
+                <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>CPF <span style={{color:C.red}}>*</span></label>
+                <input placeholder="000.000.000-00" value={data.cpf} maxLength={14}
+                  onChange={e=>{ set("cpfExists",false); set("cpf",maskCPF(e.target.value)); }}
+                  onBlur={()=>checkCPF(data.cpf)}
+                  style={{width:"100%",padding:"11px 14px",borderRadius:8,border:`1.5px solid ${cpfError?C.red:C.border2}`,background:"#fff",...B,fontSize:14,color:C.text,outline:"none"}} />
+                {cpfChecking&&<div style={{...B,fontSize:11,color:C.muted,marginTop:5}}>🔍 Verificando CPF...</div>}
+                {cpfError&&!cpfChecking&&<div style={{...B,fontSize:11,color:C.red,marginTop:5}}>⚠ {cpfError}</div>}
+                {!cpfError&&!cpfChecking&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&!data.cpfExists&&<div style={{...B,fontSize:11,color:C.green,marginTop:5}}>✓ CPF disponível</div>}
+              </div>
               <Field label="Data de nascimento" value={data.nascimento} onChange={v=>set("nascimento",v)} type="date" hint={ageError} required helper="Mínimo 18 anos" />
             </div>
-            <Field label="WhatsApp" placeholder="(11) 99999-9999" value={data.telefone} onChange={v=>set("telefone",maskPhone(v))} type="tel" maxLength={15} required />
+            <Field label="WhatsApp" placeholder="(11) 99999-9999" value={data.telefone} onChange={v=>set("telefone",maskPhone(v))} type="tel" maxLength={15} required helper="Usado pelas empresas para entrar em contato com você" />
             <Alert type="info">Todos os dados são tratados com sigilo e usados apenas para verificação.</Alert>
           </>}
 
@@ -546,7 +612,7 @@ function WorkerRegister({ onDone, onBack }) {
           {/* ── STEP 3: Especialidades ── */}
           {step===3&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Suas especialidades</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Selecione as funções que você exerce ou já exerceu. No próximo passo você informa o nível em cada uma.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Selecione as funções que você exerce. No próximo passo você informa o nível em cada uma.</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:18}}>
               {SPECS.map(s=>{const on=data.specs.includes(s.id); return(
                 <div key={s.id} className={`chip ${on?"on":""}`} onClick={()=>toggleArr("specs",s.id)}>
@@ -555,7 +621,32 @@ function WorkerRegister({ onDone, onBack }) {
                   {on&&<span style={{color:C.green,fontSize:11}}>✓</span>}
                 </div>
               );})}
+              {/* Especialidade customizada */}
+              {data.specCustom&&(
+                <div className={`chip ${data.specs.includes("custom")?"on":""}`} onClick={()=>toggleArr("specs","custom")}>
+                  <span style={{fontSize:18}}>⭐</span>
+                  <span style={{...B,fontSize:13,fontWeight:data.specs.includes("custom")?600:400,color:data.specs.includes("custom")?C.green:C.sub}}>{data.specCustom}</span>
+                  {data.specs.includes("custom")&&<span style={{color:C.green,fontSize:11}}>✓</span>}
+                  <span onClick={e=>{e.stopPropagation();set("specCustom","");setData(d=>({...d,specs:d.specs.filter(s=>s!=="custom"),specLevels:{...d.specLevels,custom:undefined}}));}} style={{color:C.red,fontWeight:700,fontSize:13,marginLeft:4,cursor:"pointer"}}>×</span>
+                </div>
+              )}
             </div>
+
+            {/* Adicionar especialidade customizada */}
+            {!data.specCustom&&(
+              <div style={{marginBottom:16}}>
+                <div style={{...B,fontSize:12,fontWeight:600,color:C.sub,marginBottom:8}}>Não encontrou sua especialidade? Cadastre abaixo:</div>
+                <div style={{display:"flex",gap:8}}>
+                  <input placeholder="Ex: Sommelier, Confeiteiro, Operador de Câmara Fria..."
+                    id="custom-spec-input"
+                    style={{flex:1,padding:"10px 14px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,color:C.text,outline:"none"}}
+                    onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){set("specCustom",e.target.value.trim());toggleArr("specs","custom");e.target.value="";}}} />
+                  <button onClick={()=>{const el=document.getElementById("custom-spec-input");if(el&&el.value.trim()){set("specCustom",el.value.trim());if(!data.specs.includes("custom"))toggleArr("specs","custom");el.value="";}}}
+                    style={{padding:"10px 16px",borderRadius:8,background:C.green,border:"none",color:"#fff",...B,fontSize:13,fontWeight:600,cursor:"pointer"}}>+ Adicionar</button>
+                </div>
+              </div>
+            )}
+
             {data.specs.length>0?<Alert type="success">{data.specs.length} especialidade{data.specs.length>1?"s":""} selecionada{data.specs.length>1?"s":""}. No próximo passo você define o nível em cada uma.</Alert>:<Alert type="warning">Selecione ao menos uma especialidade.</Alert>}
           </>}
 
@@ -569,23 +660,8 @@ function WorkerRegister({ onDone, onBack }) {
             {!allLevelsFilled&&<Alert type="warning">Preencha o nível e o tempo de experiência de todas as especialidades.</Alert>}
           </>}
 
-          {/* ── STEP 5: Equipamentos ── */}
+          {/* ── STEP 5: Disponibilidade ── */}
           {step===5&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Equipamentos e sistemas</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Selecione os equipamentos e sistemas que você sabe operar. Deixe em branco se não se aplicar.</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
-              {EQUIP.map(eq=>{const on=data.equipamentos.includes(eq); return(
-                <div key={eq} className={`chip ${on?"on":""}`} onClick={()=>toggleArr("equipamentos",eq)}>
-                  <span style={{...B,fontSize:13,fontWeight:on?600:400,color:on?C.green:C.sub}}>{eq}</span>
-                  {on&&<span style={{color:C.green,fontSize:11}}>✓</span>}
-                </div>
-              );})}
-            </div>
-            {data.equipamentos.length===0&&<Alert type="info" style={{marginTop:16}}>Não é obrigatório. Pule se não se aplicar.</Alert>}
-          </>}
-
-          {/* ── STEP 6: Disponibilidade ── */}
-          {step===6&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Disponibilidade</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Marque os turnos disponíveis em cada dia. Deixe em branco os dias que não quer trabalhar.</p>
 
@@ -651,8 +727,8 @@ function WorkerRegister({ onDone, onBack }) {
             )}
           </>}
 
-          {/* ── STEP 7: Perfil profissional ── */}
-          {step===7&&<>
+          {/* ── STEP 6: Perfil profissional ── */}
+          {step===6&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Perfil profissional</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Três perguntas rápidas que ajudam as empresas a entender seu perfil de trabalho.</p>
 
@@ -687,8 +763,8 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
           </>}
 
-          {/* ── STEP 8: Documentação ── */}
-          {step===8&&<>
+          {/* ── STEP 7: Informações adicionais ── */}
+          {step===7&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Informações adicionais</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Última etapa antes da foto e documento.</p>
 
@@ -707,8 +783,8 @@ function WorkerRegister({ onDone, onBack }) {
             <Alert type="info">Informação usada para conectar com empresas que possuem cotas PCD.</Alert>
           </>}
 
-          {/* ── STEP 9: Foto ── */}
-          {step===9&&<>
+          {/* ── STEP 8: Foto ── */}
+          {step===8&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto de perfil</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Perfis com foto recebem muito mais convites de empresas.</p>
             <Alert type="info">Rosto completamente visível · Sem óculos escuros · Fundo neutro · Boa iluminação · Foto recente</Alert>
@@ -724,8 +800,8 @@ function WorkerRegister({ onDone, onBack }) {
             <input ref={photoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"fotoRosto");}} />
           </>}
 
-          {/* ── STEP 10: Documento + Login ── */}
-          {step===10&&<>
+          {/* ── STEP 9: Documento + Login ── */}
+          {step===9&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Documento e conta</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:20,lineHeight:1.65}}>Envie sua selfie com documento para verificação de identidade e crie seu login.</p>
 
@@ -771,9 +847,16 @@ function WorkerRegister({ onDone, onBack }) {
           </>}
         </div>
 
-        <div style={{marginTop:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        {fieldErrors.length>0&&(
+          <div style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:10,padding:"12px 16px",marginTop:14}}>
+            <div style={{...B,fontSize:13,fontWeight:600,color:C.red,marginBottom:6}}>⚠ Preencha os campos obrigatórios:</div>
+            {fieldErrors.map((e,i)=><div key={i} style={{...B,fontSize:13,color:C.red}}>• {e}</div>)}
+          </div>
+        )}
+
+        <div style={{marginTop:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{...B,fontSize:13,color:C.sub}}>Já tem conta? <span onClick={onBack} style={{color:C.green,cursor:"pointer",fontWeight:600}}>Fazer login</span></span>
-          <Btn label={step===10?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={next} disabled={!canNext} loading={submitting} />
+          <Btn label={step===9?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={handleNext} loading={submitting} />
         </div>
       </div>
     </div>
