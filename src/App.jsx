@@ -381,7 +381,7 @@ function Header({ onNav, user, type }) {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {!user?<>
-              <Btn label="Entrar" variant="ghost" size="sm" onClick={()=>onNav("worker-auth")} />
+              <Btn label="Entrar" variant="ghost" size="sm" onClick={()=>onNav("auth-choice")} />
               <Btn label="Cadastro Negócio" variant="primary" size="sm" onClick={()=>onNav("company-register")} />
               <Btn label="Admin" variant="white" size="sm" onClick={()=>onNav("admin-login")} />
             </>:<>
@@ -1908,6 +1908,55 @@ function TalentBrowser({ company, onLogout }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════
+// AUTH CHOICE
+// ═══════════════════════════════════════════════════════════════
+function AuthChoice({ onNav }) {
+  return (
+    <div style={{minHeight:"75vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",background:C.bg}}>
+      <div style={{maxWidth:560,width:"100%"}}>
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:10}}>Quem é você?</h2>
+          <p style={{...B,fontSize:15,color:C.muted}}>Escolha como deseja acessar o VORKY</p>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+          {/* Empresa */}
+          <div onClick={()=>onNav("company-auth")}
+            style={{background:C.white,border:`1.5px solid ${C.border}`,borderRadius:16,padding:32,cursor:"pointer",textAlign:"center",transition:"all .18s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green;e.currentTarget.style.boxShadow="0 4px 20px rgba(22,163,74,.1)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
+            <div style={{fontSize:52,marginBottom:16}}>🏢</div>
+            <div style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:8}}>Sou uma empresa</div>
+            <div style={{...B,fontSize:14,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse o Talent Browser e encontre colaboradores verificados na sua região.</div>
+            <div style={{background:C.green,borderRadius:9,padding:"11px 20px",...H,fontSize:14,fontWeight:700,color:"#fff"}}>
+              Entrar como empresa →
+            </div>
+          </div>
+
+          {/* Colaborador */}
+          <div onClick={()=>onNav("worker-auth")}
+            style={{background:C.white,border:`1.5px solid ${C.border}`,borderRadius:16,padding:32,cursor:"pointer",textAlign:"center",transition:"all .18s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.boxShadow="0 4px 20px rgba(37,99,235,.1)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
+            <div style={{fontSize:52,marginBottom:16}}>👤</div>
+            <div style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:8}}>Sou colaborador</div>
+            <div style={{...B,fontSize:14,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse sua conta e aguarde convites de empresas na sua região.</div>
+            <div style={{background:C.blue,borderRadius:9,padding:"11px 20px",...H,fontSize:14,fontWeight:700,color:"#fff"}}>
+              Entrar como colaborador →
+            </div>
+          </div>
+        </div>
+        <div style={{textAlign:"center",marginTop:24}}>
+          <span style={{...B,fontSize:13,color:C.muted}}>Ainda não tem conta? </span>
+          <span onClick={()=>onNav("company-register")} style={{...B,fontSize:13,color:C.green,cursor:"pointer",fontWeight:600}}>Cadastrar empresa</span>
+          <span style={{...B,fontSize:13,color:C.muted}}> ou </span>
+          <span onClick={()=>onNav("worker-register")} style={{...B,fontSize:13,color:C.green,cursor:"pointer",fontWeight:600}}>Cadastrar como colaborador</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── AUTH SCREEN (worker only) ─────────────────────────────────
 function AuthScreen({ type, onLogin, onRegister, onBack }) {
   const [email,setEmail]=useState(""); const [pass,setPass]=useState("");
@@ -1957,11 +2006,12 @@ export default function VORKYApp() {
       <GlobalStyles />
       <Header onNav={onNav} user={userName} type={userType} />
       {!admin&&!company&&screen==="home"             &&<Landing          onNav={onNav} />}
-      {!admin&&!company&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("home")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
+      {!admin&&!company&&screen==="auth-choice"      &&<AuthChoice       onNav={onNav} />}
+      {!admin&&!company&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("auth-choice")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
       {!admin&&!company&&screen==="worker-register"  &&<WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
       {!admin&&!company&&screen==="worker-success"   &&<WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
       {!admin&&!company&&screen==="worker-app"       &&<Landing          onNav={onNav} />}
-      {!admin&&!company&&screen==="company-auth"     &&<CompanyLogin     onBack={()=>onNav("home")} onLogin={handleCompanyLogin} onRegister={()=>onNav("company-register")} />}
+      {!admin&&!company&&screen==="company-auth"     &&<CompanyLogin     onBack={()=>onNav("auth-choice")} onLogin={handleCompanyLogin} onRegister={()=>onNav("company-register")} />}
       {!admin&&!company&&screen==="company-register" &&<CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
       {!admin&&!company&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
       {!admin&&company  &&screen==="company-app"     &&<TalentBrowser    company={company} onLogout={handleCompanyLogout} />}
