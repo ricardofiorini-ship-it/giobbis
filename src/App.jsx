@@ -1269,8 +1269,7 @@ function AdminPanel() {
   return (
     <div style={{display:"grid",gridTemplateColumns:"220px 1fr",minHeight:"calc(100vh - 60px)"}}>
       {rejectModal&&<RejectModal />}
-      {deleteModal&&<AdminDeleteModal />
-      <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
+      {deleteModal&&<AdminDeleteModal />}      <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
         <div style={{padding:"0 16px 18px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
           <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Painel Interno</div>
           <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Equipe VORKY</div>
