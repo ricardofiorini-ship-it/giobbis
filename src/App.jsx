@@ -1269,7 +1269,8 @@ function AdminPanel() {
   return (
     <div style={{display:"grid",gridTemplateColumns:"220px 1fr",minHeight:"calc(100vh - 60px)"}}>
       {rejectModal&&<RejectModal />}
-      {deleteModal&&<AdminDeleteModal />}      <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
+      {deleteModal&&<AdminDeleteModal />}
+      <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
         <div style={{padding:"0 16px 18px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
           <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Painel Interno</div>
           <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Equipe VORKY</div>
@@ -1792,108 +1793,190 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
   // Worker detail modal
   if(selWorker) return (
-    <div style={{minHeight:"90vh",padding:"28px 32px",background:C.bg}}>
-      <div style={{maxWidth:780,margin:"0 auto"}}>
-        <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",marginBottom:22}}>← Voltar ao Talent Browser</button>
+    <div style={{minHeight:"90vh",background:C.bg}}>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 260px",gap:20,alignItems:"start"}}>
-          <div>
-            {/* Header */}
-            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
-              <div style={{display:"flex",gap:18,alignItems:"center",marginBottom:20}}>
-                <div style={{width:72,height:72,borderRadius:36,background:C.greenBg,border:`2px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <span style={{...H,fontSize:26,fontWeight:900,color:C.green}}>{selWorker.nome?.[0]}</span>
-                </div>
+      {/* Hero banner */}
+      <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1E3A5F 100%)`,padding:"32px 40px 28px"}}>
+        <div style={{maxWidth:900,margin:"0 auto"}}>
+          <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:"rgba(255,255,255,.6)",background:"none",border:"none",cursor:"pointer",marginBottom:20,display:"flex",alignItems:"center",gap:6}}>
+            ← Voltar ao Talent Browser
+          </button>
+          <div style={{display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
+            {/* Avatar */}
+            <div style={{width:90,height:90,borderRadius:45,background:C.green,border:"3px solid rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <span style={{...H,fontSize:36,fontWeight:900,color:"#fff"}}>{selWorker.nome?.[0]}</span>
+            </div>
+            {/* Name + info */}
+            <div style={{flex:1}}>
+              <h2 style={{...H,fontSize:30,fontWeight:900,color:"#fff",letterSpacing:-.5,marginBottom:6}}>{selWorker.nome}</h2>
+              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                <span style={{...B,fontSize:13,color:"rgba(255,255,255,.7)"}}>📍 {selWorker.cidade}/{selWorker.estado}</span>
+                <span style={{...B,fontSize:13,color:"#4ADE80",fontWeight:600}}>📏 {selWorker.distLabel} desta unidade</span>
+                <span style={{...B,fontSize:13,color:"rgba(255,255,255,.7)"}}>🔄 Aceita vagas em até {selWorker.raio_km||10}km</span>
+                <span style={{...B,fontSize:13,color:"rgba(255,255,255,.7)"}}>🚌 {selWorker.deslocamento||"—"}</span>
+              </div>
+            </div>
+            {/* WhatsApp CTA — hero */}
+            <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",flexShrink:0}}>
+              <div style={{background:"#25D366",borderRadius:12,padding:"14px 24px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                <span style={{fontSize:22}}>💬</span>
                 <div>
-                  <h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>{selWorker.nome}</h3>
-                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                    <span style={{...B,fontSize:13,color:C.muted}}>📍 {selWorker.cidade}/{selWorker.estado}</span>
-                    <span style={{...B,fontSize:13,color:C.green,fontWeight:600}}>📏 {selWorker.distLabel} da unidade</span>
-                    <span style={{...B,fontSize:13,color:C.muted}}>🚗 Raio até {selWorker.raio_km||10}km</span>
-                  </div>
+                  <div style={{...H,fontSize:15,fontWeight:700,color:"#fff"}}>Convidar pelo WhatsApp</div>
+                  <div style={{...B,fontSize:11,color:"rgba(255,255,255,.8)"}}>Mensagem pré-formatada</div>
                 </div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px"}}>
-                {[["Deslocamento",selWorker.deslocamento||"—"],["Tipo de trabalho",selWorker.tipo_trabalho||"—"],["Equipe grande",selWorker.trabalho_equipe?"Sim":"Não"],["Atend. ao cliente",selWorker.atend_cliente?"Sim":"Não"],["PCD",selWorker.pcd?(selWorker.pcd_tipo||"Sim"):"Não"]].map(([k,v])=>(
-                  <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
-                    <div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div>
-                    <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            </a>
+          </div>
 
-            {/* Especialidades */}
-            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
-              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Especialidades e experiência</div>
-              {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
-                const sl=selWorker.spec_levels?.[s.id]; const nivel=sl?.nivel||0;
-                return (
-                  <div key={s.id} style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:18}}>{s.icon}</span><span style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{s.label}</span></div>
-                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{...B,fontSize:12,fontWeight:600,color:levelColors[nivel]}}>{LEVELS[nivel]?.label||"—"}</span>
-                        {sl?.experiencia&&<span style={{...B,fontSize:11,color:C.muted}}>· {sl.experiencia}</span>}
-                      </div>
-                    </div>
-                    <div className="level-bar"><div className="level-fill" style={{width:`${levelWidth[nivel]}%`,background:levelColors[nivel]}} /></div>
-                    {sl?.empresas?.length>0&&(
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
-                        <span style={{...B,fontSize:11,color:C.muted}}>Trabalhou em:</span>
-                        {sl.empresas.map((emp,i)=><span key={i} style={{...B,fontSize:11,fontWeight:600,color:C.navy,background:C.bg,border:`1px solid ${C.border2}`,borderRadius:5,padding:"2px 8px"}}>{emp}</span>)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {selWorker.specs?.includes("custom")&&selWorker.spec_levels?.custom&&(
-                <div style={{marginBottom:16,paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:18}}>⭐</span><span style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{selWorker.spec_levels.custom.label||"Especialidade própria"}</span></div>
-                    <span style={{...B,fontSize:12,fontWeight:600,color:levelColors[selWorker.spec_levels.custom.nivel||0]}}>{LEVELS[selWorker.spec_levels.custom.nivel||0]?.label}</span>
-                  </div>
-                  <div className="level-bar"><div className="level-fill" style={{width:`${levelWidth[selWorker.spec_levels.custom.nivel||0]}%`,background:levelColors[selWorker.spec_levels.custom.nivel||0]}} /></div>
-                </div>
-              )}
-            </div>
+          {/* Specialty chips in hero */}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:20}}>
+            {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
+              const nivel=selWorker.spec_levels?.[s.id]?.nivel||0;
+              const levelColors=["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
+              return <div key={s.id} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.15)",borderRadius:20,padding:"5px 12px"}}>
+                <span style={{fontSize:14}}>{s.icon}</span>
+                <span style={{...B,fontSize:12,fontWeight:600,color:"#fff"}}>{s.label}</span>
+                <span style={{...B,fontSize:10,color:levelColors[nivel],background:"rgba(0,0,0,.3)",borderRadius:10,padding:"1px 6px"}}>{LEVELS[nivel]?.label}</span>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
 
-            {/* Disponibilidade */}
-            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28}}>
-              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Disponibilidade</div>
-              {DAYS.filter(d=>(selWorker.disponibilidade?.[d]||[]).length>0).map(d=>(
-                <div key={d} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                  <span style={{...H,fontSize:13,fontWeight:700,color:C.navy,minWidth:36}}>{d}</span>
-                  <div style={{display:"flex",gap:6}}>
-                    {(selWorker.disponibilidade[d]||[]).map(sid=>{
-                      const sh=SHIFTS.find(s=>s.id===sid);
-                      return sh?<span key={sid} style={{...B,fontSize:12,fontWeight:600,color:sh.color,background:sh.color+"15",padding:"3px 10px",borderRadius:6}}>{sh.label}</span>:null;
-                    })}
-                  </div>
+      {/* Content */}
+      <div style={{maxWidth:900,margin:"0 auto",padding:"24px 40px 60px",display:"grid",gridTemplateColumns:"1fr 300px",gap:20,alignItems:"start"}}>
+        <div>
+
+          {/* Perfil comportamental — cards */}
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Perfil de trabalho</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+              {[
+                {label:"Trabalho em equipe", value:selWorker.trabalho_equipe?"✓ Sim":"✗ Não", ok:selWorker.trabalho_equipe},
+                {label:"Atend. ao cliente",  value:selWorker.atend_cliente?"✓ Sim":"✗ Não",  ok:selWorker.atend_cliente},
+                {label:"Tipo preferido",     value:selWorker.tipo_trabalho||"—",              ok:!!selWorker.tipo_trabalho},
+              ].map(({label,value,ok})=>(
+                <div key={label} style={{background:ok?C.greenBg:C.bg,border:`1px solid ${ok?C.greenBorder:C.border}`,borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
+                  <div style={{...B,fontSize:11,color:C.muted,marginBottom:6}}>{label}</div>
+                  <div style={{...H,fontSize:14,fontWeight:700,color:ok?C.green:C.sub}}>{value}</div>
                 </div>
               ))}
             </div>
+            {selWorker.pcd&&(
+              <div style={{marginTop:12,background:C.blueBg,border:`1px solid ${C.blueBorder}`,borderRadius:9,padding:"10px 14px",...B,fontSize:13,color:C.blue}}>
+                ♿ PCD{selWorker.pcd_tipo?` — ${selWorker.pcd_tipo}`:""}
+              </div>
+            )}
           </div>
 
-          {/* Action panel */}
-          <div style={{position:"sticky",top:80}}>
-            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
-              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:6}}>Convidar {selWorker.nome.split(" ")[0]}</div>
-              <div style={{...B,fontSize:13,color:C.sub,marginBottom:20,lineHeight:1.65}}>
-                Uma mensagem pré-formatada será aberta no WhatsApp com o contato deste colaborador.
+          {/* Especialidades */}
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Especialidades e experiência</div>
+            {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
+              const sl=selWorker.spec_levels?.[s.id]; const nivel=sl?.nivel||0;
+              const levelColors=["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
+              const levelWidth=[0,25,50,75,100];
+              return (
+                <div key={s.id} style={{background:C.bg,borderRadius:12,padding:"16px 18px",marginBottom:10,border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:22}}>{s.icon}</span>
+                      <span style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{s.label}</span>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{...B,fontSize:12,fontWeight:700,color:levelColors[nivel],background:levelColors[nivel]+"18",padding:"3px 10px",borderRadius:20}}>{LEVELS[nivel]?.label||"—"}</span>
+                      {sl?.experiencia&&<span style={{...B,fontSize:11,color:C.muted}}>{sl.experiencia}</span>}
+                    </div>
+                  </div>
+                  <div style={{height:8,borderRadius:4,background:C.border,overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:4,background:levelColors[nivel],width:`${levelWidth[nivel]}%`,transition:"width .3s"}} />
+                  </div>
+                  {sl?.empresas?.length>0&&(
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10,alignItems:"center"}}>
+                      <span style={{...B,fontSize:11,color:C.muted}}>Trabalhou em:</span>
+                      {sl.empresas.map((emp,i)=>(
+                        <span key={i} style={{...B,fontSize:12,fontWeight:600,color:C.navy,background:C.white,border:`1px solid ${C.border2}`,borderRadius:6,padding:"3px 10px"}}>{emp}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {selWorker.specs?.includes("custom")&&selWorker.spec_levels?.custom&&(
+              <div style={{background:C.bg,borderRadius:12,padding:"16px 18px",border:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:22}}>⭐</span><span style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{selWorker.spec_levels.custom.label||"Especialidade própria"}</span></div>
+                  <span style={{...B,fontSize:12,fontWeight:700,color:levelColors[selWorker.spec_levels.custom.nivel||0],background:levelColors[selWorker.spec_levels.custom.nivel||0]+"18",padding:"3px 10px",borderRadius:20}}>{LEVELS[selWorker.spec_levels.custom.nivel||0]?.label}</span>
+                </div>
               </div>
+            )}
+          </div>
+
+          {/* Disponibilidade — grade visual */}
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24}}>
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Disponibilidade</div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:"4px"}}>
+                <thead>
+                  <tr>
+                    <th style={{...B,fontSize:11,fontWeight:600,color:C.muted,textAlign:"left",padding:"4px 8px",minWidth:40}}></th>
+                    {SHIFTS.map(sh=><th key={sh.id} style={{...B,fontSize:11,fontWeight:700,color:sh.color,textAlign:"center",padding:"4px 8px",minWidth:80}}>{sh.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {DAYS.map(day=>{
+                    const dayShifts=selWorker.disponibilidade?.[day]||[];
+                    const hasAny=dayShifts.length>0;
+                    return (
+                      <tr key={day}>
+                        <td style={{...H,fontSize:13,fontWeight:700,color:hasAny?C.navy:C.muted,padding:"3px 8px"}}>{day}</td>
+                        {SHIFTS.map(sh=>{
+                          const on=dayShifts.includes(sh.id);
+                          return <td key={sh.id} style={{padding:3}}>
+                            <div style={{padding:"8px 6px",borderRadius:8,background:on?sh.color+"18":C.bg,border:`1.5px solid ${on?sh.color:C.border}`,textAlign:"center"}}>
+                              {on?<span style={{...B,fontSize:11,fontWeight:700,color:sh.color}}>✓</span>:<span style={{...B,fontSize:11,color:C.border}}>—</span>}
+                            </div>
+                          </td>;
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky action panel */}
+        <div style={{position:"sticky",top:20}}>
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
+            <div style={{background:C.navy,padding:"18px 20px"}}>
+              <div style={{...H,fontSize:16,fontWeight:800,color:"#fff",marginBottom:2}}>Convidar {selWorker.nome.split(" ")[0]}</div>
+              <div style={{...B,fontSize:12,color:"rgba(255,255,255,.6)"}}>para a unidade {selUnit?.nome}</div>
+            </div>
+            <div style={{padding:20}}>
+              <div style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+                <div style={{...B,fontSize:11,color:C.muted,marginBottom:4}}>Distância até a unidade</div>
+                <div style={{...H,fontSize:24,fontWeight:900,color:C.green}}>{selWorker.distLabel}</div>
+                <div style={{...B,fontSize:11,color:C.muted,marginTop:2}}>Raio aceito: {selWorker.raio_km||10}km ✓</div>
+              </div>
+
+              <div style={{...B,fontSize:12,color:C.sub,marginBottom:14,lineHeight:1.65}}>
+                O WhatsApp vai abrir com uma mensagem já pronta para {selWorker.nome.split(" ")[0]}. Você pode editar antes de enviar.
+              </div>
+
               <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>
-                <div style={{background:"#25D366",borderRadius:10,padding:"14px 20px",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-                  <span style={{fontSize:20}}>💬</span>
-                  <span style={{...H,fontSize:15,fontWeight:700,color:"#fff"}}>Convidar pelo WhatsApp</span>
+                <div style={{background:"#25D366",borderRadius:10,padding:"14px 18px",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+                  <span style={{fontSize:22}}>💬</span>
+                  <span style={{...H,fontSize:15,fontWeight:700,color:"#fff"}}>Abrir WhatsApp</span>
                 </div>
               </a>
-              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginTop:10,lineHeight:1.6}}>
-                Ao clicar, o WhatsApp abre com uma mensagem pronta. Você edita antes de enviar.
-              </div>
+
               <Div />
-              <div style={{...B,fontSize:12,color:C.muted}}>📍 Unidade: <strong style={{color:C.navy}}>{selUnit?.nome}</strong></div>
-              <div style={{...B,fontSize:12,color:C.muted,marginTop:4}}>📏 Distância: <strong style={{color:C.green}}>{selWorker.distLabel}</strong></div>
+              <div style={{...B,fontSize:12,color:C.muted,lineHeight:1.7}}>
+                <div>📍 <strong style={{color:C.navy}}>{selUnit?.nome}</strong></div>
+                <div style={{marginTop:4}}>🔄 Se desloca de <strong style={{color:C.navy}}>{selWorker.deslocamento||"—"}</strong></div>
+              </div>
             </div>
           </div>
         </div>
