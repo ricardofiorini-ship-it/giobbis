@@ -1989,22 +1989,44 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
       {deleteModal&&<DeleteModal />}
 
       {/* Header */}
-      <div style={{background:C.white,borderBottom:`1px solid ${C.border}`,padding:"14px 32px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <div style={{...H,fontSize:17,fontWeight:900,color:C.navy}}>{company.nome_fant||company.razao}</div>
-          <div style={{...B,fontSize:12,color:C.muted}}>{company.seg} · {company.cidade}/{company.estado}</div>
+      <div style={{background:C.navy,padding:"20px 32px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:44,height:44,borderRadius:10,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>⚡</div>
+          <div>
+            <div style={{...H,fontSize:18,fontWeight:900,color:"#fff"}}>{company.nome_fant||company.razao}</div>
+            <div style={{...B,fontSize:12,color:"rgba(255,255,255,.5)"}}>{company.seg} · {company.cidade}/{company.estado}</div>
+          </div>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
           <Badge status={company.status} />
-          <Btn label="Sair" variant="ghost" size="sm" onClick={onLogout} />
+          <button onClick={onLogout} style={{...B,fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)",background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"7px 16px",cursor:"pointer"}}>Sair</button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{background:C.white,borderBottom:`1px solid ${C.border}`,display:"flex",padding:"0 32px"}}>
-        {TABS.map(t=>(
-          <button key={t.id} className={`tab-btn ${tab===t.id?"active":""}`} onClick={()=>setTab(t.id)} style={{maxWidth:180}}>
-            {t.icon} {t.label}
+      <div style={{background:C.navy,borderBottom:`3px solid rgba(255,255,255,.08)`,display:"flex",padding:"0 32px",gap:4}}>
+        {[
+          {id:"talent", icon:"🔍", label:"Talent Browser"},
+          {id:"profile", icon:"🏢", label:"Meu Perfil"},
+          {id:"vorky-team", icon:"⚡", label:"Time VORKY", soon:true},
+        ].map(t=>(
+          <button key={t.id}
+            onClick={()=>!t.soon&&setTab(t.id)}
+            style={{
+              ...B, fontSize:13, fontWeight:600,
+              padding:"14px 20px",
+              background:"transparent",
+              border:"none",
+              borderBottom:`3px solid ${tab===t.id?"#fff":"transparent"}`,
+              color: t.soon?"rgba(255,255,255,.3)": tab===t.id?"#fff":"rgba(255,255,255,.6)",
+              cursor:t.soon?"default":"pointer",
+              display:"flex", alignItems:"center", gap:7,
+              transition:"all .15s",
+              marginBottom:-3,
+            }}>
+            <span style={{fontSize:15}}>{t.icon}</span>
+            {t.label}
+            {t.soon&&<span style={{...B,fontSize:10,fontWeight:700,color:"rgba(255,255,255,.35)",background:"rgba(255,255,255,.08)",borderRadius:10,padding:"2px 8px",letterSpacing:.5}}>EM BREVE</span>}
           </button>
         ))}
       </div>
