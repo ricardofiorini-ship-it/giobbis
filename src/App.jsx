@@ -2318,7 +2318,7 @@ export default function VORKYApp() {
   return (
     <>
       <GlobalStyles />
-      <Header onNav={onNav} user={userName} type={userType} />
+      {!admin&&!company&&<Header onNav={onNav} user={userName} type={userType} />
       {!admin&&!company&&screen==="home"             &&<Landing          onNav={onNav} />}
       {!admin&&!company&&screen==="auth-choice"      &&<AuthChoice       onNav={onNav} />}
       {!admin&&!company&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("auth-choice")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
