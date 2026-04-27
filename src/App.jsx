@@ -651,6 +651,7 @@ function Landing({ onNav }) {
                 tag:"Para o Vorker",
                 title:"Você manda no seu relógio",
                 desc:"Escolha quando, onde e quanto quer trabalhar. Sem chefe, sem horário fixo, sem enrolação.",
+                photo:"/vorker-girl.png",
                 features:[
                   {icon:"⚡",title:"Liberdade total",desc:"Defina seus turnos e dias disponíveis"},
                   {icon:"💰",title:"Pagamento rápido",desc:"Receba pelos turnos realizados"},
@@ -663,6 +664,7 @@ function Landing({ onNav }) {
                 tag:"Para a Empresa",
                 title:"Escala sempre cheia",
                 desc:"Acesso imediato a colaboradores verificados, treinados e próximos da sua unidade.",
+                photo:null,
                 features:[
                   {icon:"🎯",title:"Mão de obra qualificada na hora",desc:"Colaboradores verificados e treinados"},
                   {icon:"📊",title:"Escala sempre cheia",desc:"Nunca fique sem equipe nas datas críticas"},
@@ -676,6 +678,14 @@ function Landing({ onNav }) {
                 {/* glows decorativos */}
                 <div style={{position:"absolute",top:-40,right:-60,width:260,height:260,background:"radial-gradient(circle, rgba(34,197,94,.18) 0%, transparent 70%)",pointerEvents:"none"}} />
                 <div style={{position:"absolute",bottom:-80,left:-40,width:200,height:200,background:"radial-gradient(circle, rgba(34,197,94,.08) 0%, transparent 70%)",pointerEvents:"none"}} />
+
+                {/* Foto opcional (decorativa, à direita) */}
+                {card.photo && (
+                  <>
+                    <img src={card.photo} alt="" className="vorker-card-photo" style={{position:"absolute",right:-30,bottom:0,height:"100%",width:"auto",maxWidth:"55%",objectFit:"contain",objectPosition:"bottom right",zIndex:0,pointerEvents:"none"}} />
+                    <div style={{position:"absolute",inset:0,background:"linear-gradient(90deg, rgba(13,33,55,.95) 0%, rgba(13,33,55,.6) 45%, rgba(13,33,55,0) 65%)",pointerEvents:"none",zIndex:0}} />
+                  </>
+                )}
 
                 <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.3)",borderRadius:100,padding:"5px 12px",marginBottom:16,position:"relative",zIndex:1}}>
                   <div style={{width:5,height:5,borderRadius:3,background:"#22C55E"}} />
