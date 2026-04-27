@@ -675,67 +675,49 @@ function Landing({ onNav }) {
                 cta:"Cadastrar minha empresa →",
                 onClick:()=>onNav("company-register"),
               },
-            ].map(card=>{
-              const isPrimary = card.variant === "primary";
-              const cardBg = isPrimary ? "linear-gradient(135deg, #1FB85C 0%, #16A34A 100%)" : "linear-gradient(135deg, #0d2137 0%, #0A1628 100%)";
-              const cardBorder = isPrimary ? "1px solid rgba(255,255,255,.18)" : "1px solid rgba(255,255,255,.06)";
-              const tagBg = isPrimary ? "rgba(7,19,31,.6)" : "rgba(34,197,94,.1)";
-              const tagBorder = isPrimary ? "1px solid rgba(255,255,255,.15)" : "1px solid rgba(34,197,94,.3)";
-              const tagText = isPrimary ? "#fff" : "#22C55E";
-              const tagDot = isPrimary ? "#fff" : "#22C55E";
-              const titleColor = "#fff";
-              const descColor = isPrimary ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.6)";
-              const featIconBg = isPrimary ? "#fff" : "rgba(34,197,94,.12)";
-              const featIconBorder = isPrimary ? "none" : "1px solid rgba(34,197,94,.25)";
-              const featDescColor = isPrimary ? "rgba(255,255,255,.8)" : "rgba(255,255,255,.5)";
-              const ctaBg = isPrimary ? "#0A1628" : "#22C55E";
-              const ctaBgHover = isPrimary ? "#1a2640" : "#16A34A";
-              const ctaText = "#fff";
-              const ctaShadow = isPrimary ? "0 8px 24px rgba(0,0,0,.25)" : "0 8px 24px rgba(34,197,94,.25)";
-              return (
-              <div key={card.tag} style={{background:cardBg,border:cardBorder,borderRadius:20,padding:36,position:"relative",overflow:"hidden",minHeight:isPrimary?460:undefined}}>
-                {!isPrimary && <>
-                  <div style={{position:"absolute",top:-40,right:-60,width:260,height:260,background:"radial-gradient(circle, rgba(34,197,94,.18) 0%, transparent 70%)",pointerEvents:"none"}} />
-                  <div style={{position:"absolute",bottom:-80,left:-40,width:200,height:200,background:"radial-gradient(circle, rgba(34,197,94,.08) 0%, transparent 70%)",pointerEvents:"none"}} />
-                </>}
-                {isPrimary && (
-                  <div style={{position:"absolute",bottom:-100,right:-100,width:300,height:300,background:"radial-gradient(circle, rgba(255,255,255,.08) 0%, transparent 70%)",pointerEvents:"none"}} />
-                )}
+            ].map(card=>(
+              <div key={card.tag} style={{background:"linear-gradient(135deg, #0d2137 0%, #0A1628 100%)",border:"1px solid rgba(255,255,255,.06)",borderRadius:20,padding:36,position:"relative",overflow:"hidden"}}>
+                {/* glows decorativos */}
+                <div style={{position:"absolute",top:-40,right:-60,width:260,height:260,background:"radial-gradient(circle, rgba(34,197,94,.18) 0%, transparent 70%)",pointerEvents:"none"}} />
+                <div style={{position:"absolute",bottom:-80,left:-40,width:200,height:200,background:"radial-gradient(circle, rgba(34,197,94,.08) 0%, transparent 70%)",pointerEvents:"none"}} />
 
-                {/* Foto opcional à direita (sangra pra fora) */}
+                {/* Foto da garota — ancorada no topo, camiseta funde no fundo */}
                 {card.photo && (
-                  <img src={card.photo} alt="" className="vorker-card-photo" style={{position:"absolute",right:-20,bottom:0,height:"100%",width:"auto",maxWidth:"58%",objectFit:"contain",objectPosition:"bottom right",zIndex:1,pointerEvents:"none"}} />
+                  <>
+                    <img src={card.photo} alt="" className="vorker-card-photo" style={{position:"absolute",right:-10,top:0,height:"100%",width:"auto",maxWidth:"58%",objectFit:"contain",objectPosition:"top right",zIndex:1,pointerEvents:"none"}} />
+                    {/* fade inferior pra fundir o ombro/camiseta no fundo do card */}
+                    <div style={{position:"absolute",right:0,bottom:0,width:"60%",height:"45%",background:"linear-gradient(180deg, transparent 0%, rgba(10,22,40,.6) 60%, #0A1628 100%)",pointerEvents:"none",zIndex:2}} />
+                  </>
                 )}
 
-                <div style={{position:"relative",zIndex:2,maxWidth:card.photo?"60%":"none"}}>
-                  <div style={{display:"inline-flex",alignItems:"center",gap:8,background:tagBg,border:tagBorder,borderRadius:100,padding:"5px 12px",marginBottom:16}}>
-                    <div style={{width:5,height:5,borderRadius:3,background:tagDot}} />
-                    <span style={{...B,fontSize:10.5,fontWeight:700,color:tagText,letterSpacing:1.4,textTransform:"uppercase"}}>{card.tag}</span>
+                <div style={{position:"relative",zIndex:3,maxWidth:card.photo?"60%":"none"}}>
+                  <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.3)",borderRadius:100,padding:"5px 12px",marginBottom:16}}>
+                    <div style={{width:5,height:5,borderRadius:3,background:"#22C55E"}} />
+                    <span style={{...B,fontSize:10.5,fontWeight:700,color:"#22C55E",letterSpacing:1.4,textTransform:"uppercase"}}>{card.tag}</span>
                   </div>
 
-                  <h3 style={{...H,fontSize:26,fontWeight:900,color:titleColor,marginBottom:10,letterSpacing:-.5,lineHeight:1.15}}>{card.title}</h3>
-                  <p style={{...B,fontSize:14,color:descColor,marginBottom:28,lineHeight:1.55}}>{card.desc}</p>
+                  <h3 style={{...H,fontSize:26,fontWeight:900,color:"#fff",marginBottom:10,letterSpacing:-.5,lineHeight:1.15}}>{card.title}</h3>
+                  <p style={{...B,fontSize:14,color:"rgba(255,255,255,.6)",marginBottom:28,lineHeight:1.55}}>{card.desc}</p>
 
                   {card.features.map(({icon,title,desc})=>(
                     <div key={title} style={{display:"flex",gap:14,marginBottom:18}}>
-                      <div style={{width:38,height:38,borderRadius:10,background:featIconBg,border:featIconBorder,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>{icon}</div>
+                      <div style={{width:38,height:38,borderRadius:10,background:"rgba(34,197,94,.12)",border:"1px solid rgba(34,197,94,.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>{icon}</div>
                       <div>
                         <div style={{...H,fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>{title}</div>
-                        <div style={{...B,fontSize:13,color:featDescColor,lineHeight:1.45}}>{desc}</div>
+                        <div style={{...B,fontSize:13,color:"rgba(255,255,255,.5)",lineHeight:1.45}}>{desc}</div>
                       </div>
                     </div>
                   ))}
 
                   <div onClick={card.onClick}
-                    style={{marginTop:28,background:ctaBg,borderRadius:10,padding:"13px 22px",textAlign:"center",cursor:"pointer",display:"inline-block",transition:"all .2s",boxShadow:ctaShadow}}
-                    onMouseEnter={e=>{e.currentTarget.style.background=ctaBgHover;e.currentTarget.style.transform="translateY(-1px)";}}
-                    onMouseLeave={e=>{e.currentTarget.style.background=ctaBg;e.currentTarget.style.transform="translateY(0)";}}>
-                    <span style={{...H,fontSize:14,fontWeight:800,color:ctaText}}>{card.cta}</span>
+                    style={{marginTop:28,background:"#22C55E",borderRadius:10,padding:"13px 22px",textAlign:"center",cursor:"pointer",display:"inline-block",transition:"all .2s",boxShadow:"0 8px 24px rgba(34,197,94,.25)"}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#16A34A";e.currentTarget.style.transform="translateY(-1px)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="#22C55E";e.currentTarget.style.transform="translateY(0)";}}>
+                    <span style={{...H,fontSize:14,fontWeight:800,color:"#0A1628"}}>{card.cta}</span>
                   </div>
                 </div>
               </div>
-              );
-            })}
+            ))}
           </div>
         </div>
       </div>
