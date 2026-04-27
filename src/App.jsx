@@ -31,7 +31,7 @@ function GlobalStyles() {
       .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
       .g3{display:grid;grid-template-columns:1fr 1fr 80px;gap:0 12px}
       @media(max-width:600px){.g2,.g3{grid-template-columns:1fr}}
-      .hdr{position:sticky;top:0;z-index:300;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-bottom:1px solid #E2E8F0;height:56px;display:flex;align-items:center}
+      .hdr{position:sticky;top:0;z-index:300;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-bottom:1px solid #E2E8F0;height:60px;display:flex;align-items:center}
       .chip{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:9px;cursor:pointer;border:1.5px solid #CBD5E1;background:transparent;transition:all .15s;user-select:none}
       .chip.on{border-color:#16A34A;background:#F0FDF4}
       .day-chip{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 10px;border-radius:9px;cursor:pointer;border:1.5px solid #CBD5E1;background:#fff;transition:all .15s;min-width:52px}
@@ -420,7 +420,7 @@ function Header({ onNav, user, type, landing }) {
     if(next >= 5) { setClicks(0); onNav("admin-login"); return; }
     onNav("home");
   };
-  const hdrStyle = landing ? {background:"#07131F",backdropFilter:"none",borderBottom:"1px solid rgba(255,255,255,.04)"} : {};
+  const hdrStyle = landing ? {background:"#0A1628",backdropFilter:"none",borderBottom:"none"} : {};
   const logoStyle = landing ? {height:44,objectFit:"contain",filter:"brightness(0) invert(1)"} : {height:44,objectFit:"contain"};
   return (
     <header className="hdr" style={hdrStyle}>
@@ -448,7 +448,7 @@ function Header({ onNav, user, type, landing }) {
           <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
             {!user?(landing?<>
               <button onClick={()=>onNav("auth-choice")} style={{...H,fontWeight:700,fontSize:13,padding:"8px 18px",borderRadius:8,background:"transparent",color:"#fff",border:"1px solid rgba(255,255,255,.25)",cursor:"pointer",whiteSpace:"nowrap"}}>Entrar</button>
-              <button onClick={()=>onNav("auth-choice")} style={{...H,fontWeight:700,fontSize:13,padding:"8px 18px",borderRadius:8,background:"#28D66F",color:"#07131F",border:"none",cursor:"pointer",whiteSpace:"nowrap"}}>Cadastrar-se</button>
+              <button onClick={()=>onNav("auth-choice")} style={{...H,fontWeight:700,fontSize:13,padding:"8px 18px",borderRadius:8,background:"#22C55E",color:"#0A1628",border:"none",cursor:"pointer",whiteSpace:"nowrap"}}>Cadastrar-se</button>
             </>:<>
               <Btn label="Entre" variant="ghost" size="sm" onClick={()=>onNav("auth-choice")} />
               <Btn label="Cadastre-se" variant="primary" size="sm" onClick={()=>onNav("auth-choice")} />
@@ -468,47 +468,45 @@ function Header({ onNav, user, type, landing }) {
 // ═══════════════════════════════════════════════════════════════
 function Landing({ onNav }) {
   return (
-    <div style={{overflowX:"hidden",background:"linear-gradient(180deg, #07131F 0%, #061C22 50%, #082017 100%)"}}>
+    <div style={{overflowX:"hidden",background:"#0A1628"}}>
 
       {/* ── HERO ── */}
-      <div style={{position:"relative",overflow:"hidden",minHeight:720,display:"flex",alignItems:"center"}}>
+      <div style={{position:"relative",overflow:"hidden"}}>
 
-        {/* Background glow */}
-        <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(circle at 25% 50%, rgba(40,214,111,.12) 0%, transparent 55%), radial-gradient(circle at 85% 30%, rgba(40,214,111,.06) 0%, transparent 45%)`,pointerEvents:"none"}} />
-        {/* Subtle grid texture */}
-        <div style={{position:"absolute",inset:0,backgroundImage:`repeating-linear-gradient(0deg, transparent, transparent 64px, rgba(255,255,255,.012) 64px, rgba(255,255,255,.012) 65px), repeating-linear-gradient(90deg, transparent, transparent 64px, rgba(255,255,255,.012) 64px, rgba(255,255,255,.012) 65px)`,pointerEvents:"none"}} />
+        {/* Background texture */}
+        <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(circle at 20% 50%, rgba(46,125,50,.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(46,125,50,.08) 0%, transparent 40%)`,pointerEvents:"none"}} />
 
-        <div className="vorker-hero-grid" style={{maxWidth:1340,margin:"0 auto",padding:"72px 64px 56px",display:"grid",gridTemplateColumns:"48% 52%",gap:48,alignItems:"center",width:"100%",position:"relative",zIndex:1}}>
+        <div className="vorker-hero-grid" style={{maxWidth:1280,margin:"0 auto",padding:"56px 32px 48px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:48,alignItems:"center",width:"100%",position:"relative",zIndex:1}}>
 
           {/* Left — Text */}
           <div>
-            <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(40,214,111,.08)",border:"1px solid rgba(40,214,111,.28)",borderRadius:100,padding:"6px 14px",marginBottom:24}}>
-              <div style={{width:6,height:6,borderRadius:3,background:"#28D66F",animation:"pulse 2s infinite",boxShadow:"0 0 8px rgba(40,214,111,.6)"}} />
-              <span style={{...B,fontSize:11,fontWeight:700,color:"#28D66F",letterSpacing:1.4,textTransform:"uppercase"}}>Plataforma de talentos em varejo</span>
+            <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.25)",borderRadius:100,padding:"6px 14px",marginBottom:24}}>
+              <div style={{width:6,height:6,borderRadius:3,background:"#22C55E",animation:"pulse 2s infinite"}} />
+              <span style={{...B,fontSize:11,fontWeight:700,color:"#22C55E",letterSpacing:1.2,textTransform:"uppercase"}}>Plataforma de talentos em varejo</span>
             </div>
 
-            <h1 className="vorker-h1" style={{...H,fontSize:"clamp(40px,4.6vw,60px)",fontWeight:900,color:"#fff",letterSpacing:-1.5,lineHeight:1.0,marginBottom:20}}>
-              Trabalhe quando quiser.<br /><span style={{color:"#28D66F"}}>Ganhe por hora</span> nos maiores supermercados do Brasil.
+            <h1 className="vorker-h1" style={{...H,fontSize:"clamp(32px,3.6vw,48px)",fontWeight:900,color:"#fff",letterSpacing:-1.2,lineHeight:1.08,marginBottom:18}}>
+              Trabalhe quando quiser. <span style={{color:"#22C55E"}}>Ganhe por hora</span> nos maiores supermercados do Brasil.
             </h1>
 
-            <p style={{...B,fontSize:15.5,color:"rgba(255,255,255,.62)",lineHeight:1.55,marginBottom:26,maxWidth:540}}>
-              Escolha seus turnos, trabalhe nas maiores redes e receba sem burocracia. <strong style={{color:"#fff",fontWeight:700}}>Sem vínculo, sem complicação.</strong>
+            <p style={{...B,fontSize:15,color:"rgba(255,255,255,.65)",lineHeight:1.6,marginBottom:24,maxWidth:520}}>
+              Escolha seus turnos, trabalhe nas maiores redes e receba sem burocracia. <strong style={{color:"rgba(255,255,255,.9)"}}>Sem vínculo, sem complicação.</strong>
             </p>
 
             {/* Feature chips */}
-            <div className="vorker-chips" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:26}}>
+            <div className="vorker-chips" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:24}}>
               {[
                 {icon:"📦",t:"Picking",d:"Oportunidades todos os dias"},
                 {icon:"🛒",t:"Estoque",d:"Turnos flexíveis perto de você"},
                 {icon:"💵",t:"Caixa",d:"Ganhe por hora, receba semanalmente"},
                 {icon:"⏱",t:"E muito mais",d:"Várias funções no varejo"},
               ].map(c=>(
-                <div key={c.t} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.12)",borderRadius:12,padding:"12px 14px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                <div key={c.t} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.08)",borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
                     <span style={{fontSize:14}}>{c.icon}</span>
-                    <span style={{...H,fontSize:12.5,fontWeight:700,color:"#fff"}}>{c.t}</span>
+                    <span style={{...H,fontSize:12,fontWeight:700,color:"#fff"}}>{c.t}</span>
                   </div>
-                  <div style={{...B,fontSize:10.5,color:"rgba(255,255,255,.55)",lineHeight:1.4}}>{c.d}</div>
+                  <div style={{...B,fontSize:10.5,color:"rgba(255,255,255,.5)",lineHeight:1.35}}>{c.d}</div>
                 </div>
               ))}
             </div>
@@ -516,19 +514,19 @@ function Landing({ onNav }) {
             {/* CTAs */}
             <div className="vorker-ctas" style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:28}}>
               <div onClick={()=>onNav("worker-register")}
-                style={{background:"#28D66F",borderRadius:12,padding:"13px 22px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .2s",boxShadow:"0 10px 28px rgba(40,214,111,.35)"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#1FB85C";e.currentTarget.style.transform="translateY(-1px)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#28D66F";e.currentTarget.style.transform="translateY(0)";}}>
+                style={{background:"#22C55E",borderRadius:10,padding:"12px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .2s",boxShadow:"0 8px 24px rgba(34,197,94,.3)"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#16A34A";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#22C55E";e.currentTarget.style.transform="translateY(0)";}}>
                 <span style={{fontSize:16}}>⚡</span>
                 <div>
-                  <div style={{...H,fontSize:14.5,fontWeight:800,color:"#07131F",lineHeight:1.1}}>Quero começar agora</div>
-                  <div style={{...B,fontSize:10.5,color:"rgba(7,19,31,.7)",marginTop:1}}>Cadastre-se grátis</div>
+                  <div style={{...H,fontSize:14,fontWeight:800,color:"#0A1628",lineHeight:1.1}}>Quero começar agora</div>
+                  <div style={{...B,fontSize:10.5,color:"rgba(10,22,40,.65)",marginTop:1}}>Cadastre-se grátis</div>
                 </div>
               </div>
               <div onClick={()=>onNav("company-register")}
-                style={{background:"rgba(255,255,255,.03)",borderRadius:12,padding:"13px 22px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,border:"1px solid rgba(255,255,255,.18)",transition:"all .2s"}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,.4)";e.currentTarget.style.background="rgba(255,255,255,.06)";}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,.18)";e.currentTarget.style.background="rgba(255,255,255,.03)";}}>
+                style={{background:"transparent",borderRadius:10,padding:"12px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,border:"1px solid rgba(255,255,255,.2)",transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,.5)";e.currentTarget.style.background="rgba(255,255,255,.04)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,.2)";e.currentTarget.style.background="transparent";}}>
                 <span style={{fontSize:16}}>🏢</span>
                 <div>
                   <div style={{...H,fontSize:14,fontWeight:700,color:"#fff",lineHeight:1.1}}>Quero contratar Vorkers</div>
@@ -545,8 +543,8 @@ function Landing({ onNav }) {
                 {icon:"💲",v:"Pagamentos",l:"semanais"},
                 {icon:"🛡",v:"Ambiente seguro",l:"e verificado"},
               ].map(s=>(
-                <div key={s.l} style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                  <div style={{width:32,height:32,borderRadius:8,background:"rgba(40,214,111,.1)",border:"1px solid rgba(40,214,111,.22)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{s.icon}</div>
+                <div key={s.l} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:32,height:32,borderRadius:8,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{s.icon}</div>
                   <div>
                     <div style={{...H,fontSize:13,fontWeight:800,color:"#fff",lineHeight:1.15}}>{s.v}</div>
                     <div style={{...B,fontSize:11,color:"rgba(255,255,255,.5)",lineHeight:1.15}}>{s.l}</div>
@@ -561,25 +559,25 @@ function Landing({ onNav }) {
             <div style={{position:"relative",borderRadius:20,overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.5)",border:"1px solid rgba(255,255,255,.08)"}}>
               <img src="/equipe.jpg" alt="Equipe Vorker" style={{width:"100%",height:"auto",display:"block"}} />
               {/* subtle dark overlay for depth */}
-              <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg, transparent 55%, rgba(7,19,31,.5) 100%)",pointerEvents:"none"}} />
+              <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg, transparent 60%, rgba(10,22,40,.4) 100%)",pointerEvents:"none"}} />
             </div>
 
             {/* Floating badge — distância (top-right) */}
-            <div className="vorker-badge-km" style={{position:"absolute",top:18,right:18,background:"rgba(7,19,31,.85)",border:"1px solid rgba(40,214,111,.32)",borderRadius:12,padding:"10px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.4)"}}>
+            <div className="vorker-badge-km" style={{position:"absolute",top:18,right:18,background:"rgba(10,22,40,.85)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"10px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.4)"}}>
               <span style={{fontSize:18}}>📍</span>
               <div>
-                <div style={{...H,fontSize:16,fontWeight:900,color:"#28D66F",lineHeight:1.1}}>11km</div>
+                <div style={{...H,fontSize:16,fontWeight:900,color:"#22C55E",lineHeight:1.1}}>11km</div>
                 <div style={{...B,fontSize:10,color:"rgba(255,255,255,.65)"}}>da unidade</div>
               </div>
             </div>
 
             {/* Floating badge — convite (bottom-right) */}
-            <div className="vorker-badge-invite" style={{position:"absolute",bottom:18,right:18,background:"rgba(7,19,31,.92)",border:"1px solid rgba(40,214,111,.32)",borderRadius:12,padding:"12px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.5)",maxWidth:280}}>
-              <div style={{width:34,height:34,borderRadius:8,background:"#28D66F",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>💬</div>
+            <div className="vorker-badge-invite" style={{position:"absolute",bottom:18,right:18,background:"rgba(10,22,40,.9)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"12px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.5)",maxWidth:280}}>
+              <div style={{width:34,height:34,borderRadius:8,background:"#22C55E",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>💬</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{...H,fontSize:13,fontWeight:800,color:"#fff",lineHeight:1.15}}>Convite recebido!</div>
                 <div style={{...B,fontSize:11,color:"rgba(255,255,255,.6)",marginTop:1}}>Assaí Perdizes</div>
-                <div style={{...B,fontSize:10.5,color:"#28D66F",marginTop:3,fontWeight:600}}>● Turno disponível</div>
+                <div style={{...B,fontSize:10.5,color:"#22C55E",marginTop:3,fontWeight:600}}>● Turno disponível</div>
               </div>
             </div>
           </div>
@@ -589,7 +587,7 @@ function Landing({ onNav }) {
         <div className="vorker-trust" style={{borderTop:"1px solid rgba(255,255,255,.06)",padding:"18px 32px",display:"flex",justifyContent:"center",alignItems:"center",gap:32,flexWrap:"wrap"}}>
           {["Sem vínculo empregatício","Você escolhe quando trabalhar","Suporte rápido e humanizado"].map(t=>(
             <div key={t} style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:18,height:18,borderRadius:9,background:"rgba(40,214,111,.15)",border:"1px solid rgba(40,214,111,.32)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#28D66F",fontWeight:900}}>✓</div>
+              <div style={{width:18,height:18,borderRadius:9,background:"rgba(34,197,94,.15)",border:"1px solid rgba(34,197,94,.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#22C55E",fontWeight:900}}>✓</div>
               <span style={{...B,fontSize:13,color:"rgba(255,255,255,.65)"}}>{t}</span>
             </div>
           ))}
@@ -713,22 +711,20 @@ function Landing({ onNav }) {
           0%,100%{opacity:1}50%{opacity:.4}
         }
         @media(max-width:768px){
-          .vorker-hero-grid{grid-template-columns:1fr!important;gap:28px!important;padding:28px 20px 24px!important}
-          .vorker-h1{font-size:34px!important;line-height:1.05!important}
+          .vorker-hero-grid{grid-template-columns:1fr!important;gap:32px!important;padding:32px 20px 24px!important}
+          .vorker-h1{font-size:32px!important;line-height:1.1!important}
           .vorker-chips{grid-template-columns:1fr 1fr!important}
           .vorker-stats{grid-template-columns:1fr 1fr!important;gap:14px!important;padding:0 4px}
           .vorker-dual{grid-template-columns:1fr!important}
           .vorker-ctas{flex-direction:column!important;align-items:stretch!important}
           .vorker-ctas>div{width:100%!important;justify-content:center!important}
-          .vorker-hero-stats{gap:12px!important;flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;margin:0 -20px;padding-left:20px;padding-right:20px}
-          .vorker-hero-stats::-webkit-scrollbar{display:none}
-          .vorker-hero-stats>div{flex:0 0 auto;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 12px}
-          .vorker-trust{gap:10px!important;padding:14px 20px!important;flex-direction:column;align-items:flex-start!important}
-          .vorker-badge-km{top:10px!important;right:10px!important;padding:7px 10px!important}
-          .vorker-badge-invite{bottom:10px!important;right:10px!important;left:10px!important;max-width:none!important;padding:10px 12px!important}
+          .vorker-hero-stats{gap:14px!important;justify-content:flex-start}
+          .vorker-trust{gap:14px!important;padding:16px 20px!important;flex-direction:column;align-items:flex-start!important}
+          .vorker-badge-km{top:12px!important;right:12px!important;padding:8px 12px!important}
+          .vorker-badge-invite{bottom:12px!important;right:12px!important;left:12px!important;max-width:none!important}
           .vorker-hdr-center{display:none!important}
           .hdr .vorker-greet{display:none!important}
-          .hdr img{height:32px!important}
+          .hdr img{height:36px!important}
         }
         @media(max-width:1024px) and (min-width:769px){
           .vorker-hdr-center{display:none!important}
