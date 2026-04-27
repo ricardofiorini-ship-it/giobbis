@@ -471,15 +471,19 @@ function Landing({ onNav }) {
     <div style={{overflowX:"hidden",background:"#0A1628"}}>
 
       {/* ── HERO ── */}
-      <div style={{position:"relative",overflow:"hidden"}}>
+      <div className="vorker-hero" style={{position:"relative",overflow:"hidden",minHeight:680}}>
 
-        {/* Background texture */}
-        <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(circle at 20% 50%, rgba(46,125,50,.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(46,125,50,.08) 0%, transparent 40%)`,pointerEvents:"none"}} />
+        {/* Gradient mask: dark on left fading to transparent on right */}
+        <div className="vorker-hero-mask" style={{position:"absolute",inset:0,background:"linear-gradient(90deg, #0A1628 0%, #0A1628 38%, rgba(10,22,40,.92) 48%, rgba(10,22,40,.4) 65%, rgba(10,22,40,0) 95%)",pointerEvents:"none",zIndex:1}} />
+        {/* Bottom darken for depth */}
+        <div className="vorker-hero-darken" style={{position:"absolute",inset:0,background:"linear-gradient(180deg, transparent 55%, rgba(10,22,40,.6) 100%)",pointerEvents:"none",zIndex:1}} />
+        {/* Subtle radial glow */}
+        <div className="vorker-hero-glow" style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(circle at 15% 50%, rgba(46,125,50,.12) 0%, transparent 55%)`,pointerEvents:"none",zIndex:1}} />
 
-        <div className="vorker-hero-grid" style={{maxWidth:1280,margin:"0 auto",padding:"56px 32px 48px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:48,alignItems:"center",width:"100%",position:"relative",zIndex:1}}>
+        <div className="vorker-hero-grid" style={{maxWidth:1280,margin:"0 auto",padding:"56px 32px 56px",position:"relative",zIndex:2,width:"100%"}}>
 
-          {/* Left — Text */}
-          <div>
+          {/* Left — Text (max-width contained so photo is visible to the right) */}
+          <div className="vorker-hero-text" style={{maxWidth:560}}>
             <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.25)",borderRadius:100,padding:"6px 14px",marginBottom:24}}>
               <div style={{width:6,height:6,borderRadius:3,background:"#22C55E",animation:"pulse 2s infinite"}} />
               <span style={{...B,fontSize:11,fontWeight:700,color:"#22C55E",letterSpacing:1.2,textTransform:"uppercase"}}>Plataforma de talentos em varejo</span>
@@ -554,32 +558,27 @@ function Landing({ onNav }) {
             </div>
           </div>
 
-          {/* Right — Team photo with floating badges */}
-          <div style={{position:"relative"}}>
-            <div style={{position:"relative",borderRadius:20,overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.5)",border:"1px solid rgba(255,255,255,.08)"}}>
-              <img src="/equipe.jpg" alt="Equipe Vorker" style={{width:"100%",height:"auto",display:"block"}} />
-              {/* subtle dark overlay for depth */}
-              <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg, transparent 60%, rgba(10,22,40,.4) 100%)",pointerEvents:"none"}} />
-            </div>
+        </div>
 
-            {/* Floating badge — distância (top-right) */}
-            <div className="vorker-badge-km" style={{position:"absolute",top:18,right:18,background:"rgba(10,22,40,.85)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"10px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.4)"}}>
-              <span style={{fontSize:18}}>📍</span>
-              <div>
-                <div style={{...H,fontSize:16,fontWeight:900,color:"#22C55E",lineHeight:1.1}}>11km</div>
-                <div style={{...B,fontSize:10,color:"rgba(255,255,255,.65)"}}>da unidade</div>
-              </div>
-            </div>
+        {/* Team photo — absolute right (desktop) / static below text (mobile) */}
+        <img src="/equipe.jpg" alt="Equipe Vorker" className="vorker-hero-photo" style={{position:"absolute",top:0,right:0,height:"100%",width:"58%",objectFit:"cover",objectPosition:"left center",zIndex:0}} />
 
-            {/* Floating badge — convite (bottom-right) */}
-            <div className="vorker-badge-invite" style={{position:"absolute",bottom:18,right:18,background:"rgba(10,22,40,.9)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"12px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.5)",maxWidth:280}}>
-              <div style={{width:34,height:34,borderRadius:8,background:"#22C55E",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>💬</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{...H,fontSize:13,fontWeight:800,color:"#fff",lineHeight:1.15}}>Convite recebido!</div>
-                <div style={{...B,fontSize:11,color:"rgba(255,255,255,.6)",marginTop:1}}>Assaí Perdizes</div>
-                <div style={{...B,fontSize:10.5,color:"#22C55E",marginTop:3,fontWeight:600}}>● Turno disponível</div>
-              </div>
-            </div>
+        {/* Floating badge — distância (top-right of hero) */}
+        <div className="vorker-badge-km" style={{position:"absolute",top:32,right:32,background:"rgba(10,22,40,.85)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"10px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.4)",zIndex:3}}>
+          <span style={{fontSize:18}}>📍</span>
+          <div>
+            <div style={{...H,fontSize:16,fontWeight:900,color:"#22C55E",lineHeight:1.1}}>11km</div>
+            <div style={{...B,fontSize:10,color:"rgba(255,255,255,.65)"}}>da unidade</div>
+          </div>
+        </div>
+
+        {/* Floating badge — convite (bottom-right of hero) */}
+        <div className="vorker-badge-invite" style={{position:"absolute",bottom:32,right:32,background:"rgba(10,22,40,.9)",border:"1px solid rgba(34,197,94,.3)",borderRadius:12,padding:"12px 14px",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 12px 32px rgba(0,0,0,.5)",maxWidth:280,zIndex:3}}>
+          <div style={{width:34,height:34,borderRadius:8,background:"#22C55E",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>💬</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{...H,fontSize:13,fontWeight:800,color:"#fff",lineHeight:1.15}}>Convite recebido!</div>
+            <div style={{...B,fontSize:11,color:"rgba(255,255,255,.6)",marginTop:1}}>Assaí Perdizes</div>
+            <div style={{...B,fontSize:10.5,color:"#22C55E",marginTop:3,fontWeight:600}}>● Turno disponível</div>
           </div>
         </div>
 
@@ -711,7 +710,9 @@ function Landing({ onNav }) {
           0%,100%{opacity:1}50%{opacity:.4}
         }
         @media(max-width:768px){
-          .vorker-hero-grid{grid-template-columns:1fr!important;gap:32px!important;padding:32px 20px 24px!important}
+          .vorker-hero{min-height:0!important}
+          .vorker-hero-grid{padding:24px 20px 0!important}
+          .vorker-hero-text{max-width:none!important}
           .vorker-h1{font-size:32px!important;line-height:1.1!important}
           .vorker-chips{grid-template-columns:1fr 1fr!important}
           .vorker-stats{grid-template-columns:1fr 1fr!important;gap:14px!important;padding:0 4px}
@@ -719,9 +720,11 @@ function Landing({ onNav }) {
           .vorker-ctas{flex-direction:column!important;align-items:stretch!important}
           .vorker-ctas>div{width:100%!important;justify-content:center!important}
           .vorker-hero-stats{gap:14px!important;justify-content:flex-start}
-          .vorker-trust{gap:14px!important;padding:16px 20px!important;flex-direction:column;align-items:flex-start!important}
-          .vorker-badge-km{top:12px!important;right:12px!important;padding:8px 12px!important}
-          .vorker-badge-invite{bottom:12px!important;right:12px!important;left:12px!important;max-width:none!important}
+          .vorker-trust{gap:10px!important;padding:14px 20px!important;flex-direction:column;align-items:flex-start!important}
+          .vorker-hero-photo{position:static!important;width:100%!important;height:auto!important;margin-top:24px;display:block;border-radius:0;object-position:center center!important}
+          .vorker-hero-mask,.vorker-hero-glow{display:none!important}
+          .vorker-hero-darken{background:linear-gradient(180deg, transparent 0%, rgba(10,22,40,.4) 100%)!important;top:auto!important;bottom:0;height:30%}
+          .vorker-badge-km,.vorker-badge-invite{display:none!important}
           .vorker-hdr-center{display:none!important}
           .hdr .vorker-greet{display:none!important}
           .hdr img{height:36px!important}
