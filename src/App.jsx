@@ -500,45 +500,37 @@ function Landing({ onNav }) {
             <p style={{...B,fontSize:13,color:"rgba(255,255,255,.3)",marginTop:20}}>VORKER — O lance é free.</p>
           </div>
 
-          {/* Right — Visual card */}
-          <div style={{position:"relative"}}>
-            {/* Main card */}
-            <div style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:24,padding:32,backdropFilter:"blur(20px)"}}>
-              <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24}}>
-                <div style={{width:56,height:56,borderRadius:28,background:"linear-gradient(135deg,#2E7D32,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{...H,fontSize:22,fontWeight:900,color:"#fff"}}>M</span>
-                </div>
-                <div>
-                  <div style={{...H,fontSize:16,fontWeight:800,color:"#fff"}}>Marcos Silva</div>
-                  <div style={{...B,fontSize:13,color:"#4ADE80"}}>✓ Vorker Verificado</div>
-                </div>
-                <div style={{marginLeft:"auto",background:"rgba(46,125,50,.2)",border:"1px solid rgba(46,125,50,.3)",borderRadius:8,padding:"4px 12px"}}>
-                  <div style={{...H,fontSize:13,fontWeight:700,color:"#4ADE80"}}>Disponível</div>
-                </div>
-              </div>
-              {[{icon:"🛒",label:"Picking",nivel:"Avançado",color:"#F97316"},{icon:"📦",label:"Estoquista",nivel:"Especialista",color:"#16A34A"},{icon:"🏪",label:"Caixa",nivel:"Intermediário",color:"#FBBF24"}].map(s=>(
-                <div key={s.label} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,background:"rgba(255,255,255,.04)",borderRadius:10,padding:"10px 14px"}}>
-                  <span style={{fontSize:20}}>{s.icon}</span>
-                  <span style={{...B,fontSize:14,color:"rgba(255,255,255,.8)",flex:1}}>{s.label}</span>
-                  <span style={{...B,fontSize:11,fontWeight:700,color:s.color,background:s.color+"20",borderRadius:20,padding:"2px 10px"}}>{s.nivel}</span>
-                </div>
-              ))}
-              <div style={{marginTop:20,padding:"14px 0 0",borderTop:"1px solid rgba(255,255,255,.08)"}}>
-                <div style={{...B,fontSize:12,color:"rgba(255,255,255,.4)",marginBottom:8}}>Disponibilidade</div>
-                <div style={{display:"flex",gap:6}}>
-                  {["Seg","Ter","Qua","Sex","Sáb"].map(d=><div key={d} style={{background:"rgba(46,125,50,.2)",border:"1px solid rgba(46,125,50,.3)",borderRadius:6,padding:"4px 10px",...B,fontSize:11,fontWeight:600,color:"#4ADE80"}}>{d}</div>)}
-                </div>
+          {/* Right — Vorkers composition */}
+          <div style={{position:"relative",minHeight:480}}>
+            {/* soft glow */}
+            <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at center bottom, rgba(46,125,50,.25) 0%, transparent 60%)",pointerEvents:"none",zIndex:0}} />
+
+            {/* Lucas — esquerda, atrás */}
+            <div style={{position:"absolute",left:0,bottom:0,width:"56%",zIndex:1}}>
+              <img src="/worker-lucas.png" alt="Lucas, Vorker" style={{width:"100%",height:"auto",display:"block",filter:"drop-shadow(0 30px 50px rgba(0,0,0,.5))"}} />
+              <div style={{position:"absolute",bottom:60,left:-8,background:"rgba(10,22,40,.75)",border:"1px solid rgba(255,255,255,.12)",borderRadius:10,padding:"8px 14px",backdropFilter:"blur(12px)"}}>
+                <div style={{...H,fontSize:13,fontWeight:800,color:"#fff"}}>Lucas R.</div>
+                <div style={{...B,fontSize:11,color:"#4ADE80",marginTop:2}}>✓ Vorker Verificado</div>
               </div>
             </div>
 
-            {/* Floating badge */}
-            <div style={{position:"absolute",top:-20,right:-20,background:"#2E7D32",borderRadius:16,padding:"14px 20px",boxShadow:"0 16px 48px rgba(46,125,50,.4)"}}>
+            {/* Marina — direita, à frente */}
+            <div style={{position:"absolute",right:0,bottom:-30,width:"60%",zIndex:2}}>
+              <img src="/worker-marina.png" alt="Marina, Vorker" style={{width:"100%",height:"auto",display:"block",filter:"drop-shadow(0 30px 50px rgba(0,0,0,.5))"}} />
+              <div style={{position:"absolute",top:80,right:-8,background:"rgba(10,22,40,.75)",border:"1px solid rgba(255,255,255,.12)",borderRadius:10,padding:"8px 14px",backdropFilter:"blur(12px)"}}>
+                <div style={{...H,fontSize:13,fontWeight:800,color:"#fff"}}>Marina S.</div>
+                <div style={{...B,fontSize:11,color:"#4ADE80",marginTop:2}}>✓ Vorker Verificado</div>
+              </div>
+            </div>
+
+            {/* Floating badge — distância */}
+            <div style={{position:"absolute",top:-10,right:-10,background:"#2E7D32",borderRadius:16,padding:"14px 20px",boxShadow:"0 16px 48px rgba(46,125,50,.4)",zIndex:3}}>
               <div style={{...H,fontSize:22,fontWeight:900,color:"#fff"}}>1.1km</div>
               <div style={{...B,fontSize:11,color:"rgba(255,255,255,.7)"}}>da unidade</div>
             </div>
 
             {/* WhatsApp floating */}
-            <div style={{position:"absolute",bottom:-16,left:-16,background:"#25D366",borderRadius:14,padding:"12px 18px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 8px 32px rgba(37,211,102,.4)"}}>
+            <div style={{position:"absolute",bottom:-20,left:-10,background:"#25D366",borderRadius:14,padding:"12px 18px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 8px 32px rgba(37,211,102,.4)",zIndex:3}}>
               <span style={{fontSize:20}}>💬</span>
               <div>
                 <div style={{...H,fontSize:13,fontWeight:700,color:"#fff"}}>Convite recebido!</div>
