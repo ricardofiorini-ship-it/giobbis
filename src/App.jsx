@@ -421,7 +421,7 @@ function Header({ onNav, user, type, landing }) {
     onNav("home");
   };
   const hdrStyle = landing ? {background:"#0A1628",backdropFilter:"none",borderBottom:"none"} : {};
-  const logoStyle = {height:44,objectFit:"contain"};
+  const logoStyle = landing ? {height:44,objectFit:"contain",filter:"brightness(0) invert(1)"} : {height:44,objectFit:"contain"};
   return (
     <header className="hdr" style={hdrStyle}>
       <div className="wrap" style={{width:"100%"}}>
