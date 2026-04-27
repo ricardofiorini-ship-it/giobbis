@@ -187,11 +187,18 @@ const Badge = ({ status }) => {
 
 // ─── DATA ──────────────────────────────────────────────────────
 const SPECS = [
-  {id:"pick",icon:"📦",label:"Picking"},{id:"rep",icon:"🏪",label:"Reposição"},
-  {id:"caixa",icon:"💳",label:"Caixa"},{id:"estq",icon:"🏭",label:"Estoquista"},
-  {id:"frios",icon:"❄️",label:"Frios"},{id:"hort",icon:"🥬",label:"Hortifruti"},
-  {id:"pack",icon:"📫",label:"Embalador"},
-  {id:"shopper",icon:"🛍",label:"Shopper"},{id:"padaria",icon:"🥖",label:"Padaria"},
+  {id:"pick",     icon:"📦", label:"Picking"},
+  {id:"rep",      icon:"🏪", label:"Reposição"},
+  {id:"caixa",    icon:"💳", label:"Caixa"},
+  {id:"estq",     icon:"🏭", label:"Estoquista"},
+  {id:"hort",     icon:"🥬", label:"Hortifruti"},
+  {id:"frios",    icon:"❄️", label:"Frios"},
+  {id:"padaria",  icon:"🥖", label:"Padaria"},
+  {id:"acougue",  icon:"🥩", label:"Açougue"},
+  {id:"pack",     icon:"📫", label:"Empacotador"},
+  {id:"invent",   icon:"📋", label:"Inventário"},
+  {id:"shopper",  icon:"🛍", label:"Shopper (app / delivery)"},
+  {id:"limpeza",  icon:"🧹", label:"Limpeza / Apoio"},
 ];
 const LEVELS = [
   {value:0,label:"Nenhum"},
@@ -806,7 +813,9 @@ function WorkerRegister({ onDone, onBack }) {
     raioKm: 10, deslocamento:"",
     // 3 — Especialidades
     specs:[], specCustom:"",
-    // 4 — Nível por especialidade
+    // 4 — Experiência por função (objeto: { [specId]: { nivel, jaSuper, ondeJaTrabalhou:[], ondeOutroNome, app, sozinho, pressao, pontualidade } })
+    funcExp:{},
+    // (legado) Nível por especialidade — mantido pra compatibilidade caso ainda use em algum lugar
     specLevels:{},
     // 5 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... })
     disponibilidade:{},
@@ -825,6 +834,13 @@ function WorkerRegister({ onDone, onBack }) {
   const toggleArr = (k,v) => setData(d=>({...d,[k]:d[k].includes(v)?d[k].filter(x=>x!==v):[...d[k],v]}));
   const readFile = (file,key) => { const r=new FileReader(); r.onload=e=>set(key,e.target.result); r.readAsDataURL(file); };
   const setSpecLevel = (specId, val) => setData(d=>({...d,specLevels:{...d.specLevels,[specId]:val}}));
+  const setFuncExp = (specId, key, val) => setData(d=>({...d,funcExp:{...d.funcExp,[specId]:{...(d.funcExp?.[specId]||{}),[key]:val}}}));
+  const toggleFuncExpArr = (specId, key, val) => setData(d=>{
+    const cur=(d.funcExp?.[specId]?.[key])||[];
+    const next=cur.includes(val)?cur.filter(x=>x!==val):[...cur,val];
+    return {...d,funcExp:{...d.funcExp,[specId]:{...(d.funcExp?.[specId]||{}),[key]:next}}};
+  });
+  const [openFunc, setOpenFunc] = useState(null);
 
   const [cpfChecking, setCpfChecking] = useState(false);
   const [fieldErrors, setFieldErrors] = useState([]);
@@ -844,6 +860,13 @@ function WorkerRegister({ onDone, onBack }) {
   const allSpecs = [...SPECS, ...(data.specCustom?[{id:"custom",icon:"⭐",label:data.specCustom}]:[])];
   const selectedSpecs = allSpecs.filter(s=>data.specs.includes(s.id));
   const allLevelsFilled = selectedSpecs.every(s=>data.specLevels[s.id]?.nivel>0&&data.specLevels[s.id]?.experiencia);
+  const isFuncExpFilled = (id) => {
+    const e=data.funcExp?.[id]; if(!e) return false;
+    if(!e.nivel||!e.jaSuper||!e.app||!e.sozinho||!e.pressao||!e.pontualidade) return false;
+    if(e.jaSuper==="sim" && (!(e.ondeJaTrabalhou?.length>0) && !e.ondeOutroNome)) return false;
+    return true;
+  };
+  const allFuncExpFilled = selectedSpecs.every(s=>isFuncExpFilled(s.id));
 
   const getMissingFields = () => {
     if(step===1){
@@ -867,7 +890,7 @@ function WorkerRegister({ onDone, onBack }) {
       return m;
     }
     if(step===3) return data.specs.length===0?["Selecione ao menos uma especialidade"]:[];
-    if(step===4) return allLevelsFilled?[]:["Preencha o nível e tempo de experiência de todas as especialidades"];
+    if(step===4) return allFuncExpFilled?[]:["Responda todas as perguntas de experiência para cada função"];
     if(step===5) return Object.values(data.disponibilidade).some(t=>t.length>0)?[]:["Selecione ao menos um turno disponível"];
     if(step===6) return data.tipoTrabalho?[]:["Tipo de trabalho preferido"];
     if(step===8) return data.fotoRosto?[]:["Foto de perfil"];
@@ -887,7 +910,7 @@ function WorkerRegister({ onDone, onBack }) {
     1:  data.nome&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&!data.cpfExists&&data.nascimento&&validateAge(data.nascimento)&&data.telefone.replace(/\D/g,"").length>=10,
     2:  data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade&&data.deslocamento,
     3:  data.specs.length>=1,
-    4:  allLevelsFilled,
+    4:  allFuncExpFilled,
     5:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
     6:  !!data.tipoTrabalho,
     7:  true,
@@ -912,8 +935,8 @@ function WorkerRegister({ onDone, onBack }) {
   const back = ()=>{ setFieldErrors([]); step>1?setStep(s=>s-1):onBack(); };
 
   const LABELS = [
-    "Dados pessoais","Endereço e deslocamento","Especialidades",
-    "Nível por especialidade","Disponibilidade",
+    "Dados pessoais","Endereço e deslocamento","Funções",
+    "Experiência por função","Disponibilidade",
     "Perfil profissional","Informações adicionais","Foto de perfil","Documento e conta",
   ];
 
@@ -976,9 +999,13 @@ function WorkerRegister({ onDone, onBack }) {
 
           {/* ── STEP 3: Especialidades ── */}
           {step===3&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Suas especialidades</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Selecione as funções que você exerce. No próximo passo você informa o nível em cada uma.</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:18}}>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Em quais funções você pode trabalhar?</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quanto mais completo seu perfil, mais convites você recebe.</p>
+
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:4}}>Funções disponíveis</div>
+            <p style={{...B,fontSize:13,color:C.sub,marginBottom:14,lineHeight:1.55}}>Selecione todas as funções que você tem interesse ou experiência.</p>
+
+            <div style={{display:"flex",flexWrap:"wrap",gap:10,marginBottom:12}}>
               {SPECS.map(s=>{const on=data.specs.includes(s.id); return(
                 <div key={s.id} className={`chip ${on?"on":""}`} onClick={()=>toggleArr("specs",s.id)}>
                   <span style={{fontSize:18}}>{s.icon}</span>
@@ -996,6 +1023,8 @@ function WorkerRegister({ onDone, onBack }) {
                 </div>
               )}
             </div>
+
+            <p style={{...B,fontSize:12,color:C.muted,marginBottom:18,fontStyle:"italic"}}>💡 Dica: selecionar mais funções aumenta suas chances de receber convites.</p>
 
             {/* Adicionar especialidade customizada */}
             {!data.specCustom&&(
@@ -1015,14 +1044,124 @@ function WorkerRegister({ onDone, onBack }) {
             {data.specs.length>0?<Alert type="success">{data.specs.length} especialidade{data.specs.length>1?"s":""} selecionada{data.specs.length>1?"s":""}. No próximo passo você define o nível em cada uma.</Alert>:<Alert type="warning">Selecione ao menos uma especialidade.</Alert>}
           </>}
 
-          {/* ── STEP 4: Nível por especialidade ── */}
+          {/* ── STEP 4: Experiência por função ── */}
           {step===4&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Nível por especialidade</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Para cada função, informe seu nível de domínio e quanto tempo tem de experiência nela.</p>
-            {selectedSpecs.map(s=>(
-              <LevelSelector key={s.id} spec={s} levels={data.specLevels} onChange={setSpecLevel} />
-            ))}
-            {!allLevelsFilled&&<Alert type="warning">Preencha o nível e o tempo de experiência de todas as especialidades.</Alert>}
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Experiência por função</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Conte sua experiência para aumentar suas chances de ser escolhido.</p>
+
+            {selectedSpecs.map(s=>{
+              const exp = data.funcExp?.[s.id] || {};
+              const isOpen = openFunc === s.id;
+              const filled = isFuncExpFilled(s.id);
+              const Q = ({ label, options, valueKey }) => (
+                <div style={{marginBottom:18}}>
+                  <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,marginBottom:10}}>{label}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {options.map(opt=>{
+                      const on = exp[valueKey] === opt.value;
+                      return (
+                        <div key={opt.value} onClick={()=>setFuncExp(s.id, valueKey, opt.value)}
+                          style={{padding:"12px 14px",borderRadius:9,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"transparent",transition:"all .15s"}}>
+                          <div style={{...B,fontSize:13,fontWeight:on?700:600,color:on?C.green:C.text,lineHeight:1.3}}>{opt.label}</div>
+                          {opt.sub && <div style={{...B,fontSize:11,color:on?C.green:C.muted,marginTop:2}}>{opt.sub}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+              return (
+                <div key={s.id} style={{border:`1px solid ${filled?C.greenBorder:C.border}`,borderRadius:12,marginBottom:12,overflow:"hidden",background:filled?C.greenBg+"40":"#fff"}}>
+                  <div onClick={()=>setOpenFunc(isOpen?null:s.id)}
+                    style={{padding:"14px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,userSelect:"none"}}>
+                    <span style={{fontSize:22}}>{s.icon}</span>
+                    <div style={{flex:1}}>
+                      <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{s.label}</div>
+                      <div style={{...B,fontSize:11,color:filled?C.green:C.muted,marginTop:2}}>{filled?"✓ Preenchido":"Toque para responder"}</div>
+                    </div>
+                    <span style={{...B,fontSize:14,color:C.muted,transform:isOpen?"rotate(180deg)":"none",transition:"transform .15s"}}>▼</span>
+                  </div>
+
+                  {isOpen && (
+                    <div style={{padding:"4px 18px 18px",borderTop:`1px solid ${C.border}`}}>
+                      <p style={{...B,fontSize:13,color:C.sub,marginTop:12,marginBottom:18,lineHeight:1.55}}>Conte sua experiência para aumentar suas chances de ser escolhido.</p>
+
+                      <Q label="Qual seu nível de experiência?" valueKey="nivel" options={[
+                        {value:"iniciante",     label:"Iniciante",     sub:"Nunca trabalhei, mas quero aprender"},
+                        {value:"intermediario", label:"Intermediário", sub:"Já fiz, mas preciso de orientação"},
+                        {value:"avancado",      label:"Avançado",      sub:"Faço sozinho, sem supervisão"},
+                      ]} />
+
+                      <div style={{marginBottom:18}}>
+                        <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,marginBottom:10}}>Você já trabalhou em supermercado?</div>
+                        <div style={{display:"flex",gap:8}}>
+                          {[{v:"sim",l:"Sim"},{v:"nao",l:"Não"}].map(({v,l})=>{
+                            const on=exp.jaSuper===v;
+                            return (
+                              <div key={v} onClick={()=>setFuncExp(s.id,"jaSuper",v)}
+                                style={{flex:1,padding:"12px 16px",borderRadius:9,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"transparent",textAlign:"center",...B,fontSize:13,fontWeight:on?700:500,color:on?C.green:C.sub,transition:"all .15s"}}>
+                                {l}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {exp.jaSuper==="sim" && (
+                          <div style={{marginTop:14,padding:14,background:C.bg,borderRadius:10,border:`1px solid ${C.border}`}}>
+                            <div style={{...B,fontSize:12,fontWeight:600,color:C.navy,marginBottom:8}}>Onde você já trabalhou?</div>
+                            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+                              {[
+                                {v:"assai",l:"Assaí"},{v:"carrefour",l:"Carrefour"},{v:"extra",l:"Extra"},
+                                {v:"paodeacucar",l:"Pão de Açúcar"},{v:"atacadao",l:"Atacadão"},
+                                {v:"rappi-ifood",l:"Rappi / iFood"},{v:"outros",l:"Outros"},
+                              ].map(({v,l})=>{
+                                const on=(exp.ondeJaTrabalhou||[]).includes(v);
+                                return (
+                                  <div key={v} onClick={()=>toggleFuncExpArr(s.id,"ondeJaTrabalhou",v)}
+                                    style={{padding:"7px 12px",borderRadius:7,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"#fff",...B,fontSize:12,fontWeight:on?700:500,color:on?C.green:C.sub,transition:"all .15s"}}>
+                                    {l}{on&&" ✓"}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <input placeholder="Digite o nome da empresa (opcional)"
+                              value={exp.ondeOutroNome||""}
+                              onChange={e=>setFuncExp(s.id,"ondeOutroNome",e.target.value)}
+                              style={{width:"100%",padding:"9px 12px",borderRadius:7,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:12,color:C.text,outline:"none"}} />
+                          </div>
+                        )}
+                      </div>
+
+                      <Q label="Você já usou app ou coletor para trabalhar?" valueKey="app" options={[
+                        {value:"frequente", label:"Sim, com frequência"},
+                        {value:"algumas",   label:"Já usei algumas vezes"},
+                        {value:"nunca",     label:"Nunca usei"},
+                      ]} />
+
+                      <Q label="Você consegue trabalhar sozinho sem supervisão?" valueKey="sozinho" options={[
+                        {value:"agil",      label:"Sim, com agilidade"},
+                        {value:"devagar",   label:"Sim, mas mais devagar"},
+                        {value:"naoainda",  label:"Ainda não"},
+                      ]} />
+
+                      <Q label="Você já trabalhou com loja cheia ou sob pressão?" valueKey="pressao" options={[
+                        {value:"tranquilo",  label:"Sim, tranquilo"},
+                        {value:"dificuldade",label:"Sim, mas com dificuldade"},
+                        {value:"nao",        label:"Não"},
+                      ]} />
+
+                      <Q label="Você costuma cumprir horários com pontualidade?" valueKey="pontualidade" options={[
+                        {value:"antes",  label:"Sempre chego antes"},
+                        {value:"horario",label:"Chego no horário"},
+                        {value:"atraso", label:"Às vezes atraso"},
+                      ]} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {!allFuncExpFilled&&<Alert type="warning">Responda todas as perguntas de experiência para cada função selecionada.</Alert>}
           </>}
 
           {/* ── STEP 5: Disponibilidade ── */}
