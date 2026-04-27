@@ -632,68 +632,79 @@ function Landing({ onNav }) {
       </div>
 
       {/* ── DUAL AUDIENCE ── */}
-      <div style={{background:"transparent",padding:"80px 32px"}}>
+      <div style={{background:"transparent",padding:"72px 32px 80px"}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:56}}>
-            <div style={{...B,fontSize:12,fontWeight:700,color:"#4ADE80",letterSpacing:1.5,textTransform:"uppercase",marginBottom:12}}>Para cada lado da equação</div>
-            <h2 style={{...H,fontSize:"clamp(28px,4vw,48px)",fontWeight:900,color:"#fff",letterSpacing:-1}}>Você manda no seu relógio.<br/>A empresa manda na escala.</h2>
+          <div style={{textAlign:"center",marginBottom:14}}>
+            <h2 style={{...H,fontSize:"clamp(28px,3.6vw,42px)",fontWeight:900,letterSpacing:-1,lineHeight:1.15,marginBottom:14}}>
+              <span style={{color:"#fff"}}>Você manda no seu relógio.</span><br/>
+              <span style={{color:"#22C55E"}}>A empresa manda na escala.</span>
+            </h2>
+            <p style={{...B,fontSize:15,color:"rgba(255,255,255,.55)",maxWidth:540,margin:"0 auto",lineHeight:1.55}}>
+              Conectamos quem quer trabalhar com empresas que precisam de gente boa.
+            </p>
           </div>
 
-          <div className="vorker-dual" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+          <div className="vorker-dual" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginTop:40}}>
 
-            {/* Vorker card */}
-            <div style={{background:`linear-gradient(135deg, #0A1628, #0d2137)`,borderRadius:24,padding:40,position:"relative",overflow:"hidden"}}>
-              <div style={{position:"absolute",top:0,right:0,width:200,height:200,background:"radial-gradient(circle, rgba(46,125,50,.2) 0%, transparent 70%)",pointerEvents:"none"}} />
-              <div style={{...B,fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:1.5,textTransform:"uppercase",marginBottom:16}}>Para o Vorker</div>
-              <h3 style={{...H,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8,letterSpacing:-.5}}>Você manda<br/>no seu relógio</h3>
-              <p style={{...B,fontSize:14,color:"rgba(255,255,255,.55)",marginBottom:32,lineHeight:1.65}}>Escolha quando, onde e quanto quer trabalhar. Sem chefe, sem horário fixo, sem enrolação.</p>
-              {[
-                {icon:"⚡",title:"Liberdade total",desc:"Defina seus turnos e dias disponíveis"},
-                {icon:"💰",title:"Pagamento rápido",desc:"Receba pelos turnos realizados"},
-                {icon:"🏆",title:"Trabalhe nas melhores marcas",desc:"Carrefour, Assaí, Extra e muito mais"},
-              ].map(({icon,title,desc})=>(
-                <div key={title} style={{display:"flex",gap:14,marginBottom:20}}>
-                  <div style={{width:40,height:40,borderRadius:10,background:"rgba(46,125,50,.2)",border:"1px solid rgba(46,125,50,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>{icon}</div>
-                  <div>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>{title}</div>
-                    <div style={{...B,fontSize:13,color:"rgba(255,255,255,.45)"}}>{desc}</div>
-                  </div>
-                </div>
-              ))}
-              <div onClick={()=>onNav("worker-register")}
-                style={{marginTop:32,background:"#2E7D32",borderRadius:12,padding:"14px 24px",textAlign:"center",cursor:"pointer",display:"inline-block",transition:"all .2s"}}
-                onMouseEnter={e=>e.currentTarget.style.background="#1B5E20"}
-                onMouseLeave={e=>e.currentTarget.style.background="#2E7D32"}>
-                <span style={{...H,fontSize:15,fontWeight:800,color:"#fff"}}>Quero ser um Vorker →</span>
-              </div>
-            </div>
+            {[
+              {
+                tag:"Para o Vorker",
+                title:"Você manda no seu relógio",
+                desc:"Escolha quando, onde e quanto quer trabalhar. Sem chefe, sem horário fixo, sem enrolação.",
+                features:[
+                  {icon:"⚡",title:"Liberdade total",desc:"Defina seus turnos e dias disponíveis"},
+                  {icon:"💰",title:"Pagamento rápido",desc:"Receba pelos turnos realizados"},
+                  {icon:"🏆",title:"Trabalhe nas melhores marcas",desc:"Carrefour, Assaí, Extra e muito mais"},
+                ],
+                cta:"Quero ser um Vorker →",
+                onClick:()=>onNav("worker-register"),
+              },
+              {
+                tag:"Para a Empresa",
+                title:"Escala sempre cheia",
+                desc:"Acesso imediato a colaboradores verificados, treinados e próximos da sua unidade.",
+                features:[
+                  {icon:"🎯",title:"Mão de obra qualificada na hora",desc:"Colaboradores verificados e treinados"},
+                  {icon:"📊",title:"Escala sempre cheia",desc:"Nunca fique sem equipe nas datas críticas"},
+                  {icon:"✅",title:"Zero burocracia",desc:"Convide pelo WhatsApp, sem contratos complexos"},
+                ],
+                cta:"Cadastrar minha empresa →",
+                onClick:()=>onNav("company-register"),
+              },
+            ].map(card=>(
+              <div key={card.tag} style={{background:"linear-gradient(135deg, #0d2137 0%, #0A1628 100%)",border:"1px solid rgba(255,255,255,.06)",borderRadius:20,padding:36,position:"relative",overflow:"hidden"}}>
+                {/* glows decorativos */}
+                <div style={{position:"absolute",top:-40,right:-60,width:260,height:260,background:"radial-gradient(circle, rgba(34,197,94,.18) 0%, transparent 70%)",pointerEvents:"none"}} />
+                <div style={{position:"absolute",bottom:-80,left:-40,width:200,height:200,background:"radial-gradient(circle, rgba(34,197,94,.08) 0%, transparent 70%)",pointerEvents:"none"}} />
 
-            {/* Empresa card */}
-            <div style={{background:"#fff",borderRadius:24,padding:40,border:"1.5px solid #E8F5E9",position:"relative",overflow:"hidden"}}>
-              <div style={{position:"absolute",top:0,right:0,width:200,height:200,background:"radial-gradient(circle, rgba(46,125,50,.06) 0%, transparent 70%)",pointerEvents:"none"}} />
-              <div style={{...B,fontSize:11,fontWeight:700,color:"#2E7D32",letterSpacing:1.5,textTransform:"uppercase",marginBottom:16}}>Para a Empresa</div>
-              <h3 style={{...H,fontSize:28,fontWeight:900,color:C.navy,marginBottom:8,letterSpacing:-.5}}>Escala sempre<br/>cheia</h3>
-              <p style={{...B,fontSize:14,color:C.sub,marginBottom:32,lineHeight:1.65}}>Acesso imediato a colaboradores verificados, treinados e próximos da sua unidade.</p>
-              {[
-                {icon:"🎯",title:"Mão de obra qualificada na hora",desc:"Colaboradores verificados e treinados"},
-                {icon:"📊",title:"Escala sempre cheia",desc:"Nunca fique sem equipe nas datas críticas"},
-                {icon:"✅",title:"Zero burocracia",desc:"Convide pelo WhatsApp, sem contratos complexos"},
-              ].map(({icon,title,desc})=>(
-                <div key={title} style={{display:"flex",gap:14,marginBottom:20}}>
-                  <div style={{width:40,height:40,borderRadius:10,background:"#F0FAF0",border:"1px solid #C8E6C9",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>{icon}</div>
-                  <div>
-                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:2}}>{title}</div>
-                    <div style={{...B,fontSize:13,color:C.muted}}>{desc}</div>
-                  </div>
+                <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(34,197,94,.1)",border:"1px solid rgba(34,197,94,.3)",borderRadius:100,padding:"5px 12px",marginBottom:16,position:"relative",zIndex:1}}>
+                  <div style={{width:5,height:5,borderRadius:3,background:"#22C55E"}} />
+                  <span style={{...B,fontSize:10.5,fontWeight:700,color:"#22C55E",letterSpacing:1.4,textTransform:"uppercase"}}>{card.tag}</span>
                 </div>
-              ))}
-              <div onClick={()=>onNav("company-register")}
-                style={{marginTop:32,background:"#F0FAF0",border:"1.5px solid #2E7D32",borderRadius:12,padding:"14px 24px",textAlign:"center",cursor:"pointer",display:"inline-block",transition:"all .2s"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#2E7D32";e.currentTarget.firstChild.style.color="#fff";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#F0FAF0";e.currentTarget.firstChild.style.color="#2E7D32";}}>
-                <span style={{...H,fontSize:15,fontWeight:800,color:"#2E7D32"}}>Cadastrar minha empresa →</span>
+
+                <h3 style={{...H,fontSize:26,fontWeight:900,color:"#fff",marginBottom:10,letterSpacing:-.5,lineHeight:1.15,position:"relative",zIndex:1}}>{card.title}</h3>
+                <p style={{...B,fontSize:14,color:"rgba(255,255,255,.6)",marginBottom:28,lineHeight:1.55,position:"relative",zIndex:1}}>{card.desc}</p>
+
+                <div style={{position:"relative",zIndex:1}}>
+                  {card.features.map(({icon,title,desc})=>(
+                    <div key={title} style={{display:"flex",gap:14,marginBottom:18}}>
+                      <div style={{width:38,height:38,borderRadius:10,background:"rgba(34,197,94,.12)",border:"1px solid rgba(34,197,94,.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>{icon}</div>
+                      <div>
+                        <div style={{...H,fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>{title}</div>
+                        <div style={{...B,fontSize:13,color:"rgba(255,255,255,.5)",lineHeight:1.45}}>{desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div onClick={card.onClick}
+                  style={{marginTop:28,background:"#22C55E",borderRadius:10,padding:"13px 22px",textAlign:"center",cursor:"pointer",display:"inline-block",transition:"all .2s",position:"relative",zIndex:1,boxShadow:"0 8px 24px rgba(34,197,94,.25)"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background="#16A34A";e.currentTarget.style.transform="translateY(-1px)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="#22C55E";e.currentTarget.style.transform="translateY(0)";}}>
+                  <span style={{...H,fontSize:14,fontWeight:800,color:"#0A1628"}}>{card.cta}</span>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -715,7 +726,8 @@ function Landing({ onNav }) {
           .vorker-h1{font-size:32px!important;line-height:1.1!important}
           .vorker-chips{grid-template-columns:1fr 1fr!important}
           .vorker-stats{grid-template-columns:1fr 1fr!important;gap:14px!important;padding:0 4px}
-          .vorker-dual{grid-template-columns:1fr!important}
+          .vorker-dual{grid-template-columns:1fr!important;gap:16px!important;margin-top:28px!important}
+          .vorker-dual>div{padding:26px 22px!important}
           .vorker-ctas{flex-direction:column!important;align-items:stretch!important}
           .vorker-ctas>div{width:100%!important;justify-content:center!important}
           .vorker-hero-stats{gap:14px!important;justify-content:flex-start}
