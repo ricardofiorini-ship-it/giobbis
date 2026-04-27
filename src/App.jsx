@@ -420,8 +420,8 @@ function Header({ onNav, user, type, landing }) {
     if(next >= 5) { setClicks(0); onNav("admin-login"); return; }
     onNav("home");
   };
-  const hdrStyle = landing ? {background:"rgba(10,22,40,.4)",backdropFilter:"blur(8px)",borderBottom:"1px solid rgba(255,255,255,.08)"} : {};
-  const logoStyle = {height:44,objectFit:"contain"};
+  const hdrStyle = landing ? {background:"#0A1628",backdropFilter:"none",borderBottom:"none"} : {};
+  const logoStyle = landing ? {height:44,objectFit:"contain",filter:"brightness(0) invert(1)"} : {height:44,objectFit:"contain"};
   return (
     <header className="hdr" style={hdrStyle}>
       <div className="wrap" style={{width:"100%"}}>
