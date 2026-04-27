@@ -437,61 +437,205 @@ function Header({ onNav, user, type }) {
 // ═══════════════════════════════════════════════════════════════
 function Landing({ onNav }) {
   return (
-    <div>
-      {/* Hero */}
-      <div style={{minHeight:"70vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px"}}>
-        <div style={{maxWidth:620,width:"100%",textAlign:"center"}}>
-          <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:1.5,textTransform:"uppercase",marginBottom:16}}>Especialistas em varejo</div>
-          <h1 style={{...H,fontSize:"clamp(38px,6vw,68px)",fontWeight:900,color:C.navy,letterSpacing:-2,lineHeight:.95,marginBottom:20}}>O parceiro certo,<br />no momento certo.</h1>
-          <p style={{...B,fontSize:17,color:C.sub,lineHeight:1.75,marginBottom:44,maxWidth:480,margin:"0 auto 44px"}}>
-            Conectamos empresas de varejo a colaboradores verificados e qualificados, de forma rápida e sem burocracia.
-          </p>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,paddingTop:40,borderTop:`1px solid ${C.border}`}}>
-            {[{v:"+1.000",l:"Estabelecimentos"},{v:"+300k",l:"Horas realizadas"},{v:"+60",l:"Cidades"},{v:"4,9★",l:"Avaliação média"}].map(({v,l})=>(
-              <div key={l} style={{textAlign:"center"}}>
-                <div style={{...H,fontSize:"clamp(22px,3vw,32px)",fontWeight:900,color:C.green}}>{v}</div>
-                <div style={{...B,fontSize:13,color:C.muted,marginTop:4}}>{l}</div>
+    <div style={{overflowX:"hidden"}}>
+
+      {/* ── HERO ── */}
+      <div style={{background:`linear-gradient(135deg, #0A1628 0%, #0d2137 60%, #0f2d1f 100%)`,minHeight:"92vh",display:"flex",alignItems:"center",position:"relative",overflow:"hidden"}}>
+
+        {/* Background texture */}
+        <div style={{position:"absolute",inset:0,backgroundImage:`radial-gradient(circle at 20% 50%, rgba(46,125,50,.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(46,125,50,.08) 0%, transparent 40%)`,pointerEvents:"none"}} />
+        <div style={{position:"absolute",inset:0,backgroundImage:`repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,.015) 60px, rgba(255,255,255,.015) 61px), repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,.015) 60px, rgba(255,255,255,.015) 61px)`,pointerEvents:"none"}} />
+
+        <div style={{maxWidth:1180,margin:"0 auto",padding:"80px 32px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:80,alignItems:"center",width:"100%",position:"relative",zIndex:1}}>
+
+          {/* Left — Text */}
+          <div>
+            <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(46,125,50,.15)",border:"1px solid rgba(46,125,50,.3)",borderRadius:100,padding:"6px 16px",marginBottom:28}}>
+              <div style={{width:6,height:6,borderRadius:3,background:"#4ADE80",animation:"pulse 2s infinite"}} />
+              <span style={{...B,fontSize:12,fontWeight:600,color:"#4ADE80",letterSpacing:1,textTransform:"uppercase"}}>Plataforma de talentos em varejo</span>
+            </div>
+
+            <h1 style={{...H,fontSize:"clamp(36px,4.5vw,62px)",fontWeight:900,color:"#fff",letterSpacing:-1.5,lineHeight:1.02,marginBottom:24}}>
+              As gigantes<br />do varejo<br />
+              <span style={{color:"#4ADE80"}}>precisam de você.</span>
+            </h1>
+
+            <p style={{...B,fontSize:17,color:"rgba(255,255,255,.65)",lineHeight:1.75,marginBottom:40,maxWidth:460}}>
+              Trabalhe nas maiores redes de supermercados. Escolha seus turnos, defina seus horários e ganhe por hora com total liberdade. <strong style={{color:"rgba(255,255,255,.9)"}}>O lance é ser livre.</strong>
+            </p>
+
+            {/* CTAs */}
+            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              <div onClick={()=>onNav("worker-register")}
+                style={{background:"#2E7D32",borderRadius:12,padding:"16px 32px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .2s",boxShadow:"0 8px 32px rgba(46,125,50,.4)"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#1B5E20";e.currentTarget.style.transform="translateY(-2px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#2E7D32";e.currentTarget.style.transform="translateY(0)";}}>
+                <span style={{fontSize:18}}>⚡</span>
+                <span style={{...H,fontSize:16,fontWeight:800,color:"#fff"}}>Quero ser um Vorker</span>
               </div>
-            ))}
+              <div onClick={()=>onNav("company-register")}
+                style={{background:"transparent",borderRadius:12,padding:"16px 32px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,border:"1.5px solid rgba(255,255,255,.25)",transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,.6)";e.currentTarget.style.background="rgba(255,255,255,.05)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,.25)";e.currentTarget.style.background="transparent";}}>
+                <span style={{fontSize:18}}>🏢</span>
+                <span style={{...H,fontSize:16,fontWeight:700,color:"#fff"}}>Preciso de Vorkers</span>
+              </div>
+            </div>
+
+            <p style={{...B,fontSize:13,color:"rgba(255,255,255,.3)",marginTop:20}}>VORKER — O lance é free.</p>
+          </div>
+
+          {/* Right — Visual card */}
+          <div style={{position:"relative"}}>
+            {/* Main card */}
+            <div style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:24,padding:32,backdropFilter:"blur(20px)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24}}>
+                <div style={{width:56,height:56,borderRadius:28,background:"linear-gradient(135deg,#2E7D32,#4ADE80)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{...H,fontSize:22,fontWeight:900,color:"#fff"}}>M</span>
+                </div>
+                <div>
+                  <div style={{...H,fontSize:16,fontWeight:800,color:"#fff"}}>Marcos Silva</div>
+                  <div style={{...B,fontSize:13,color:"#4ADE80"}}>✓ Vorker Verificado</div>
+                </div>
+                <div style={{marginLeft:"auto",background:"rgba(46,125,50,.2)",border:"1px solid rgba(46,125,50,.3)",borderRadius:8,padding:"4px 12px"}}>
+                  <div style={{...H,fontSize:13,fontWeight:700,color:"#4ADE80"}}>Disponível</div>
+                </div>
+              </div>
+              {[{icon:"🛒",label:"Picking",nivel:"Avançado",color:"#F97316"},{icon:"📦",label:"Estoquista",nivel:"Especialista",color:"#16A34A"},{icon:"🏪",label:"Caixa",nivel:"Intermediário",color:"#FBBF24"}].map(s=>(
+                <div key={s.label} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,background:"rgba(255,255,255,.04)",borderRadius:10,padding:"10px 14px"}}>
+                  <span style={{fontSize:20}}>{s.icon}</span>
+                  <span style={{...B,fontSize:14,color:"rgba(255,255,255,.8)",flex:1}}>{s.label}</span>
+                  <span style={{...B,fontSize:11,fontWeight:700,color:s.color,background:s.color+"20",borderRadius:20,padding:"2px 10px"}}>{s.nivel}</span>
+                </div>
+              ))}
+              <div style={{marginTop:20,padding:"14px 0 0",borderTop:"1px solid rgba(255,255,255,.08)"}}>
+                <div style={{...B,fontSize:12,color:"rgba(255,255,255,.4)",marginBottom:8}}>Disponibilidade</div>
+                <div style={{display:"flex",gap:6}}>
+                  {["Seg","Ter","Qua","Sex","Sáb"].map(d=><div key={d} style={{background:"rgba(46,125,50,.2)",border:"1px solid rgba(46,125,50,.3)",borderRadius:6,padding:"4px 10px",...B,fontSize:11,fontWeight:600,color:"#4ADE80"}}>{d}</div>)}
+                </div>
+              </div>
+            </div>
+
+            {/* Floating badge */}
+            <div style={{position:"absolute",top:-20,right:-20,background:"#2E7D32",borderRadius:16,padding:"14px 20px",boxShadow:"0 16px 48px rgba(46,125,50,.4)"}}>
+              <div style={{...H,fontSize:22,fontWeight:900,color:"#fff"}}>1.1km</div>
+              <div style={{...B,fontSize:11,color:"rgba(255,255,255,.7)"}}>da unidade</div>
+            </div>
+
+            {/* WhatsApp floating */}
+            <div style={{position:"absolute",bottom:-16,left:-16,background:"#25D366",borderRadius:14,padding:"12px 18px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 8px 32px rgba(37,211,102,.4)"}}>
+              <span style={{fontSize:20}}>💬</span>
+              <div>
+                <div style={{...H,fontSize:13,fontWeight:700,color:"#fff"}}>Convite recebido!</div>
+                <div style={{...B,fontSize:11,color:"rgba(255,255,255,.8)"}}>Assaí Perdizes</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Shortcut buttons — abaixo do hero */}
-      <div style={{background:C.white,borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,padding:"32px 20px"}}>
-        <div style={{maxWidth:720,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:24}}>
-            <div style={{...H,fontSize:18,fontWeight:800,color:C.navy}}>Comece agora — é gratuito</div>
+      {/* ── STATS ── */}
+      <div style={{background:"#fff",padding:"56px 32px",borderBottom:`1px solid #E8F5E9`}}>
+        <div style={{maxWidth:900,margin:"0 auto",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:24}}>
+          {[
+            {v:"+1.000",l:"Estabelecimentos",icon:"🏪"},
+            {v:"+300k",l:"Horas realizadas",icon:"⏱"},
+            {v:"+60",l:"Cidades",icon:"📍"},
+            {v:"4,9★",l:"Avaliação média",icon:"⭐"},
+          ].map(({v,l,icon})=>(
+            <div key={l} style={{textAlign:"center",padding:"28px 20px",borderRadius:16,border:"1.5px solid #E8F5E9",background:"#F9FFF9"}}>
+              <div style={{fontSize:32,marginBottom:10}}>{icon}</div>
+              <div style={{...H,fontSize:36,fontWeight:900,color:"#2E7D32",letterSpacing:-1}}>{v}</div>
+              <div style={{...B,fontSize:13,color:"#666",marginTop:6}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── DUAL AUDIENCE ── */}
+      <div style={{background:"#F8FAFC",padding:"80px 32px"}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:56}}>
+            <div style={{...B,fontSize:12,fontWeight:700,color:"#2E7D32",letterSpacing:1.5,textTransform:"uppercase",marginBottom:12}}>Para cada lado da equação</div>
+            <h2 style={{...H,fontSize:"clamp(28px,4vw,48px)",fontWeight:900,color:C.navy,letterSpacing:-1}}>Você manda no seu relógio.<br/>A empresa manda na escala.</h2>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-            {/* Empresa */}
-            <div onClick={()=>onNav("company-register")}
-              style={{background:C.greenBg,border:`1.5px solid ${C.greenBorder}`,borderRadius:14,padding:"24px 28px",cursor:"pointer",display:"flex",alignItems:"center",gap:18,transition:"all .18s"}}
-              onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(22,163,74,.15)";}}
-              onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";}}>
-              <div style={{fontSize:42,flexShrink:0}}>🏢</div>
-              <div>
-                <div style={{...H,fontSize:17,fontWeight:900,color:C.navy,marginBottom:4}}>Sou uma empresa</div>
-                <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.5}}>Quero encontrar colaboradores qualificados na minha região</div>
-                <div style={{...H,fontSize:13,fontWeight:700,color:C.green,marginTop:8}}>Cadastrar empresa →</div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+
+            {/* Vorker card */}
+            <div style={{background:`linear-gradient(135deg, #0A1628, #0d2137)`,borderRadius:24,padding:40,position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",top:0,right:0,width:200,height:200,background:"radial-gradient(circle, rgba(46,125,50,.2) 0%, transparent 70%)",pointerEvents:"none"}} />
+              <div style={{...B,fontSize:11,fontWeight:700,color:"#4ADE80",letterSpacing:1.5,textTransform:"uppercase",marginBottom:16}}>Para o Vorker</div>
+              <h3 style={{...H,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8,letterSpacing:-.5}}>Você manda<br/>no seu relógio</h3>
+              <p style={{...B,fontSize:14,color:"rgba(255,255,255,.55)",marginBottom:32,lineHeight:1.65}}>Escolha quando, onde e quanto quer trabalhar. Sem chefe, sem horário fixo, sem enrolação.</p>
+              {[
+                {icon:"⚡",title:"Liberdade total",desc:"Defina seus turnos e dias disponíveis"},
+                {icon:"💰",title:"Pagamento rápido",desc:"Receba pelos turnos realizados"},
+                {icon:"🏆",title:"Trabalhe nas melhores marcas",desc:"Carrefour, Assaí, Extra e muito mais"},
+              ].map(({icon,title,desc})=>(
+                <div key={title} style={{display:"flex",gap:14,marginBottom:20}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:"rgba(46,125,50,.2)",border:"1px solid rgba(46,125,50,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>{icon}</div>
+                  <div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>{title}</div>
+                    <div style={{...B,fontSize:13,color:"rgba(255,255,255,.45)"}}>{desc}</div>
+                  </div>
+                </div>
+              ))}
+              <div onClick={()=>onNav("worker-register")}
+                style={{marginTop:32,background:"#2E7D32",borderRadius:12,padding:"14px 24px",textAlign:"center",cursor:"pointer",display:"inline-block",transition:"all .2s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="#1B5E20"}
+                onMouseLeave={e=>e.currentTarget.style.background="#2E7D32"}>
+                <span style={{...H,fontSize:15,fontWeight:800,color:"#fff"}}>Quero ser um Vorker →</span>
               </div>
             </div>
 
-            {/* Colaborador */}
-            <div onClick={()=>onNav("worker-register")}
-              style={{background:C.blueBg,border:`1.5px solid ${C.blueBorder}`,borderRadius:14,padding:"24px 28px",cursor:"pointer",display:"flex",alignItems:"center",gap:18,transition:"all .18s"}}
-              onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(37,99,235,.15)";}}
-              onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";}}>
-              <div style={{fontSize:42,flexShrink:0}}>👤</div>
-              <div>
-                <div style={{...H,fontSize:17,fontWeight:900,color:C.navy,marginBottom:4}}>Sou colaborador</div>
-                <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.5}}>Quero ser encontrado por empresas e receber convites de trabalho</div>
-                <div style={{...H,fontSize:13,fontWeight:700,color:C.blue,marginTop:8}}>Criar meu perfil →</div>
+            {/* Empresa card */}
+            <div style={{background:"#fff",borderRadius:24,padding:40,border:"1.5px solid #E8F5E9",position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",top:0,right:0,width:200,height:200,background:"radial-gradient(circle, rgba(46,125,50,.06) 0%, transparent 70%)",pointerEvents:"none"}} />
+              <div style={{...B,fontSize:11,fontWeight:700,color:"#2E7D32",letterSpacing:1.5,textTransform:"uppercase",marginBottom:16}}>Para a Empresa</div>
+              <h3 style={{...H,fontSize:28,fontWeight:900,color:C.navy,marginBottom:8,letterSpacing:-.5}}>Escala sempre<br/>cheia</h3>
+              <p style={{...B,fontSize:14,color:C.sub,marginBottom:32,lineHeight:1.65}}>Acesso imediato a colaboradores verificados, treinados e próximos da sua unidade.</p>
+              {[
+                {icon:"🎯",title:"Mão de obra qualificada na hora",desc:"Colaboradores verificados e treinados"},
+                {icon:"📊",title:"Escala sempre cheia",desc:"Nunca fique sem equipe nas datas críticas"},
+                {icon:"✅",title:"Zero burocracia",desc:"Convide pelo WhatsApp, sem contratos complexos"},
+              ].map(({icon,title,desc})=>(
+                <div key={title} style={{display:"flex",gap:14,marginBottom:20}}>
+                  <div style={{width:40,height:40,borderRadius:10,background:"#F0FAF0",border:"1px solid #C8E6C9",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>{icon}</div>
+                  <div>
+                    <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:2}}>{title}</div>
+                    <div style={{...B,fontSize:13,color:C.muted}}>{desc}</div>
+                  </div>
+                </div>
+              ))}
+              <div onClick={()=>onNav("company-register")}
+                style={{marginTop:32,background:"#F0FAF0",border:"1.5px solid #2E7D32",borderRadius:12,padding:"14px 24px",textAlign:"center",cursor:"pointer",display:"inline-block",transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#2E7D32";e.currentTarget.firstChild.style.color="#fff";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#F0FAF0";e.currentTarget.firstChild.style.color="#2E7D32";}}>
+                <span style={{...H,fontSize:15,fontWeight:800,color:"#2E7D32"}}>Cadastrar minha empresa →</span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ── FOOTER ── */}
+      <div style={{background:"#0A1628",padding:"32px",textAlign:"center"}}>
+        <img src={VORKER_LOGO} alt="Vorker" style={{height:32,objectFit:"contain",filter:"brightness(0) invert(1)",opacity:.6,marginBottom:12}} />
+        <div style={{...B,fontSize:13,color:"rgba(255,255,255,.3)"}}>VORKER — O lance é free. · {new Date().getFullYear()}</div>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%,100%{opacity:1}50%{opacity:.4}
+        }
+        @media(max-width:768px){
+          .vorker-hero-grid{grid-template-columns:1fr!important}
+          .vorker-stats{grid-template-columns:1fr 1fr!important}
+          .vorker-dual{grid-template-columns:1fr!important}
+          .vorker-ctas{flex-direction:column!important}
+        }
+      `}</style>
     </div>
   );
 }
