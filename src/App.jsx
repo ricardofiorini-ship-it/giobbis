@@ -544,7 +544,6 @@ function Landing({ onNav }) {
               {[
                 {icon:"👥",v:"+3.200",l:"Vorkers ativos"},
                 {icon:"🏬",v:"+150",l:"Lojas parceiras"},
-                {icon:"💲",v:"Pagamentos",l:"semanais"},
                 {icon:"🛡",v:"Ambiente seguro",l:"e verificado"},
               ].map(s=>(
                 <div key={s.l} style={{display:"flex",alignItems:"center",gap:8}}>
