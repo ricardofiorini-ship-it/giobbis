@@ -838,6 +838,7 @@ function WorkerRegister({ onDone, onBack }) {
     // 1 — Dados pessoais
     nome:"", cpf:"", nascimento:"", telefone:"",
     cpfExists: false,
+    emailExists: false,
     // 2 — Endereço + deslocamento
     cep:"", rua:"", numero:"", complemento:"", bairro:"", cidade:"", estado:"",
     raioKm: 10, deslocamento:"",
@@ -884,6 +885,8 @@ function WorkerRegister({ onDone, onBack }) {
   const cpfError   = data.cpf&&data.cpf.replace(/\D/g,"").length===11&&!validateCPF(data.cpf)?"CPF inválido":data.cpfExists?"CPF já cadastrado — se já tem conta, faça login":"";
   const ageError   = data.nascimento&&!validateAge(data.nascimento)?"É necessário ter 18 anos ou mais":"";
   const senhaError = data.confirma&&data.senha!==data.confirma?"Senhas não coincidem":"";
+  const emailValid = (em) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((em||"").trim());
+  const emailError = data.email&&!emailValid(data.email)?"E-mail inválido":data.emailExists?"E-mail já cadastrado — se já tem conta, faça login":"";
 
   const checkCPF = async (cpf) => {
     const raw = cpf.replace(/\D/g,"");
@@ -892,6 +895,16 @@ function WorkerRegister({ onDone, onBack }) {
     const { data: existing } = await supabase.from("workers").select("id").eq("cpf",cpf).maybeSingle();
     setCpfChecking(false);
     set("cpfExists", !!existing);
+  };
+
+  const [emailChecking, setEmailChecking] = useState(false);
+  const checkEmail = async (em) => {
+    const v = (em||"").trim().toLowerCase();
+    if(!emailValid(v)) return;
+    setEmailChecking(true);
+    const { data: existing } = await supabase.from("workers").select("id").eq("email", v).maybeSingle();
+    setEmailChecking(false);
+    set("emailExists", !!existing);
   };
   const allSpecs = [...SPECS, ...(data.specCustom?[{id:"custom",icon:"⭐",label:data.specCustom}]:[])];
   const selectedSpecs = allSpecs.filter(s=>data.specs.includes(s.id));
@@ -913,6 +926,8 @@ function WorkerRegister({ onDone, onBack }) {
     if(step===2){
       const m=[];
       if(!data.email) m.push("E-mail");
+      else if(!emailValid(data.email)) m.push("E-mail inválido");
+      else if(data.emailExists) m.push("E-mail já cadastrado");
       if(data.senha.length<8) m.push("Senha (mínimo 8 caracteres)");
       if(senhaError) m.push("Senhas não coincidem");
       return m;
@@ -951,7 +966,7 @@ function WorkerRegister({ onDone, onBack }) {
 
   const canNext = {
     1:  data.nome&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&!data.cpfExists&&data.nascimento&&validateAge(data.nascimento)&&data.telefone.replace(/\D/g,"").length>=10,
-    2:  data.email&&data.senha.length>=8&&!senhaError,
+    2:  data.email&&emailValid(data.email)&&!data.emailExists&&data.senha.length>=8&&!senhaError,
     3:  data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade&&data.deslocamento,
     4:  !!data.fotoRosto && !!data.docTipo && !!data.selfieDoc,
     5:  data.specs.length>=1,
@@ -1460,7 +1475,18 @@ function WorkerRegister({ onDone, onBack }) {
           {step===2&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Crie sua conta</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Defina o e-mail e senha que você usará para acessar o app a partir de agora.</p>
-            <Field label="E-mail" placeholder="seu@email.com" value={data.email} onChange={v=>set("email",v)} type="email" required helper="Usaremos este e-mail para login e comunicação." />
+
+            <div style={{marginBottom:16}}>
+              <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>E-mail <span style={{color:C.red}}>*</span></label>
+              <input type="email" placeholder="seu@email.com" value={data.email}
+                onChange={e=>{ set("emailExists",false); set("email",e.target.value); }}
+                onBlur={()=>checkEmail(data.email)}
+                style={{width:"100%",padding:"11px 14px",borderRadius:8,border:`1.5px solid ${emailError?C.red:C.border2}`,background:"#fff",...B,fontSize:14,color:C.text,outline:"none"}} />
+              {emailChecking&&<div style={{...B,fontSize:11,color:C.muted,marginTop:5}}>🔍 Verificando e-mail...</div>}
+              {emailError&&!emailChecking&&<div style={{...B,fontSize:11,color:C.red,marginTop:5}}>⚠ {emailError}</div>}
+              {!emailError&&!emailChecking&&data.email&&emailValid(data.email)&&!data.emailExists&&<div style={{...B,fontSize:11,color:C.green,marginTop:5}}>✓ E-mail disponível</div>}
+              {!emailError&&!emailChecking&&!data.email&&<div style={{...B,fontSize:11,color:C.muted,marginTop:5}}>Usaremos este e-mail para login e comunicação.</div>}
+            </div>
             <div className="g2">
               <Field label="Senha" placeholder="Mínimo 8 caracteres" value={data.senha} onChange={v=>set("senha",v)} type="password" required />
               <Field label="Confirmar senha" placeholder="Repita a senha" value={data.confirma} onChange={v=>set("confirma",v)} type="password" hint={senhaError} required />
