@@ -967,11 +967,59 @@ function WorkerRegister({ onDone, onBack }) {
   const next = async () => {
     if(step<9){ setStep(s=>s+1); return; }
     setSubmitting(true); setSubmitError("");
-    try { const saved=await saveWorker(data); onDone({...data,id:saved.id}); }
+    try {
+      const saved=await saveWorker(data);
+      try { localStorage.removeItem("vorker:worker_register_draft"); } catch {}
+      onDone({...data,id:saved.id});
+    }
     catch(e){ setSubmitError(e.message||"Erro ao salvar. Tente novamente."); }
     finally { setSubmitting(false); }
   };
   const back = ()=>{ setFieldErrors([]); step>1?setStep(s=>s-1):onBack(); };
+
+  // Salvar e continuar depois (localStorage)
+  const DRAFT_KEY = "vorker:worker_register_draft";
+  const [draftPrompt, setDraftPrompt] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const [savedToast, setSavedToast] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.data) {
+          setDraftPrompt(true);
+          setDraftSavedAt(parsed.savedAt || null);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const restoreDraft = () => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.data) setData(parsed.data);
+        if (parsed?.step) setStep(parsed.step);
+      }
+    } catch {}
+    setDraftPrompt(false);
+  };
+  const discardDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    setDraftPrompt(false);
+  };
+  const saveAndExit = () => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
+      setSavedToast(true);
+      setTimeout(()=>{ setSavedToast(false); onBack(); }, 1500);
+    } catch {
+      alert("Não foi possível salvar localmente. Continue o cadastro nesta sessão.");
+    }
+  };
 
   const LABELS = [
     "Dados pessoais","Endereço e deslocamento","Funções",
@@ -993,6 +1041,20 @@ function WorkerRegister({ onDone, onBack }) {
   return (
     <div style={{minHeight:"90vh",padding:"32px 20px 80px",background:C.bg}}>
       <div style={{maxWidth: step===6 ? 1080 : 640, margin:"0 auto"}}>
+
+        {/* Banner: cadastro em andamento detectado no localStorage */}
+        {draftPrompt && (
+          <div style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:12,padding:"14px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <span style={{fontSize:20}}>💾</span>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{...H,fontSize:14,fontWeight:700,color:C.green}}>Cadastro salvo encontrado</div>
+              <div style={{...B,fontSize:12,color:C.sub,marginTop:2}}>Você pode continuar de onde parou{draftSavedAt?` (salvo em ${new Date(draftSavedAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})})`:""}.</div>
+            </div>
+            <button onClick={restoreDraft} style={{padding:"8px 14px",borderRadius:8,background:C.green,border:"none",color:"#fff",...B,fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Continuar</button>
+            <button onClick={discardDraft} style={{padding:"8px 14px",borderRadius:8,background:"transparent",border:`1.5px solid ${C.border2}`,color:C.sub,...B,fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Descartar</button>
+          </div>
+        )}
+
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <button onClick={back} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer"}}>← {step>1?"Voltar":"Cancelar"}</button>
           <Prog step={step} total={9} />
@@ -1187,7 +1249,7 @@ function WorkerRegister({ onDone, onBack }) {
           {/* ── STEP 5: Disponibilidade ── */}
           {step===5&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Disponibilidade</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Marque os turnos disponíveis em cada dia. Deixe em branco os dias que não quer trabalhar.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Marque os turnos que você quer trabalhar. Deixe em branco os turnos que não deseja trabalhar.</p>
 
             <div style={{overflowX:"auto"}}>
               <table className="vorker-disp-table" style={{width:"100%",borderCollapse:"separate",borderSpacing:"6px"}}>
@@ -1498,10 +1560,23 @@ function WorkerRegister({ onDone, onBack }) {
           </div>
         )}
 
-        <div style={{marginTop:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{...B,fontSize:13,color:C.sub}}>Já tem conta? <span onClick={onBack} style={{color:C.green,cursor:"pointer",fontWeight:600}}>Fazer login</span></span>
+        <div className="vorker-nav-row" style={{marginTop:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <span style={{...B,fontSize:13,color:C.sub}}>Já tem conta? <span onClick={onBack} style={{color:C.green,cursor:"pointer",fontWeight:600}}>Fazer login</span></span>
+            <span onClick={saveAndExit} style={{...B,fontSize:12,color:C.muted,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,userSelect:"none"}}>
+              <span>💾</span>
+              <span style={{borderBottom:`1px dashed ${C.muted}`}}>Salvar e continuar depois</span>
+            </span>
+          </div>
           <Btn label={step===9?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={handleNext} loading={submitting} />
         </div>
+
+        {/* Toast: cadastro salvo */}
+        {savedToast && (
+          <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.green,color:"#fff",padding:"12px 22px",borderRadius:10,boxShadow:"0 12px 32px rgba(0,0,0,.25)",...H,fontSize:14,fontWeight:700,zIndex:9999,display:"flex",alignItems:"center",gap:10}}>
+            <span>✓</span> Cadastro salvo. Você pode voltar a qualquer momento neste navegador.
+          </div>
+        )}
       </div>
     </div>
   );
