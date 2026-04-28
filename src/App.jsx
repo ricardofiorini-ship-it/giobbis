@@ -904,7 +904,11 @@ function Landing({ onNav }) {
           .vorker-mockup{padding:14px!important;gap:12px!important}
           .vorker-perfil-grid{grid-template-columns:1fr!important}
           .vorker-admin-top{grid-template-columns:1fr!important;gap:12px!important}
+          .vorker-admin-header{grid-template-columns:1fr!important;gap:18px!important;padding:18px!important}
+          .vorker-admin-decision{padding-left:0!important;border-left:none!important;border-top:1px solid #E2E8F0;padding-top:16px!important}
+          .vorker-admin-facts{grid-template-columns:repeat(2,1fr)!important;gap:12px!important}
           .vorker-admin-body{grid-template-columns:1fr!important;gap:12px!important}
+          .vorker-day-row{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
           .vorker-traits-grid{grid-template-columns:repeat(2,1fr)!important}
           .vorker-docs-grid{grid-template-columns:1fr!important}
           .vorker-day-full{display:none!important}
@@ -2362,100 +2366,104 @@ function AdminPanel() {
           if (alertas.length===0) alertas.push({lv:"green",txt:"✓ Nenhum alerta encontrado."});
           const cellsFilled = Object.values(selWorker.disponibilidade||{}).reduce((a,b)=>a+(b?.length||0),0);
           const dispTag = cellsFilled>=14 ? {l:"Disponibilidade ampla",c:C.green,bg:C.greenBg,bd:C.greenBorder}
-                          : cellsFilled>=6 ? {l:"Disponibilidade média",c:"#CA8A04",bg:"#FEFCE8",bd:"#FDE68A"}
+                          : cellsFilled>=6 ? {l:"Disponibilidade parcial",c:"#CA8A04",bg:"#FEFCE8",bd:"#FDE68A"}
                           : {l:"Disponibilidade limitada",c:C.red,bg:C.redBg,bd:C.redBorder};
+          const statusInfo = {
+            pending:  { label:"⏱ Aguardando análise",      bg:"#FEF3C7", color:"#92400E", border:"#FDE68A" },
+            approved: { label:"✓ Aprovado na plataforma",  bg:C.greenBg, color:C.green,   border:C.greenBorder },
+            rejected: { label:"✕ Reprovado",               bg:C.redBg,   color:C.red,     border:C.redBorder },
+          }[selWorker.status] || { label:"—", bg:C.bg, color:C.muted, border:C.border };
+          const cadastradoEm = selWorker.created_at ? new Date(selWorker.created_at).toLocaleDateString("pt-BR") : null;
           return (
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:12,flexWrap:"wrap"}}>
-              <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer"}}>← Voltar para candidatos</button>
-              <Badge status={selWorker.status} />
+            <div style={{marginBottom:14}}>
+              <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4}}>← Voltar para candidatos</button>
             </div>
 
-            {/* TOP HEADER: 3 colunas — Identidade | Decisão | Score */}
-            <div className="vorker-admin-top" style={{display:"grid",gridTemplateColumns:"1.4fr 1fr 1fr",gap:14,marginBottom:14,alignItems:"stretch"}}>
+            {/* CABEÇALHO — Card único: identidade (left) + decisão (right) */}
+            <div className="vorker-admin-header" style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:14,display:"grid",gridTemplateColumns:"1fr 280px",gap:24,alignItems:"stretch"}}>
 
-              {/* Identidade */}
-              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
-                <div style={{display:"flex",gap:18,alignItems:"flex-start"}}>
+              {/* Esquerda — Identidade */}
+              <div className="vorker-admin-identity" style={{display:"flex",flexDirection:"column",gap:18}}>
+                <div style={{display:"flex",gap:18,alignItems:"center"}}>
                   {selWorker.foto_rosto ? (
-                    <img src={selWorker.foto_rosto} alt={selWorker.nome} style={{width:96,height:96,borderRadius:14,objectFit:"cover",border:`1px solid ${C.border}`,flexShrink:0}} />
+                    <img src={selWorker.foto_rosto} alt={selWorker.nome} style={{width:88,height:88,borderRadius:44,objectFit:"cover",border:`2px solid ${C.greenBorder}`,flexShrink:0}} />
                   ) : (
-                    <div style={{width:96,height:96,borderRadius:14,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                      <span style={{...H,fontSize:38,fontWeight:900,color:"#fff"}}>{selWorker.nome?.[0]}</span>
+                    <div style={{width:88,height:88,borderRadius:44,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{...H,fontSize:34,fontWeight:900,color:"#fff"}}>{selWorker.nome?.[0]}</span>
                     </div>
                   )}
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Aprovação manual</div>
-                    <h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4,lineHeight:1.2}}>{selWorker.nome}</h3>
-                    <div style={{...B,fontSize:13,color:C.sub,marginBottom:12}}>{selWorker.cidade}/{selWorker.estado}{idade!=null?` · ${idade} anos`:""}</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                      <div style={{...B,fontSize:12,color:C.sub,display:"flex",alignItems:"center",gap:7}}><span>📞</span><span>{selWorker.telefone||"—"}</span></div>
-                      <div style={{...B,fontSize:12,color:C.sub,display:"flex",alignItems:"center",gap:7,wordBreak:"break-all"}}><span>✉️</span><span>{selWorker.email||"—"}</span></div>
-                      <div style={{...B,fontSize:12,color:C.sub,display:"flex",alignItems:"center",gap:7}}><span>🪪</span><span>CPF {selWorker.cpf||"—"} · {selWorker.doc_tipo||"—"}</span></div>
-                      <div style={{...B,fontSize:12,color:C.sub,display:"flex",alignItems:"center",gap:7}}><span>🚌</span><span>{selWorker.deslocamento||"—"} · raio {selWorker.raio_km||10}km</span></div>
-                      {selWorker.pcd && <div style={{...B,fontSize:12,color:C.blue,display:"flex",alignItems:"center",gap:7}}><span>♿</span><span>PCD{selWorker.pcd_tipo?` — ${selWorker.pcd_tipo}`:""}</span></div>}
+                    <h3 style={{...H,fontSize:24,fontWeight:900,color:C.navy,marginBottom:7,lineHeight:1.15}}>{selWorker.nome}</h3>
+                    <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap",...B,fontSize:13,color:C.sub,marginBottom:10}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:5}}><span>📍</span>{selWorker.cidade}/{selWorker.estado}</span>
+                      <span>·</span>
+                      <span>{selWorker.raio_km||10}km de raio</span>
+                      {idade!=null && <><span>·</span><span>{idade} anos</span></>}
                     </div>
-                    {(selWorker.rua || selWorker.cep) && (
-                      <div style={{marginTop:12,padding:"10px 13px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:9}}>
-                        <div style={{...B,fontSize:10.5,color:C.muted,marginBottom:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>📍 Endereço</div>
-                        <div style={{...B,fontSize:12,color:C.navy,fontWeight:500,lineHeight:1.5}}>
-                          {selWorker.rua}{selWorker.numero?`, ${selWorker.numero}`:""}{selWorker.complemento?` — ${selWorker.complemento}`:""}
-                          {selWorker.bairro&&<><br/>{selWorker.bairro} · {selWorker.cidade}/{selWorker.estado}</>}
-                          {selWorker.cep&&<>{" · CEP "}{selWorker.cep}</>}
-                        </div>
-                      </div>
-                    )}
+                    <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:5,background:statusInfo.bg,border:`1px solid ${statusInfo.border}`,borderRadius:7,padding:"4px 11px",...B,fontSize:12,fontWeight:700,color:statusInfo.color}}>{statusInfo.label}</span>
+                      {cadastradoEm && <span style={{...B,fontSize:12,color:C.muted}}>Cadastrado em {cadastradoEm}</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Decisão */}
-              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,display:"flex",flexDirection:"column"}}>
-                <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:14}}>Decisão da curadoria</div>
-                {selWorker.status==="pending" && (
-                  <div style={{display:"flex",flexDirection:"column",gap:10,flex:1}}>
-                    <Btn label="✓ Aprovar candidato" variant="approve" size="lg" full loading={saving} onClick={()=>updateWo(selWorker.id,{status:"approved"})} />
-                    <Btn label="✕ Reprovar" variant="danger" size="md" full onClick={()=>setRejectModal({id:selWorker.id,type:"worker"})} />
-                    <div style={{...B,fontSize:11,color:C.muted,marginTop:6,lineHeight:1.55}}>Verifique fotos e dados antes de decidir. Use o painel ao lado para anotações e alertas.</div>
-                  </div>
-                )}
-                {selWorker.status==="approved" && (
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    <div style={{padding:14,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,...B,fontSize:13,color:C.green,fontWeight:600,textAlign:"center"}}>✓ Perfil ativo na plataforma</div>
-                    <Btn label="Suspender" variant="danger" size="sm" full loading={saving} onClick={()=>updateWo(selWorker.id,{status:"rejected",reject_note:"Perfil suspenso."})} />
-                  </div>
-                )}
-                {selWorker.status==="rejected" && (
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {selWorker.reject_note && <div style={{padding:"10px 14px",background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:9,...B,fontSize:12,color:C.red}}><strong>Motivo:</strong> {selWorker.reject_note}</div>}
-                    <Btn label="↩ Reabrir para análise" variant="amber" size="md" full loading={saving} onClick={()=>updateWo(selWorker.id,{status:"pending",reject_note:""})} />
-                  </div>
-                )}
-              </div>
-
-              {/* Score */}
-              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
-                <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Recomendação do sistema</div>
-                <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:6}}>
-                  <span style={{...H,fontSize:42,fontWeight:900,color:scoreColor(score.total),letterSpacing:-1.5,lineHeight:1}}>{score.total}</span>
-                  <span style={{...B,fontSize:13,color:C.muted,fontWeight:600}}>/100</span>
-                </div>
-                <div style={{height:6,borderRadius:3,background:"#E2E8F0",overflow:"hidden",marginBottom:14}}>
-                  <div style={{height:"100%",borderRadius:3,background:scoreColor(score.total),width:`${score.total}%`,transition:"width .3s"}} />
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                  {[["Comportamental",score.breakdown.comportamental],["Experiência",score.breakdown.experiencia],["Disponibilidade",score.breakdown.disponibilidade],["Flexibilidade",score.breakdown.flexibilidade],["Documentação",score.breakdown.documentacao],["Histórico",score.breakdown.historico]].map(([label,value])=>(
-                    <div key={label}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                        <span style={{...B,fontSize:10.5,color:C.sub}}>{label}</span>
-                        <span style={{...B,fontSize:10.5,fontWeight:700,color:scoreColor(value)}}>{value}</span>
-                      </div>
-                      <div style={{height:3,borderRadius:2,background:"#E2E8F0",overflow:"hidden"}}>
-                        <div style={{height:"100%",borderRadius:2,background:scoreColor(value),width:`${value}%`}} />
-                      </div>
+                {/* Mini-facts row — 5 colunas */}
+                <div className="vorker-admin-facts" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14,paddingTop:18,borderTop:`1px solid ${C.border}`}}>
+                  {[
+                    {icon:"🪪", label:"CPF",      value:selWorker.cpf},
+                    {icon:"📱", label:"WhatsApp", value:selWorker.telefone},
+                    {icon:"✉️", label:"E-mail",   value:selWorker.email},
+                    {icon:"♿", label:"PCD",      value:selWorker.pcd ? (selWorker.pcd_tipo||"Sim") : "Não"},
+                    {icon:"🚗", label:"Veículo",  value:selWorker.deslocamento||"—"},
+                  ].map(({icon,label,value})=>(
+                    <div key={label} style={{minWidth:0}}>
+                      <div style={{...B,fontSize:11,color:C.muted,marginBottom:4,display:"inline-flex",alignItems:"center",gap:5}}><span>{icon}</span>{label}</div>
+                      <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,wordBreak:"break-all",lineHeight:1.35}}>{value||"—"}</div>
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Direita — Decisão do curador */}
+              <div className="vorker-admin-decision" style={{display:"flex",flexDirection:"column",gap:8,paddingLeft:24,borderLeft:`1px solid ${C.border}`}}>
+                <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Decisão do curador</div>
+
+                {selWorker.status==="pending" && (<>
+                  <button onClick={()=>updateWo(selWorker.id,{status:"approved"})} disabled={saving}
+                    style={{background:C.green,color:"#fff",border:"none",borderRadius:10,padding:"12px 16px",cursor:saving?"default":"pointer",textAlign:"left",transition:"opacity .15s",opacity:saving?.6:1}}>
+                    <div style={{...H,fontSize:14,fontWeight:800,marginBottom:2}}>✓ Aprovar</div>
+                    <div style={{...B,fontSize:11,color:"rgba(255,255,255,.85)"}}>Liberar para receber convites</div>
+                  </button>
+                  <button onClick={()=>setSelWorker(null)}
+                    style={{background:"#FEFCE8",color:"#92400E",border:"1.5px solid #FDE68A",borderRadius:10,padding:"11px 16px",cursor:"pointer",textAlign:"left"}}>
+                    <div style={{...H,fontSize:14,fontWeight:800,marginBottom:2}}>🕐 Revisar depois</div>
+                    <div style={{...B,fontSize:11,color:"#92400E",opacity:.8}}>Adicionar à fila de revisão</div>
+                  </button>
+                  <button onClick={()=>setRejectModal({id:selWorker.id,type:"worker"})}
+                    style={{background:C.redBg,color:C.red,border:`1.5px solid ${C.redBorder}`,borderRadius:10,padding:"11px 16px",cursor:"pointer",textAlign:"left"}}>
+                    <div style={{...H,fontSize:14,fontWeight:800,marginBottom:2}}>✕ Reprovar</div>
+                    <div style={{...B,fontSize:11,color:C.red,opacity:.8}}>Não aprovar candidato</div>
+                  </button>
+                </>)}
+
+                {selWorker.status==="approved" && (<>
+                  <div style={{padding:"12px 14px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,...B,fontSize:13,color:C.green,fontWeight:600,textAlign:"center"}}>✓ Perfil ativo</div>
+                  <button onClick={()=>updateWo(selWorker.id,{status:"rejected",reject_note:"Perfil suspenso."})} disabled={saving}
+                    style={{background:C.redBg,color:C.red,border:`1.5px solid ${C.redBorder}`,borderRadius:10,padding:"10px 16px",cursor:saving?"default":"pointer",textAlign:"left",opacity:saving?.6:1}}>
+                    <div style={{...H,fontSize:13,fontWeight:800,marginBottom:2}}>⏸ Suspender</div>
+                    <div style={{...B,fontSize:11,color:C.red,opacity:.8}}>Remove o perfil da plataforma</div>
+                  </button>
+                </>)}
+
+                {selWorker.status==="rejected" && (<>
+                  {selWorker.reject_note && <div style={{padding:"10px 12px",background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:9,...B,fontSize:11.5,color:C.red,lineHeight:1.5}}><strong>Motivo:</strong> {selWorker.reject_note}</div>}
+                  <button onClick={()=>updateWo(selWorker.id,{status:"pending",reject_note:""})} disabled={saving}
+                    style={{background:"#FEFCE8",color:"#92400E",border:"1.5px solid #FDE68A",borderRadius:10,padding:"11px 16px",cursor:saving?"default":"pointer",textAlign:"left",opacity:saving?.6:1}}>
+                    <div style={{...H,fontSize:14,fontWeight:800,marginBottom:2}}>↩ Reabrir para análise</div>
+                    <div style={{...B,fontSize:11,color:"#92400E",opacity:.8}}>Volta o perfil para a fila</div>
+                  </button>
+                </>)}
               </div>
             </div>
 
@@ -2463,6 +2471,18 @@ function AdminPanel() {
             <div className="vorker-admin-body" style={{display:"grid",gridTemplateColumns:"1fr 280px",gap:14,alignItems:"start"}}>
 
               <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                {/* ENDEREÇO (será redesenhado em parte futura) */}
+                {(selWorker.rua || selWorker.cep) && (
+                  <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
+                    <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase",marginBottom:10}}>📍 Endereço</div>
+                    <div style={{...B,fontSize:13,color:C.navy,fontWeight:500,lineHeight:1.6}}>
+                      {selWorker.rua}{selWorker.numero?`, ${selWorker.numero}`:""}{selWorker.complemento?` — ${selWorker.complemento}`:""}
+                      {selWorker.bairro&&<><br/>{selWorker.bairro} · {selWorker.cidade}/{selWorker.estado}</>}
+                      {selWorker.cep&&<>{" · CEP "}{selWorker.cep}</>}
+                    </div>
+                  </div>
+                )}
+
                 {/* PERFIL OPERACIONAL — 5 traits */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
                   <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase",marginBottom:14}}>Perfil operacional</div>
@@ -2483,58 +2503,50 @@ function AdminPanel() {
                   </div>
                 </div>
 
-                {/* DISPONIBILIDADE */}
+                {/* DISPONIBILIDADE — linha com 7 cards de dia */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
-                    <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase"}}>Disponibilidade</div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:22,height:22,borderRadius:11,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{...H,fontSize:11,fontWeight:800,color:"#fff"}}>1</span>
+                      </div>
+                      <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase"}}>Disponibilidade</div>
+                    </div>
                     <span style={{...B,fontSize:11,fontWeight:700,color:dispTag.c,background:dispTag.bg,border:`1px solid ${dispTag.bd}`,padding:"3px 10px",borderRadius:14}}>{dispTag.l}</span>
                   </div>
-                  <div style={{overflowX:"auto"}}>
-                    <table className="vorker-disp-table" style={{width:"100%",borderCollapse:"separate",borderSpacing:"4px"}}>
-                      <thead>
-                        <tr>
-                          <th style={{padding:"4px 6px",minWidth:70}}></th>
-                          {SHIFTS.map(sh=>(
-                            <th key={sh.id} style={{textAlign:"center",padding:"4px 6px",minWidth:80}}>
-                              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
-                                <span style={{fontSize:13,lineHeight:1}}>{sh.icon}</span>
-                                <span style={{...H,fontSize:10.5,fontWeight:700,color:sh.color}}>{sh.label}</span>
-                              </div>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {DAYS.map(day=>{
-                          const dayShifts=selWorker.disponibilidade?.[day]||[];
-                          const hasAny=dayShifts.length>0;
-                          return (
-                            <tr key={day}>
-                              <td style={{...H,fontSize:11,fontWeight:700,color:hasAny?C.green:C.sub,padding:"5px 6px",borderRight:`1px solid ${C.border}`}}>
-                                <span className="vorker-day-full">{DAY_FULL[day]||day}</span>
-                                <span className="vorker-day-short" style={{display:"none"}}>{day}</span>
-                              </td>
-                              {SHIFTS.map(sh=>{
-                                const on=dayShifts.includes(sh.id);
-                                return <td key={sh.id} style={{padding:1.5}}>
-                                  <div style={{padding:"6px 4px",borderRadius:7,background:on?C.greenBg:"#fff",border:`1.5px solid ${on?C.green:C.border2}`,textAlign:"center",minHeight:28,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                    <span style={{...H,fontSize:12,fontWeight:700,color:on?C.green:"#CBD5E1",lineHeight:1}}>{on?"✓":"—"}</span>
-                                  </div>
-                                </td>;
-                              })}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+
+                  <div className="vorker-day-row" style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
+                    {DAYS.map(day=>{
+                      const shifts=selWorker.disponibilidade?.[day]||[];
+                      const primary = SHIFTS.find(s=>shifts.includes(s.id));
+                      const hasAny = shifts.length>0;
+                      const extra = shifts.length-1;
+                      return (
+                        <div key={day} style={{textAlign:"center",padding:"12px 6px",borderRadius:9,background:hasAny?"#fff":C.bg,border:`1.5px solid ${hasAny?C.border:C.border}`,display:"flex",flexDirection:"column",alignItems:"center",gap:5,position:"relative"}}>
+                          <div style={{...H,fontSize:12,fontWeight:800,color:hasAny?C.green:C.muted,letterSpacing:.3}}>{day}</div>
+                          {primary ? (
+                            <>
+                              <div style={{fontSize:22,lineHeight:1}}>{primary.icon}</div>
+                              <div style={{...B,fontSize:11,fontWeight:600,color:primary.color}}>{primary.label}</div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{fontSize:22,lineHeight:1,opacity:.3}}>·</div>
+                              <div style={{...B,fontSize:11,fontWeight:500,color:C.muted,fontStyle:"italic"}}>Indisponível</div>
+                            </>
+                          )}
+                          {extra>0 && (
+                            <span style={{position:"absolute",top:6,right:6,...B,fontSize:9,fontWeight:800,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"1px 5px",lineHeight:1.4}}>+{extra}</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
+
                   {selWorker.flexibilidade && FLEX_LABEL[selWorker.flexibilidade] && (
-                    <div style={{marginTop:12,padding:"10px 14px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:9,display:"flex",alignItems:"center",gap:10}}>
-                      <span style={{fontSize:18}}>{FLEX_LABEL[selWorker.flexibilidade].icon}</span>
-                      <div>
-                        <div style={{...B,fontSize:10.5,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Flexibilidade</div>
-                        <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{FLEX_LABEL[selWorker.flexibilidade].label} <span style={{...B,fontSize:11,color:C.sub,fontWeight:500}}>· {FLEX_LABEL[selWorker.flexibilidade].desc}</span></div>
-                      </div>
+                    <div style={{marginTop:12,display:"flex",alignItems:"center",gap:8,...B,fontSize:12,color:C.sub}}>
+                      <span style={{fontSize:14}}>{FLEX_LABEL[selWorker.flexibilidade].icon}</span>
+                      <span><strong style={{color:C.navy,fontWeight:700}}>{FLEX_LABEL[selWorker.flexibilidade].desc}</strong></span>
                     </div>
                   )}
                 </div>
@@ -2637,8 +2649,33 @@ function AdminPanel() {
                 </div>
               </div>
 
-              {/* RIGHT RAIL: alertas + anotações + histórico + zona de perigo */}
+              {/* RIGHT RAIL: score + alertas + anotações + histórico + zona de perigo */}
               <div style={{display:"flex",flexDirection:"column",gap:14}} className="vorker-admin-rail">
+
+                {/* Score (será redesenhado em parte futura) */}
+                <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:18}}>
+                  <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Recomendação do sistema</div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:6}}>
+                    <span style={{...H,fontSize:36,fontWeight:900,color:scoreColor(score.total),letterSpacing:-1.2,lineHeight:1}}>{score.total}</span>
+                    <span style={{...B,fontSize:12,color:C.muted,fontWeight:600}}>/100</span>
+                  </div>
+                  <div style={{height:5,borderRadius:3,background:"#E2E8F0",overflow:"hidden",marginBottom:12}}>
+                    <div style={{height:"100%",borderRadius:3,background:scoreColor(score.total),width:`${score.total}%`,transition:"width .3s"}} />
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {[["Comportamental",score.breakdown.comportamental],["Experiência",score.breakdown.experiencia],["Disponibilidade",score.breakdown.disponibilidade],["Flexibilidade",score.breakdown.flexibilidade],["Documentação",score.breakdown.documentacao],["Histórico",score.breakdown.historico]].map(([label,value])=>(
+                      <div key={label}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{...B,fontSize:10.5,color:C.sub}}>{label}</span>
+                          <span style={{...B,fontSize:10.5,fontWeight:700,color:scoreColor(value)}}>{value}</span>
+                        </div>
+                        <div style={{height:3,borderRadius:2,background:"#E2E8F0",overflow:"hidden"}}>
+                          <div style={{height:"100%",borderRadius:2,background:scoreColor(value),width:`${value}%`}} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:18}}>
                   <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:12}}>⚠ Alertas</div>
