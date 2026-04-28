@@ -923,7 +923,15 @@ function WorkerRegister({ onDone, onBack }) {
     if(step===3) return data.specs.length===0?["Selecione ao menos uma especialidade"]:[];
     if(step===4) return allFuncExpFilled?[]:["Responda todas as perguntas de experiência para cada função"];
     if(step===5) return Object.values(data.disponibilidade).some(t=>t.length>0)?[]:["Selecione ao menos um turno disponível"];
-    if(step===6) return data.tipoTrabalho?[]:["Tipo de trabalho preferido"];
+    if(step===6){
+      const m=[]; const p=data.perfilTrabalho||{};
+      if(!p.corrido)    m.push("Pergunta 1 — Quando o trabalho está corrido");
+      if(!p.diaADia)    m.push("Pergunta 2 — No dia a dia");
+      if(!p.tarefa)     m.push("Pergunta 3 — Quando recebe uma tarefa nova");
+      if(!p.diferente)  m.push("Pergunta 4 — Se algo sai diferente");
+      if(!p.imprevisto) m.push("Pergunta 5 — Se surge um imprevisto");
+      return m;
+    }
     if(step===8) return data.fotoRosto?[]:["Foto de perfil"];
     if(step===9){
       const m=[];
@@ -943,7 +951,7 @@ function WorkerRegister({ onDone, onBack }) {
     3:  data.specs.length>=1,
     4:  allFuncExpFilled,
     5:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
-    6:  !!data.tipoTrabalho,
+    6:  !!(data.perfilTrabalho?.corrido && data.perfilTrabalho?.diaADia && data.perfilTrabalho?.tarefa && data.perfilTrabalho?.diferente && data.perfilTrabalho?.imprevisto),
     7:  true,
     8:  !!data.fotoRosto,
     9:  data.email&&data.senha.length>=8&&!senhaError&&!!data.docTipo&&!!data.selfieDoc,
