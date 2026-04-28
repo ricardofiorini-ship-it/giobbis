@@ -243,6 +243,67 @@ const FLEX_LABEL = {
   "agendar":       { icon:"📅", label:"Prefere agendar",        desc:"1 dia ou mais antes" },
 };
 
+// ─── Score do candidato (para a curadoria do admin) ──────────────
+const TEMPO_PTS = {
+  "Menos de 6 meses": 1, "6 meses a 1 ano": 2, "1 a 3 anos": 3, "3 a 5 anos": 4, "Mais de 5 anos": 5,
+};
+const PERFIL_PTS = {
+  corrido:    { manter:3,    equilibrar:2, diminuir:1 },
+  diaADia:    { praticas:3,  equilibrio:2, cuidado:1 },
+  tarefa:     { iniciativa:3,perguntar:2,  orientacao:1 },
+  diferente:  { ajusta:3,    entender:2,   avisar:1 },
+  imprevisto: { resolver:3,  aviso:2,      cancelar:1 },
+};
+const FLEX_PTS = { "mesmo-dia":3, "algumas-horas":2, "agendar":1 };
+const SCORE_WEIGHTS = { comportamental:25, experiencia:25, disponibilidade:20, flexibilidade:15, documentacao:10, historico:5 };
+
+const computeWorkerScore = (w) => {
+  const p = w.perfil_trabalho || {};
+  let compTotal = 0, compMax = 0;
+  Object.entries(PERFIL_PTS).forEach(([k,opts])=>{ compMax += 3; if(p[k]&&opts[p[k]]) compTotal += opts[p[k]]; });
+  const comportamental = compMax>0 ? Math.round((compTotal/compMax)*100) : 0;
+
+  const specs = w.specs || [];
+  const tempos = specs.map(s => TEMPO_PTS[w.func_exp?.[s]?.tempo] || 0);
+  const tempoAvg = tempos.length>0 ? tempos.reduce((a,b)=>a+b,0)/tempos.length : 0;
+  const experiencia = Math.round((tempoAvg/5)*100);
+
+  const cellsFilled = Object.values(w.disponibilidade||{}).reduce((acc,arr)=>acc+(arr?.length||0), 0);
+  const disponibilidade = Math.round((Math.min(cellsFilled,28)/28)*100);
+
+  const flexibilidade = w.flexibilidade ? Math.round((FLEX_PTS[w.flexibilidade]/3)*100) : 0;
+
+  let docCount = 0;
+  if(w.foto_rosto) docCount++;
+  if(w.selfie_doc) docCount++;
+  if(w.doc_tipo)   docCount++;
+  const documentacao = Math.round((docCount/3)*100);
+
+  const empresasCount = (w.empresas_selected?.length||0) + (w.empresas_custom?.length||0);
+  const historico = Math.round((Math.min(empresasCount,5)/5)*100);
+
+  const total = Math.round(
+    (comportamental*SCORE_WEIGHTS.comportamental +
+     experiencia*SCORE_WEIGHTS.experiencia +
+     disponibilidade*SCORE_WEIGHTS.disponibilidade +
+     flexibilidade*SCORE_WEIGHTS.flexibilidade +
+     documentacao*SCORE_WEIGHTS.documentacao +
+     historico*SCORE_WEIGHTS.historico) / 100
+  );
+
+  return { total, breakdown:{ comportamental, experiencia, disponibilidade, flexibilidade, documentacao, historico } };
+};
+const scoreColor = (s) => s>=80 ? "#16A34A" : s>=60 ? "#65A30D" : s>=40 ? "#EAB308" : "#DC2626";
+
+const calcIdade = (nasc) => {
+  if(!nasc) return null;
+  const b = new Date(nasc); const t = new Date();
+  let age = t.getFullYear() - b.getFullYear();
+  const m = t.getMonth() - b.getMonth();
+  if(m<0 || (m===0 && t.getDate()<b.getDate())) age--;
+  return age>=0 && age<150 ? age : null;
+};
+
 const EMPRESAS_PRESET = [
   {id:"assai",       label:"Assaí"},
   {id:"carrefour",   label:"Carrefour"},
@@ -2272,10 +2333,33 @@ function AdminPanel() {
                     <Badge status={selWorker.status} />
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px"}}>
-                    {[["CPF",selWorker.cpf],["Nascimento",selWorker.nascimento],["WhatsApp",selWorker.telefone],["E-mail",selWorker.email],["Deslocamento",selWorker.deslocamento||"—"],["PCD",selWorker.pcd?(selWorker.pcd_tipo||"Sim"):"Não"],["Documento",selWorker.doc_tipo||"—"]].map(([k,v])=>(
+                    {(()=>{ const idade=calcIdade(selWorker.nascimento); return [
+                      ["CPF",selWorker.cpf],
+                      ["Nascimento", selWorker.nascimento ? `${selWorker.nascimento}${idade!=null?` · ${idade} anos`:""}` : "—"],
+                      ["WhatsApp",selWorker.telefone],
+                      ["E-mail",selWorker.email],
+                      ["Deslocamento",selWorker.deslocamento||"—"],
+                      ["PCD",selWorker.pcd?(selWorker.pcd_tipo||"Sim"):"Não"],
+                      ["Documento",selWorker.doc_tipo||"—"],
+                    ];})().map(([k,v])=>(
                       <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}><div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div><div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v||"—"}</div></div>
                     ))}
                   </div>
+
+                  {/* Endereço completo */}
+                  {(selWorker.rua || selWorker.cep) && (
+                    <div style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:9,padding:"14px 18px",marginTop:18,display:"flex",alignItems:"flex-start",gap:12}}>
+                      <span style={{fontSize:18,marginTop:1}}>📍</span>
+                      <div style={{flex:1}}>
+                        <div style={{...B,fontSize:11,color:C.muted,marginBottom:4,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Endereço</div>
+                        <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,lineHeight:1.55}}>
+                          {selWorker.rua}{selWorker.numero?`, ${selWorker.numero}`:""}{selWorker.complemento?` — ${selWorker.complemento}`:""}<br/>
+                          {selWorker.bairro}{selWorker.bairro&&" · "}{selWorker.cidade}/{selWorker.estado}
+                          {selWorker.cep&&<><br/><span style={{...B,fontSize:12,color:C.sub,fontWeight:500}}>CEP {selWorker.cep}</span></>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Documentos enviados — fotos reais para verificação */}
@@ -2443,6 +2527,45 @@ function AdminPanel() {
               </div>
 
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {/* Score do candidato — sugestão automática para a curadoria */}
+                {(()=>{
+                  const sc = computeWorkerScore(selWorker);
+                  const breakdown = [
+                    ["Comportamental", sc.breakdown.comportamental],
+                    ["Experiência",    sc.breakdown.experiencia],
+                    ["Disponibilidade",sc.breakdown.disponibilidade],
+                    ["Flexibilidade",  sc.breakdown.flexibilidade],
+                    ["Documentação",   sc.breakdown.documentacao],
+                    ["Histórico",      sc.breakdown.historico],
+                  ];
+                  return (
+                    <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
+                      <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Score do candidato</div>
+                      <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:6}}>
+                        <span style={{...H,fontSize:42,fontWeight:900,color:scoreColor(sc.total),letterSpacing:-1.5,lineHeight:1}}>{sc.total}</span>
+                        <span style={{...B,fontSize:13,color:C.muted,fontWeight:600}}>/100</span>
+                      </div>
+                      <div style={{height:6,borderRadius:3,background:"#E2E8F0",overflow:"hidden",marginBottom:16}}>
+                        <div style={{height:"100%",borderRadius:3,background:scoreColor(sc.total),width:`${sc.total}%`,transition:"width .3s"}} />
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:9}}>
+                        {breakdown.map(([label, value])=>(
+                          <div key={label}>
+                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                              <span style={{...B,fontSize:11,color:C.sub}}>{label}</span>
+                              <span style={{...B,fontSize:11,fontWeight:700,color:scoreColor(value)}}>{value}</span>
+                            </div>
+                            <div style={{height:4,borderRadius:2,background:"#E2E8F0",overflow:"hidden"}}>
+                              <div style={{height:"100%",borderRadius:2,background:scoreColor(value),width:`${value}%`,transition:"width .3s"}} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{...B,fontSize:10.5,color:C.muted,marginTop:14,lineHeight:1.5,fontStyle:"italic"}}>Sugestão automática baseada nas respostas. Use como apoio, não como decisão.</div>
+                    </div>
+                  );
+                })()}
+
                 {selWorker.status==="pending"&&(<div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
                   <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Decisão</div>
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
