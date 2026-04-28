@@ -912,6 +912,13 @@ function WorkerRegister({ onDone, onBack }) {
     }
     if(step===2){
       const m=[];
+      if(!data.email) m.push("E-mail");
+      if(data.senha.length<8) m.push("Senha (mínimo 8 caracteres)");
+      if(senhaError) m.push("Senhas não coincidem");
+      return m;
+    }
+    if(step===3){
+      const m=[];
       if(!data.cep) m.push("CEP");
       if(!data.rua) m.push("Rua/Avenida");
       if(!data.numero) m.push("Número");
@@ -920,10 +927,17 @@ function WorkerRegister({ onDone, onBack }) {
       if(!data.deslocamento) m.push("Como você se desloca");
       return m;
     }
-    if(step===3) return data.specs.length===0?["Selecione ao menos uma especialidade"]:[];
-    if(step===4) return allFuncExpFilled?[]:["Responda todas as perguntas de experiência para cada função"];
-    if(step===5) return Object.values(data.disponibilidade).some(t=>t.length>0)?[]:["Selecione ao menos um turno disponível"];
-    if(step===6){
+    if(step===4){
+      const m=[];
+      if(!data.fotoRosto) m.push("Foto de perfil");
+      if(!data.docTipo)   m.push("Tipo de documento (RG ou CNH)");
+      if(!data.selfieDoc) m.push("Selfie com documento");
+      return m;
+    }
+    if(step===5) return data.specs.length===0?["Selecione ao menos uma função"]:[];
+    if(step===6) return allFuncExpFilled?[]:["Informe o tempo de experiência em cada função"];
+    if(step===7) return Object.values(data.disponibilidade).some(t=>t.length>0)?[]:["Selecione ao menos um turno disponível"];
+    if(step===8){
       const m=[]; const p=data.perfilTrabalho||{};
       if(!p.corrido)    m.push("Pergunta 1 — Quando o trabalho está corrido");
       if(!p.diaADia)    m.push("Pergunta 2 — No dia a dia");
@@ -932,29 +946,19 @@ function WorkerRegister({ onDone, onBack }) {
       if(!p.imprevisto) m.push("Pergunta 5 — Se surge um imprevisto");
       return m;
     }
-    if(step===8) return data.fotoRosto?[]:["Foto de perfil"];
-    if(step===9){
-      const m=[];
-      if(!data.docTipo) m.push("Tipo de documento (RG ou CNH)");
-      if(!data.selfieDoc) m.push("Selfie com documento");
-      if(!data.email) m.push("E-mail");
-      if(data.senha.length<8) m.push("Senha (mínimo 8 caracteres)");
-      if(senhaError) m.push("Senhas não coincidem");
-      return m;
-    }
     return [];
   };
 
   const canNext = {
     1:  data.nome&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&!data.cpfExists&&data.nascimento&&validateAge(data.nascimento)&&data.telefone.replace(/\D/g,"").length>=10,
-    2:  data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade&&data.deslocamento,
-    3:  data.specs.length>=1,
-    4:  allFuncExpFilled,
-    5:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
-    6:  !!(data.perfilTrabalho?.corrido && data.perfilTrabalho?.diaADia && data.perfilTrabalho?.tarefa && data.perfilTrabalho?.diferente && data.perfilTrabalho?.imprevisto),
-    7:  true,
-    8:  !!data.fotoRosto,
-    9:  data.email&&data.senha.length>=8&&!senhaError&&!!data.docTipo&&!!data.selfieDoc,
+    2:  data.email&&data.senha.length>=8&&!senhaError,
+    3:  data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade&&data.deslocamento,
+    4:  !!data.fotoRosto && !!data.docTipo && !!data.selfieDoc,
+    5:  data.specs.length>=1,
+    6:  allFuncExpFilled,
+    7:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
+    8:  !!(data.perfilTrabalho?.corrido && data.perfilTrabalho?.diaADia && data.perfilTrabalho?.tarefa && data.perfilTrabalho?.diferente && data.perfilTrabalho?.imprevisto),
+    9:  true,
   }[step];
 
   const handleNext = () => {
@@ -1022,25 +1026,27 @@ function WorkerRegister({ onDone, onBack }) {
   };
 
   const LABELS = [
-    "Dados pessoais","Endereço e deslocamento","Funções",
-    "Experiência e empresas","Disponibilidade",
-    "Perfil de trabalho","Informações adicionais","Foto de perfil","Documento e conta",
+    "Dados pessoais","Senha","Endereço e deslocamento",
+    "Foto e documento","Funções","Experiência e empresas",
+    "Disponibilidade","Perfil de trabalho","Informações adicionais",
   ];
 
   const CHECKLIST = [
     {label:"Informações pessoais", step:1},
-    {label:"Endereço",             step:2},
-    {label:"Funções",              step:3},
-    {label:"Experiência",          step:4},
-    {label:"Disponibilidade",      step:5},
-    {label:"Perfil profissional",  step:6},
+    {label:"Senha",                step:2},
+    {label:"Endereço",             step:3},
+    {label:"Foto e documento",     step:4},
+    {label:"Funções",              step:5},
+    {label:"Experiência",          step:6},
+    {label:"Disponibilidade",      step:7},
+    {label:"Perfil profissional",  step:8},
     {label:"Confirmar cadastro",   step:9},
   ];
   const progressPct = Math.round((step / 9) * 100);
 
   return (
     <div style={{minHeight:"90vh",padding:"32px 20px 80px",background:C.bg}}>
-      <div style={{maxWidth: step===6 ? 1080 : 640, margin:"0 auto"}}>
+      <div style={{maxWidth: step===8 ? 1080 : 640, margin:"0 auto"}}>
 
         {/* Banner: cadastro em andamento detectado no localStorage */}
         {draftPrompt && (
@@ -1061,7 +1067,7 @@ function WorkerRegister({ onDone, onBack }) {
         </div>
         <div style={{...B,fontSize:12,color:C.muted,marginBottom:20}}>{LABELS[step-1]}</div>
 
-        <div className="vorker-step-wrap" style={step===6?{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}:{}}>
+        <div className="vorker-step-wrap" style={step===8?{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}:{}}>
         <div className="fu" key={step} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:16,padding:"32px 36px",boxShadow:"0 2px 16px rgba(0,0,0,.05)"}}>
 
           {/* ── STEP 1: Dados pessoais ── */}
@@ -1086,8 +1092,8 @@ function WorkerRegister({ onDone, onBack }) {
             <Alert type="info">Todos os dados são tratados com sigilo e usados apenas para verificação.</Alert>
           </>}
 
-          {/* ── STEP 2: Endereço + deslocamento ── */}
-          {step===2&&<>
+          {/* ── STEP 3: Endereço + deslocamento ── */}
+          {step===3&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Endereço e deslocamento</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Usamos para mostrar vagas próximas com a distância exata de cada oportunidade.</p>
             <AddressBlock data={data} setData={setData} loading={cepLoading} setLoading={setCepLoading} />
@@ -1110,8 +1116,8 @@ function WorkerRegister({ onDone, onBack }) {
             <div style={{...B,fontSize:12,color:C.muted,marginTop:6}}>Você aceita vagas num raio de até {data.raioKm}km da sua casa</div>
           </>}
 
-          {/* ── STEP 3: Especialidades ── */}
-          {step===3&&<>
+          {/* ── STEP 5: Funções ── */}
+          {step===5&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Em quais funções você pode trabalhar?</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quanto mais completo seu perfil, mais convites você recebe.</p>
 
@@ -1157,8 +1163,8 @@ function WorkerRegister({ onDone, onBack }) {
             {data.specs.length>0?<Alert type="success">{data.specs.length} especialidade{data.specs.length>1?"s":""} selecionada{data.specs.length>1?"s":""}. No próximo passo você define o nível em cada uma.</Alert>:<Alert type="warning">Selecione ao menos uma especialidade.</Alert>}
           </>}
 
-          {/* ── STEP 4: Tempo de experiência + Empresas onde trabalhou ── */}
-          {step===4&&<>
+          {/* ── STEP 6: Tempo de experiência + Empresas onde trabalhou ── */}
+          {step===6&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Sua experiência</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quanto tempo você tem em cada função e onde já trabalhou.</p>
 
@@ -1246,8 +1252,8 @@ function WorkerRegister({ onDone, onBack }) {
             {!allFuncExpFilled&&<Alert type="warning">Informe o tempo de experiência em cada função.</Alert>}
           </>}
 
-          {/* ── STEP 5: Disponibilidade ── */}
-          {step===5&&<>
+          {/* ── STEP 7: Disponibilidade ── */}
+          {step===7&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Disponibilidade</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Marque os turnos que você quer trabalhar. Deixe em branco os turnos que não deseja trabalhar.</p>
 
@@ -1347,8 +1353,8 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
           </>}
 
-          {/* ── STEP 6: Perfil de trabalho ── */}
-          {step===6&&<>
+          {/* ── STEP 8: Perfil de trabalho ── */}
+          {step===8&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Seu perfil de trabalho</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:24,lineHeight:1.65}}>Responda de forma rápida e natural. Não existem respostas certas ou erradas — isso ajuda as empresas a te conhecerem melhor e fazerem as melhores escolhas.</p>
 
@@ -1429,10 +1435,10 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
           </>}
 
-          {/* ── STEP 7: Informações adicionais ── */}
-          {step===7&&<>
+          {/* ── STEP 9: Informações adicionais ── */}
+          {step===9&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Informações adicionais</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Última etapa antes da foto e documento.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Última etapa antes de finalizar seu cadastro.</p>
 
             <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:12}}>Pessoa com deficiência (PCD)?</div>
             <div style={{display:"flex",gap:10,marginBottom:14}}>
@@ -1447,13 +1453,29 @@ function WorkerRegister({ onDone, onBack }) {
               <Field label="Tipo de deficiência (opcional)" placeholder="Ex: Auditiva, Visual, Física, Intelectual..." value={data.pcdTipo} onChange={v=>set("pcdTipo",v)} helper="Permite que empresas com cotas PCD priorizem seu perfil" />
             )}
             <Alert type="info">Informação usada para conectar com empresas que possuem cotas PCD.</Alert>
+            {submitError&&<Alert type="error">{submitError}</Alert>}
           </>}
 
-          {/* ── STEP 8: Foto ── */}
-          {step===8&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto de perfil</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Perfis com foto recebem muito mais convites de empresas.</p>
-            <Alert type="info">Rosto completamente visível · Sem óculos escuros · Fundo neutro · Boa iluminação · Foto recente</Alert>
+          {/* ── STEP 2: Senha (criar conta) ── */}
+          {step===2&&<>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Crie sua conta</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Defina o e-mail e senha que você usará para acessar o app a partir de agora.</p>
+            <Field label="E-mail" placeholder="seu@email.com" value={data.email} onChange={v=>set("email",v)} type="email" required helper="Usaremos este e-mail para login e comunicação." />
+            <div className="g2">
+              <Field label="Senha" placeholder="Mínimo 8 caracteres" value={data.senha} onChange={v=>set("senha",v)} type="password" required />
+              <Field label="Confirmar senha" placeholder="Repita a senha" value={data.confirma} onChange={v=>set("confirma",v)} type="password" hint={senhaError} required />
+            </div>
+            <Alert type="info">Em breve: cadastro com Google ou Meta.</Alert>
+          </>}
+
+          {/* ── STEP 4: Foto e documento ── */}
+          {step===4&&<>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto e documento</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Envie sua foto de perfil e a selfie com documento. Usados para verificação de identidade.</p>
+
+            {/* Foto de perfil */}
+            <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:10}}>Foto de perfil</div>
+            <Alert type="info">Rosto visível · Sem óculos escuros · Fundo neutro · Boa iluminação</Alert>
             <div className={`upload-zone ${data.fotoRosto?"has":""}`} onClick={()=>photoRef.current?.click()}>
               {data.fotoRosto
                 ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
@@ -1464,13 +1486,10 @@ function WorkerRegister({ onDone, onBack }) {
                 :<div><div style={{fontSize:52,marginBottom:12}}>📷</div><div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Clique para enviar sua foto</div><div style={{...B,fontSize:13,color:C.muted}}>JPG ou PNG · máx. 5MB</div></div>}
             </div>
             <input ref={photoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"fotoRosto");}} />
-          </>}
 
-          {/* ── STEP 9: Documento + Login ── */}
-          {step===9&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Documento e conta</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:20,lineHeight:1.65}}>Envie sua selfie com documento para verificação de identidade e crie seu login.</p>
+            <Div />
 
+            {/* Tipo de documento + selfie com doc */}
             <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Tipo de documento</div>
             <div style={{display:"flex",gap:12,marginBottom:18}}>
               {[["RG","🪪","Identidade"],["CNH","🚗","Habilitação"]].map(([t,ic,sub])=>(
@@ -1499,22 +1518,13 @@ function WorkerRegister({ onDone, onBack }) {
                   :<div><div style={{fontSize:48,marginBottom:12}}>🤳</div><div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Selfie segurando o {data.docTipo}</div><div style={{...B,fontSize:13,color:C.muted}}>Foto · máx. 10MB</div></div>}
               </div>
               <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"selfieDoc");}} />
-              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:18}}>🔒 Visível apenas à equipe VORKER.</div>
+              <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:6}}>🔒 Visível apenas à equipe VORKER.</div>
             </>}
-
-            <Div />
-            <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Criar login</div>
-            <Field label="E-mail" placeholder="seu@email.com" value={data.email} onChange={v=>set("email",v)} type="email" required />
-            <div className="g2">
-              <Field label="Senha" placeholder="Mínimo 8 caracteres" value={data.senha} onChange={v=>set("senha",v)} type="password" required />
-              <Field label="Confirmar senha" placeholder="Repita a senha" value={data.confirma} onChange={v=>set("confirma",v)} type="password" hint={senhaError} required />
-            </div>
-            {submitError&&<Alert type="error">{submitError}</Alert>}
           </>}
         </div>
 
-        {/* Sidebar progresso (visível apenas no step 6 — desktop ao lado, mobile abaixo) */}
-        {step===6 && (
+        {/* Sidebar progresso (visível apenas no step 8 — desktop ao lado, mobile abaixo) */}
+        {step===8 && (
           <aside className="vorker-sidebar" style={{display:"flex",flexDirection:"column",gap:14,position:"sticky",top:20}}>
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"22px 22px",boxShadow:"0 2px 12px rgba(0,0,0,.04)"}}>
               <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>Seu progresso</div>
