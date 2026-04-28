@@ -799,6 +799,8 @@ function Landing({ onNav }) {
           .vorker-q-grid{grid-template-columns:1fr!important}
           .vorker-step-wrap{grid-template-columns:1fr!important;gap:14px!important}
           .vorker-sidebar{position:static!important}
+          .vorker-mobile-btn{display:none!important}
+          .vorker-mockup{padding:14px!important;gap:12px!important}
           .vorker-day-full{display:none!important}
           .vorker-day-short{display:inline!important}
           .vorker-disp-table th{min-width:auto!important;padding:8px 2px!important}
@@ -898,6 +900,7 @@ function WorkerRegister({ onDone, onBack }) {
   };
 
   const [emailChecking, setEmailChecking] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const checkEmail = async (em) => {
     const v = (em||"").trim().toLowerCase();
     if(!emailValid(v)) return;
@@ -942,17 +945,12 @@ function WorkerRegister({ onDone, onBack }) {
       if(!data.deslocamento) m.push("Como você se desloca");
       return m;
     }
-    if(step===4){
-      const m=[];
-      if(!data.fotoRosto) m.push("Foto de perfil");
-      if(!data.docTipo)   m.push("Tipo de documento (RG ou CNH)");
-      if(!data.selfieDoc) m.push("Selfie com documento");
-      return m;
-    }
-    if(step===5) return data.specs.length===0?["Selecione ao menos uma função"]:[];
-    if(step===6) return allFuncExpFilled?[]:["Informe o tempo de experiência em cada função"];
-    if(step===7) return Object.values(data.disponibilidade).some(t=>t.length>0)?[]:["Selecione ao menos um turno disponível"];
-    if(step===8){
+    if(step===4) return [];   // foto perfil opcional
+    if(step===5) return [];   // foto documento opcional
+    if(step===6) return data.specs.length===0?["Selecione ao menos uma função"]:[];
+    if(step===7) return allFuncExpFilled?[]:["Informe o tempo de experiência em cada função"];
+    if(step===8) return Object.values(data.disponibilidade).some(t=>t.length>0)?[]:["Selecione ao menos um turno disponível"];
+    if(step===9){
       const m=[]; const p=data.perfilTrabalho||{};
       if(!p.corrido)    m.push("Pergunta 1 — Quando o trabalho está corrido");
       if(!p.diaADia)    m.push("Pergunta 2 — No dia a dia");
@@ -968,12 +966,13 @@ function WorkerRegister({ onDone, onBack }) {
     1:  data.nome&&data.cpf.replace(/\D/g,"").length===11&&validateCPF(data.cpf)&&!data.cpfExists&&data.nascimento&&validateAge(data.nascimento)&&data.telefone.replace(/\D/g,"").length>=10,
     2:  data.email&&emailValid(data.email)&&!data.emailExists&&data.senha.length>=8&&!senhaError,
     3:  data.cep&&data.rua&&data.numero&&data.bairro&&data.cidade&&data.deslocamento,
-    4:  !!data.fotoRosto && !!data.docTipo && !!data.selfieDoc,
-    5:  data.specs.length>=1,
-    6:  allFuncExpFilled,
-    7:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
-    8:  !!(data.perfilTrabalho?.corrido && data.perfilTrabalho?.diaADia && data.perfilTrabalho?.tarefa && data.perfilTrabalho?.diferente && data.perfilTrabalho?.imprevisto),
-    9:  true,
+    4:  true,                                                                                       // foto perfil opcional (pode enviar depois)
+    5:  true,                                                                                       // foto documento opcional (pode enviar depois)
+    6:  data.specs.length>=1,
+    7:  allFuncExpFilled,
+    8:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
+    9:  !!(data.perfilTrabalho?.corrido && data.perfilTrabalho?.diaADia && data.perfilTrabalho?.tarefa && data.perfilTrabalho?.diferente && data.perfilTrabalho?.imprevisto),
+    10: true,
   }[step];
 
   const handleNext = () => {
@@ -984,7 +983,7 @@ function WorkerRegister({ onDone, onBack }) {
   };
 
   const next = async () => {
-    if(step<9){ setStep(s=>s+1); return; }
+    if(step<10){ setStep(s=>s+1); return; }
     setSubmitting(true); setSubmitError("");
     try {
       const saved=await saveWorker(data);
@@ -1042,7 +1041,7 @@ function WorkerRegister({ onDone, onBack }) {
 
   const LABELS = [
     "Dados pessoais","Senha","Endereço e deslocamento",
-    "Foto e documento","Funções","Experiência e empresas",
+    "Foto de perfil","Foto do documento","Funções","Experiência e empresas",
     "Disponibilidade","Perfil de trabalho","Informações adicionais",
   ];
 
@@ -1050,18 +1049,19 @@ function WorkerRegister({ onDone, onBack }) {
     {label:"Informações pessoais", step:1},
     {label:"Senha",                step:2},
     {label:"Endereço",             step:3},
-    {label:"Foto e documento",     step:4},
-    {label:"Funções",              step:5},
-    {label:"Experiência",          step:6},
-    {label:"Disponibilidade",      step:7},
-    {label:"Perfil profissional",  step:8},
-    {label:"Confirmar cadastro",   step:9},
+    {label:"Foto de perfil",       step:4},
+    {label:"Foto do documento",    step:5},
+    {label:"Funções",              step:6},
+    {label:"Experiência",          step:7},
+    {label:"Disponibilidade",      step:8},
+    {label:"Perfil profissional",  step:9},
+    {label:"Confirmar cadastro",   step:10},
   ];
-  const progressPct = Math.round((step / 9) * 100);
+  const progressPct = Math.round((step / 10) * 100);
 
   return (
     <div style={{minHeight:"90vh",padding:"32px 20px 80px",background:C.bg}}>
-      <div style={{maxWidth: step===8 ? 1080 : 640, margin:"0 auto"}}>
+      <div style={{maxWidth: step===9 ? 1080 : 640, margin:"0 auto"}}>
 
         {/* Banner: cadastro em andamento detectado no localStorage */}
         {draftPrompt && (
@@ -1082,7 +1082,7 @@ function WorkerRegister({ onDone, onBack }) {
         </div>
         <div style={{...B,fontSize:12,color:C.muted,marginBottom:20}}>{LABELS[step-1]}</div>
 
-        <div className="vorker-step-wrap" style={step===8?{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}:{}}>
+        <div className="vorker-step-wrap" style={step===9?{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}:{}}>
         <div className="fu" key={step} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:16,padding:"32px 36px",boxShadow:"0 2px 16px rgba(0,0,0,.05)"}}>
 
           {/* ── STEP 1: Dados pessoais ── */}
@@ -1131,8 +1131,8 @@ function WorkerRegister({ onDone, onBack }) {
             <div style={{...B,fontSize:12,color:C.muted,marginTop:6}}>Você aceita vagas num raio de até {data.raioKm}km da sua casa</div>
           </>}
 
-          {/* ── STEP 5: Funções ── */}
-          {step===5&&<>
+          {/* ── STEP 6: Funções ── */}
+          {step===6&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Em quais funções você pode trabalhar?</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quanto mais completo seu perfil, mais convites você recebe.</p>
 
@@ -1178,8 +1178,8 @@ function WorkerRegister({ onDone, onBack }) {
             {data.specs.length>0?<Alert type="success">{data.specs.length} especialidade{data.specs.length>1?"s":""} selecionada{data.specs.length>1?"s":""}. No próximo passo você define o nível em cada uma.</Alert>:<Alert type="warning">Selecione ao menos uma especialidade.</Alert>}
           </>}
 
-          {/* ── STEP 6: Tempo de experiência + Empresas onde trabalhou ── */}
-          {step===6&&<>
+          {/* ── STEP 7: Tempo de experiência + Empresas onde trabalhou ── */}
+          {step===7&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Sua experiência</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quanto tempo você tem em cada função e onde já trabalhou.</p>
 
@@ -1267,8 +1267,8 @@ function WorkerRegister({ onDone, onBack }) {
             {!allFuncExpFilled&&<Alert type="warning">Informe o tempo de experiência em cada função.</Alert>}
           </>}
 
-          {/* ── STEP 7: Disponibilidade ── */}
-          {step===7&&<>
+          {/* ── STEP 8: Disponibilidade ── */}
+          {step===8&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Disponibilidade</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Marque os turnos que você quer trabalhar. Deixe em branco os turnos que não deseja trabalhar.</p>
 
@@ -1368,8 +1368,8 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
           </>}
 
-          {/* ── STEP 8: Perfil de trabalho ── */}
-          {step===8&&<>
+          {/* ── STEP 9: Perfil de trabalho ── */}
+          {step===9&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Seu perfil de trabalho</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:24,lineHeight:1.65}}>Responda de forma rápida e natural. Não existem respostas certas ou erradas — isso ajuda as empresas a te conhecerem melhor e fazerem as melhores escolhas.</p>
 
@@ -1450,8 +1450,8 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
           </>}
 
-          {/* ── STEP 9: Informações adicionais ── */}
-          {step===9&&<>
+          {/* ── STEP 10: Informações adicionais ── */}
+          {step===10&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Informações adicionais</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Última etapa antes de finalizar seu cadastro.</p>
 
@@ -1494,14 +1494,33 @@ function WorkerRegister({ onDone, onBack }) {
             <Alert type="info">Em breve: cadastro com Google ou Meta.</Alert>
           </>}
 
-          {/* ── STEP 4: Foto e documento ── */}
+          {/* ── STEP 4: Foto de perfil ── */}
           {step===4&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto e documento</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Envie sua foto de perfil e a selfie com documento. Usados para verificação de identidade.</p>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto de perfil</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Perfis com foto recebem muito mais convites. Use uma foto clara, de rosto.</p>
 
-            {/* Foto de perfil */}
-            <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:10}}>Foto de perfil</div>
-            <Alert type="info">Rosto visível · Sem óculos escuros · Fundo neutro · Boa iluminação</Alert>
+            {/* Mockup ilustrativo */}
+            <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:18,alignItems:"center",background:C.bg,border:`1px dashed ${C.border2}`,borderRadius:12,padding:18,marginBottom:18}} className="vorker-mockup">
+              <div style={{position:"relative",width:120,height:120,flexShrink:0}}>
+                <div style={{position:"absolute",inset:0,border:`2.5px dashed ${C.green}`,borderRadius:60}} />
+                <div style={{position:"absolute",inset:8,background:"linear-gradient(160deg,#DCFCE7,#BBF7D0)",borderRadius:52,display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden"}}>
+                  <svg viewBox="0 0 100 100" style={{width:"100%",height:"100%"}}>
+                    <circle cx="50" cy="36" r="18" fill="#16A34A" opacity=".75" />
+                    <path d="M18,100 Q50,58 82,100 Z" fill="#16A34A" opacity=".75" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:8}}>Como deve ficar</div>
+                {["Rosto centralizado e visível","Boa iluminação, fundo neutro","Sem óculos escuros nem boné","Foto recente — só você"].map(t=>(
+                  <div key={t} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <span style={{color:C.green,fontWeight:900,fontSize:12}}>✓</span>
+                    <span style={{...B,fontSize:12,color:C.sub}}>{t}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className={`upload-zone ${data.fotoRosto?"has":""}`} onClick={()=>photoRef.current?.click()}>
               {data.fotoRosto
                 ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
@@ -1513,10 +1532,25 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
             <input ref={photoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"fotoRosto");}} />
 
-            <Div />
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginTop:14}}>
+              <span style={{...B,fontSize:12,color:C.muted}}>💡 Você pode enviar depois pelo seu perfil.</span>
+              <button onClick={()=>setQrModalOpen(true)} className="vorker-mobile-btn" style={{...H,fontSize:13,fontWeight:700,color:C.green,background:"transparent",border:`1.5px solid ${C.green}`,borderRadius:8,padding:"8px 14px",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8}}>
+                <span>📱</span> Continuar no celular
+              </button>
+            </div>
+          </>}
 
-            {/* Tipo de documento + selfie com doc */}
-            <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Tipo de documento</div>
+          {/* ── STEP 5: Foto do documento ── */}
+          {step===5&&<>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto do documento</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Selfie segurando o seu documento, para verificar sua identidade.</p>
+
+            <div style={{background:C.greenBg,border:`1.5px solid ${C.greenBorder}`,borderRadius:10,padding:"12px 16px",marginBottom:18,display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:18}}>ℹ️</span>
+              <div style={{...B,fontSize:13,color:C.green,lineHeight:1.55}}><strong>Você só precisa enviar UM documento</strong> — RG <strong>ou</strong> CNH (não os dois). Escolha o que você tem em mãos.</div>
+            </div>
+
+            <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>Qual documento você vai usar?</div>
             <div style={{display:"flex",gap:12,marginBottom:18}}>
               {[["RG","🪪","Identidade"],["CNH","🚗","Habilitação"]].map(([t,ic,sub])=>(
                 <div key={t} onClick={()=>set("docTipo",t)} style={{flex:1,background:data.docTipo===t?C.greenBg:"#fff",borderRadius:12,padding:"16px 14px",border:`2px solid ${data.docTipo===t?C.green:C.border2}`,textAlign:"center",cursor:"pointer",transition:"all .15s"}}>
@@ -1528,13 +1562,37 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
 
             {data.docTipo&&<>
-              <Alert type="warning">
-                <strong>Como tirar a selfie com {data.docTipo}:</strong><br />
-                1. Segure o {data.docTipo} aberto na altura do rosto<br />
-                2. Rosto e documento visíveis na mesma foto<br />
-                3. Documento legível, sem reflexos · Fundo simples
-              </Alert>
-              <div className={`upload-zone ${data.selfieDoc?"has":""}`} onClick={()=>selfieRef.current?.click()} style={{marginBottom:16}}>
+              {/* Mockup ilustrativo do enquadramento da selfie com documento */}
+              <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:18,alignItems:"center",background:C.bg,border:`1px dashed ${C.border2}`,borderRadius:12,padding:18,marginBottom:14}} className="vorker-mockup">
+                <div style={{position:"relative",width:140,height:120,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {/* Cabeça */}
+                  <div style={{position:"absolute",left:8,top:14,width:54,height:54,borderRadius:27,background:"linear-gradient(160deg,#DCFCE7,#BBF7D0)",border:`2px solid ${C.green}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg viewBox="0 0 100 100" style={{width:36,height:36}}>
+                      <circle cx="50" cy="38" r="18" fill="#16A34A" opacity=".75" />
+                      <path d="M22,100 Q50,62 78,100 Z" fill="#16A34A" opacity=".75" />
+                    </svg>
+                  </div>
+                  {/* Documento */}
+                  <div style={{position:"absolute",right:0,top:34,width:84,height:54,borderRadius:7,background:"#fff",border:`2px solid ${C.green}`,padding:"6px 8px"}}>
+                    <div style={{width:18,height:22,background:"#CBD5E1",borderRadius:3,float:"left",marginRight:6}} />
+                    <div style={{height:5,background:"#CBD5E1",borderRadius:2,marginBottom:4,marginLeft:24}} />
+                    <div style={{height:4,background:"#E2E8F0",borderRadius:2,marginBottom:3,marginLeft:24,width:"60%"}} />
+                    <div style={{height:4,background:"#E2E8F0",borderRadius:2,marginBottom:3,width:"75%"}} />
+                    <div style={{height:4,background:"#E2E8F0",borderRadius:2,width:"45%"}} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:8}}>Como deve ficar</div>
+                  {["Rosto e documento na mesma foto","Documento aberto e legível","Sem reflexos sobre o documento","Fundo simples e boa iluminação"].map(t=>(
+                    <div key={t} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                      <span style={{color:C.green,fontWeight:900,fontSize:12}}>✓</span>
+                      <span style={{...B,fontSize:12,color:C.sub}}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className={`upload-zone ${data.selfieDoc?"has":""}`} onClick={()=>selfieRef.current?.click()} style={{marginBottom:8}}>
                 {data.selfieDoc
                   ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
                     <img src={data.selfieDoc} alt="" style={{maxWidth:220,maxHeight:165,borderRadius:10,objectFit:"cover",border:`2px solid ${C.green}`}} />
@@ -1546,11 +1604,18 @@ function WorkerRegister({ onDone, onBack }) {
               <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"selfieDoc");}} />
               <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:6}}>🔒 Visível apenas à equipe VORKER.</div>
             </>}
+
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginTop:14}}>
+              <span style={{...B,fontSize:12,color:C.muted}}>💡 Você pode enviar depois pelo seu perfil.</span>
+              <button onClick={()=>setQrModalOpen(true)} className="vorker-mobile-btn" style={{...H,fontSize:13,fontWeight:700,color:C.green,background:"transparent",border:`1.5px solid ${C.green}`,borderRadius:8,padding:"8px 14px",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8}}>
+                <span>📱</span> Continuar no celular
+              </button>
+            </div>
           </>}
         </div>
 
-        {/* Sidebar progresso (visível apenas no step 8 — desktop ao lado, mobile abaixo) */}
-        {step===8 && (
+        {/* Sidebar progresso (visível apenas no step 9 — desktop ao lado, mobile abaixo) */}
+        {step===9 && (
           <aside className="vorker-sidebar" style={{display:"flex",flexDirection:"column",gap:14,position:"sticky",top:20}}>
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"22px 22px",boxShadow:"0 2px 12px rgba(0,0,0,.04)"}}>
               <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>Seu progresso</div>
@@ -1604,13 +1669,33 @@ function WorkerRegister({ onDone, onBack }) {
               <span style={{borderBottom:`1px dashed ${C.muted}`}}>Salvar e continuar depois</span>
             </span>
           </div>
-          <Btn label={step===9?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={handleNext} loading={submitting} />
+          <Btn label={step===10?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={handleNext} loading={submitting} />
         </div>
 
         {/* Toast: cadastro salvo */}
         {savedToast && (
           <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.green,color:"#fff",padding:"12px 22px",borderRadius:10,boxShadow:"0 12px 32px rgba(0,0,0,.25)",...H,fontSize:14,fontWeight:700,zIndex:9999,display:"flex",alignItems:"center",gap:10}}>
             <span>✓</span> Cadastro salvo. Você pode voltar a qualquer momento neste navegador.
+          </div>
+        )}
+
+        {/* Modal: continuar no celular (QR code) */}
+        {qrModalOpen && (
+          <div onClick={()=>setQrModalOpen(false)} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.6)",backdropFilter:"blur(4px)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,maxWidth:420,width:"100%",padding:"28px 28px 24px",boxShadow:"0 24px 60px rgba(0,0,0,.3)",position:"relative"}}>
+              <button onClick={()=>setQrModalOpen(false)} style={{position:"absolute",top:14,right:14,width:32,height:32,borderRadius:16,border:"none",background:C.bg,cursor:"pointer",...H,fontSize:18,color:C.muted}}>×</button>
+              <div style={{...H,fontSize:18,fontWeight:800,color:C.navy,marginBottom:6}}>📱 Continuar no celular</div>
+              <p style={{...B,fontSize:13,color:C.sub,marginBottom:18,lineHeight:1.5}}>Escaneie o QR code com a câmera do seu celular para abrir esta página e enviar a foto pelo seu dispositivo móvel.</p>
+              <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent("https://giobbis.vercel.app")}&bgcolor=ffffff&color=0A1628&qzone=2`}
+                  alt="QR code para celular"
+                  style={{width:200,height:200,borderRadius:10,border:`1px solid ${C.border}`}} />
+              </div>
+              <div style={{...B,fontSize:12,fontWeight:600,color:C.navy,textAlign:"center",marginBottom:14,padding:"8px 12px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`,fontFamily:"monospace"}}>giobbis.vercel.app</div>
+              <div style={{...B,fontSize:11,color:C.muted,lineHeight:1.5,padding:"10px 12px",background:C.amberBg||"#FEF3C7",border:`1px solid ${C.amberBorder||"#FDE68A"}`,borderRadius:8}}>
+                <strong style={{color:C.amber||"#92400E"}}>Em breve:</strong> continuação automática (você abre no celular e o cadastro continua de onde parou). Por enquanto, ao abrir no celular, use o "Salvar e continuar depois" no mesmo navegador, ou refaça o cadastro.
+              </div>
+            </div>
           </div>
         )}
       </div>
