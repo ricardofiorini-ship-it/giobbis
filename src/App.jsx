@@ -210,6 +210,24 @@ const LEVELS = [
 const EXP_TIMES = [
   "Menos de 6 meses","6 meses a 1 ano","1 a 3 anos","3 a 5 anos","Mais de 5 anos"
 ];
+const EMPRESAS_PRESET = [
+  {id:"assai",       label:"Assaí"},
+  {id:"carrefour",   label:"Carrefour"},
+  {id:"extra",       label:"Extra"},
+  {id:"paodeacucar", label:"Pão de Açúcar"},
+  {id:"atacadao",    label:"Atacadão"},
+  {id:"big",         label:"BIG"},
+  {id:"sams",        label:"Sam's Club"},
+  {id:"makro",       label:"Makro"},
+  {id:"tenda",       label:"Tenda Atacado"},
+  {id:"dia",         label:"Dia"},
+  {id:"mambo",       label:"Mambo"},
+  {id:"giga",        label:"Giga Atacado"},
+  {id:"rappi",       label:"Rappi"},
+  {id:"ifood",       label:"iFood"},
+  {id:"mercadolivre",label:"Mercado Livre"},
+  {id:"magalu",      label:"Magalu"},
+];
 const DAYS   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
 const SHIFTS = [
   {id:"manha",    label:"Manhã",     color:"#F59E0B"},
@@ -811,10 +829,12 @@ function WorkerRegister({ onDone, onBack }) {
     // 2 — Endereço + deslocamento
     cep:"", rua:"", numero:"", complemento:"", bairro:"", cidade:"", estado:"",
     raioKm: 10, deslocamento:"",
-    // 3 — Especialidades
+    // 3 — Funções (especialidades)
     specs:[], specCustom:"",
-    // 4 — Experiência por função (objeto: { [specId]: { nivel, jaSuper, ondeJaTrabalhou:[], ondeOutroNome, app, sozinho, pressao, pontualidade } })
-    funcExp:{},
+    // 4 — Tempo de experiência por função + empresas onde trabalhou
+    funcExp:{},                    // { [specId]: { tempo: "1 a 3 anos" } }
+    empresasSelected:[],           // IDs de redes preset
+    empresasCustom:[],             // strings de nomes adicionados livremente
     // (legado) Nível por especialidade — mantido pra compatibilidade caso ainda use em algum lugar
     specLevels:{},
     // 5 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... })
@@ -860,12 +880,7 @@ function WorkerRegister({ onDone, onBack }) {
   const allSpecs = [...SPECS, ...(data.specCustom?[{id:"custom",icon:"⭐",label:data.specCustom}]:[])];
   const selectedSpecs = allSpecs.filter(s=>data.specs.includes(s.id));
   const allLevelsFilled = selectedSpecs.every(s=>data.specLevels[s.id]?.nivel>0&&data.specLevels[s.id]?.experiencia);
-  const isFuncExpFilled = (id) => {
-    const e=data.funcExp?.[id]; if(!e) return false;
-    if(!e.nivel||!e.jaSuper||!e.app||!e.sozinho||!e.pressao||!e.pontualidade) return false;
-    if(e.jaSuper==="sim" && (!(e.ondeJaTrabalhou?.length>0) && !e.ondeOutroNome)) return false;
-    return true;
-  };
+  const isFuncExpFilled = (id) => !!data.funcExp?.[id]?.tempo;
   const allFuncExpFilled = selectedSpecs.every(s=>isFuncExpFilled(s.id));
 
   const getMissingFields = () => {
@@ -936,7 +951,7 @@ function WorkerRegister({ onDone, onBack }) {
 
   const LABELS = [
     "Dados pessoais","Endereço e deslocamento","Funções",
-    "Experiência por função","Disponibilidade",
+    "Experiência e empresas","Disponibilidade",
     "Perfil profissional","Informações adicionais","Foto de perfil","Documento e conta",
   ];
 
@@ -1044,124 +1059,93 @@ function WorkerRegister({ onDone, onBack }) {
             {data.specs.length>0?<Alert type="success">{data.specs.length} especialidade{data.specs.length>1?"s":""} selecionada{data.specs.length>1?"s":""}. No próximo passo você define o nível em cada uma.</Alert>:<Alert type="warning">Selecione ao menos uma especialidade.</Alert>}
           </>}
 
-          {/* ── STEP 4: Experiência por função ── */}
+          {/* ── STEP 4: Tempo de experiência + Empresas onde trabalhou ── */}
           {step===4&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Experiência por função</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Conte sua experiência para aumentar suas chances de ser escolhido.</p>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Sua experiência</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Quanto tempo você tem em cada função e onde já trabalhou.</p>
 
+            {/* Bloco A — Tempo de experiência por função */}
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:4}}>Tempo de experiência</div>
+            <p style={{...B,fontSize:13,color:C.sub,marginBottom:14,lineHeight:1.55}}>Para cada função selecionada, escolha quanto tempo de experiência você tem.</p>
             {selectedSpecs.map(s=>{
-              const exp = data.funcExp?.[s.id] || {};
-              const isOpen = openFunc === s.id;
-              const filled = isFuncExpFilled(s.id);
-              const Q = ({ label, options, valueKey }) => (
-                <div style={{marginBottom:18}}>
-                  <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,marginBottom:10}}>{label}</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {options.map(opt=>{
-                      const on = exp[valueKey] === opt.value;
+              const tempo = data.funcExp?.[s.id]?.tempo || "";
+              return (
+                <div key={s.id} style={{border:`1px solid ${tempo?C.greenBorder:C.border}`,background:tempo?C.greenBg+"40":"#fff",borderRadius:10,padding:"14px 16px",marginBottom:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                    <span style={{fontSize:20}}>{s.icon}</span>
+                    <span style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{s.label}</span>
+                  </div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {EXP_TIMES.map(t=>{
+                      const on=tempo===t;
                       return (
-                        <div key={opt.value} onClick={()=>setFuncExp(s.id, valueKey, opt.value)}
-                          style={{padding:"12px 14px",borderRadius:9,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"transparent",transition:"all .15s"}}>
-                          <div style={{...B,fontSize:13,fontWeight:on?700:600,color:on?C.green:C.text,lineHeight:1.3}}>{opt.label}</div>
-                          {opt.sub && <div style={{...B,fontSize:11,color:on?C.green:C.muted,marginTop:2}}>{opt.sub}</div>}
+                        <div key={t} onClick={()=>setFuncExp(s.id,"tempo",t)}
+                          style={{padding:"7px 12px",borderRadius:7,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"#fff",...B,fontSize:12,fontWeight:on?700:500,color:on?C.green:C.sub,transition:"all .15s"}}>
+                          {t}
                         </div>
                       );
                     })}
                   </div>
                 </div>
               );
-              return (
-                <div key={s.id} style={{border:`1px solid ${filled?C.greenBorder:C.border}`,borderRadius:12,marginBottom:12,overflow:"hidden",background:filled?C.greenBg+"40":"#fff"}}>
-                  <div onClick={()=>setOpenFunc(isOpen?null:s.id)}
-                    style={{padding:"14px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,userSelect:"none"}}>
-                    <span style={{fontSize:22}}>{s.icon}</span>
-                    <div style={{flex:1}}>
-                      <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{s.label}</div>
-                      <div style={{...B,fontSize:11,color:filled?C.green:C.muted,marginTop:2}}>{filled?"✓ Preenchido":"Toque para responder"}</div>
-                    </div>
-                    <span style={{...B,fontSize:14,color:C.muted,transform:isOpen?"rotate(180deg)":"none",transition:"transform .15s"}}>▼</span>
-                  </div>
-
-                  {isOpen && (
-                    <div style={{padding:"4px 18px 18px",borderTop:`1px solid ${C.border}`}}>
-                      <p style={{...B,fontSize:13,color:C.sub,marginTop:12,marginBottom:18,lineHeight:1.55}}>Conte sua experiência para aumentar suas chances de ser escolhido.</p>
-
-                      <Q label="Qual seu nível de experiência?" valueKey="nivel" options={[
-                        {value:"iniciante",     label:"Iniciante",     sub:"Nunca trabalhei, mas quero aprender"},
-                        {value:"intermediario", label:"Intermediário", sub:"Já fiz, mas preciso de orientação"},
-                        {value:"avancado",      label:"Avançado",      sub:"Faço sozinho, sem supervisão"},
-                      ]} />
-
-                      <div style={{marginBottom:18}}>
-                        <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,marginBottom:10}}>Você já trabalhou em supermercado?</div>
-                        <div style={{display:"flex",gap:8}}>
-                          {[{v:"sim",l:"Sim"},{v:"nao",l:"Não"}].map(({v,l})=>{
-                            const on=exp.jaSuper===v;
-                            return (
-                              <div key={v} onClick={()=>setFuncExp(s.id,"jaSuper",v)}
-                                style={{flex:1,padding:"12px 16px",borderRadius:9,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"transparent",textAlign:"center",...B,fontSize:13,fontWeight:on?700:500,color:on?C.green:C.sub,transition:"all .15s"}}>
-                                {l}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {exp.jaSuper==="sim" && (
-                          <div style={{marginTop:14,padding:14,background:C.bg,borderRadius:10,border:`1px solid ${C.border}`}}>
-                            <div style={{...B,fontSize:12,fontWeight:600,color:C.navy,marginBottom:8}}>Onde você já trabalhou?</div>
-                            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
-                              {[
-                                {v:"assai",l:"Assaí"},{v:"carrefour",l:"Carrefour"},{v:"extra",l:"Extra"},
-                                {v:"paodeacucar",l:"Pão de Açúcar"},{v:"atacadao",l:"Atacadão"},
-                                {v:"rappi-ifood",l:"Rappi / iFood"},{v:"outros",l:"Outros"},
-                              ].map(({v,l})=>{
-                                const on=(exp.ondeJaTrabalhou||[]).includes(v);
-                                return (
-                                  <div key={v} onClick={()=>toggleFuncExpArr(s.id,"ondeJaTrabalhou",v)}
-                                    style={{padding:"7px 12px",borderRadius:7,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"#fff",...B,fontSize:12,fontWeight:on?700:500,color:on?C.green:C.sub,transition:"all .15s"}}>
-                                    {l}{on&&" ✓"}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <input placeholder="Digite o nome da empresa (opcional)"
-                              value={exp.ondeOutroNome||""}
-                              onChange={e=>setFuncExp(s.id,"ondeOutroNome",e.target.value)}
-                              style={{width:"100%",padding:"9px 12px",borderRadius:7,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:12,color:C.text,outline:"none"}} />
-                          </div>
-                        )}
-                      </div>
-
-                      <Q label="Você já usou app ou coletor para trabalhar?" valueKey="app" options={[
-                        {value:"frequente", label:"Sim, com frequência"},
-                        {value:"algumas",   label:"Já usei algumas vezes"},
-                        {value:"nunca",     label:"Nunca usei"},
-                      ]} />
-
-                      <Q label="Você consegue trabalhar sozinho sem supervisão?" valueKey="sozinho" options={[
-                        {value:"agil",      label:"Sim, com agilidade"},
-                        {value:"devagar",   label:"Sim, mas mais devagar"},
-                        {value:"naoainda",  label:"Ainda não"},
-                      ]} />
-
-                      <Q label="Você já trabalhou com loja cheia ou sob pressão?" valueKey="pressao" options={[
-                        {value:"tranquilo",  label:"Sim, tranquilo"},
-                        {value:"dificuldade",label:"Sim, mas com dificuldade"},
-                        {value:"nao",        label:"Não"},
-                      ]} />
-
-                      <Q label="Você costuma cumprir horários com pontualidade?" valueKey="pontualidade" options={[
-                        {value:"antes",  label:"Sempre chego antes"},
-                        {value:"horario",label:"Chego no horário"},
-                        {value:"atraso", label:"Às vezes atraso"},
-                      ]} />
-                    </div>
-                  )}
-                </div>
-              );
             })}
 
-            {!allFuncExpFilled&&<Alert type="warning">Responda todas as perguntas de experiência para cada função selecionada.</Alert>}
+            <Div />
+
+            {/* Bloco B — Empresas onde trabalhou */}
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:4}}>Empresas onde você já trabalhou</div>
+            <p style={{...B,fontSize:13,color:C.sub,marginBottom:14,lineHeight:1.55}}>Selecione todas em que tem experiência. Não encontrou? Adicione abaixo.</p>
+
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
+              {EMPRESAS_PRESET.map(e=>{
+                const on=data.empresasSelected.includes(e.id);
+                return (
+                  <div key={e.id} onClick={()=>toggleArr("empresasSelected",e.id)}
+                    style={{padding:"9px 14px",borderRadius:8,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"#fff",...B,fontSize:13,fontWeight:on?700:500,color:on?C.green:C.sub,transition:"all .15s",userSelect:"none"}}>
+                    {e.label}{on&&" ✓"}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Customs já adicionados */}
+            {data.empresasCustom.length>0&&(
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
+                {data.empresasCustom.map((nome,idx)=>(
+                  <div key={idx} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:8,border:`1.5px solid ${C.green}`,background:C.greenBg,...B,fontSize:13,fontWeight:600,color:C.green}}>
+                    <span>⭐ {nome}</span>
+                    <span onClick={()=>setData(d=>({...d,empresasCustom:d.empresasCustom.filter((_,i)=>i!==idx)}))}
+                      style={{color:C.red,fontWeight:700,fontSize:14,cursor:"pointer",lineHeight:1}}>×</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Adicionar empresa custom */}
+            <div style={{...B,fontSize:12,fontWeight:600,color:C.sub,marginBottom:8}}>Adicionar outra empresa:</div>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <input placeholder="Ex: Mercadinho do Bairro, Hortifruti Bom Preço..."
+                id="custom-empresa-input"
+                style={{flex:1,padding:"10px 14px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,color:C.text,outline:"none"}}
+                onKeyDown={e=>{
+                  if(e.key==="Enter"&&e.target.value.trim()){
+                    const nome=e.target.value.trim();
+                    if(!data.empresasCustom.includes(nome)) setData(d=>({...d,empresasCustom:[...d.empresasCustom,nome]}));
+                    e.target.value="";
+                  }
+                }} />
+              <button onClick={()=>{
+                const el=document.getElementById("custom-empresa-input");
+                if(el&&el.value.trim()){
+                  const nome=el.value.trim();
+                  if(!data.empresasCustom.includes(nome)) setData(d=>({...d,empresasCustom:[...d.empresasCustom,nome]}));
+                  el.value="";
+                }
+              }} style={{padding:"10px 16px",borderRadius:8,background:C.green,border:"none",color:"#fff",...B,fontSize:13,fontWeight:600,cursor:"pointer"}}>+ Adicionar</button>
+            </div>
+            <p style={{...B,fontSize:11,color:C.muted,marginBottom:18}}>Pode adicionar quantas empresas quiser. Pressione Enter ou clique em "+ Adicionar".</p>
+
+            {!allFuncExpFilled&&<Alert type="warning">Informe o tempo de experiência em cada função.</Alert>}
           </>}
 
           {/* ── STEP 5: Disponibilidade ── */}
