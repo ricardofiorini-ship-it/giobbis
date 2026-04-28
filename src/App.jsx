@@ -796,6 +796,9 @@ function Landing({ onNav }) {
           .vorker-dual{grid-template-columns:1fr!important;gap:16px!important;margin-top:28px!important}
           .vorker-dual>div{padding:26px 22px!important}
           .vorker-flex-grid{grid-template-columns:1fr!important}
+          .vorker-q-grid{grid-template-columns:1fr!important}
+          .vorker-step-wrap{grid-template-columns:1fr!important;gap:14px!important}
+          .vorker-sidebar{position:static!important}
           .vorker-day-full{display:none!important}
           .vorker-day-short{display:inline!important}
           .vorker-disp-table th{min-width:auto!important;padding:8px 2px!important}
@@ -849,7 +852,9 @@ function WorkerRegister({ onDone, onBack }) {
     // 5 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... }) + flexibilidade
     disponibilidade:{},
     flexibilidade:"",  // "mesmo-dia" | "algumas-horas" | "agendar"
-    // 6 — Perfil comportamental
+    // 6 — Perfil de trabalho (5 perguntas comportamentais)
+    perfilTrabalho:{ corrido:"", diaADia:"", tarefa:"", diferente:"", imprevisto:"" },
+    // (legado) campos antigos do step 6 — mantidos pra compatibilidade
     trabalhoEquipe:false, atendCliente:false, tipoTrabalho:"",
     // 7 — Documentação
     temPix:false, chavePix:"", pcd:false, pcdTipo:"",
@@ -871,6 +876,7 @@ function WorkerRegister({ onDone, onBack }) {
     return {...d,funcExp:{...d.funcExp,[specId]:{...(d.funcExp?.[specId]||{}),[key]:next}}};
   });
   const [openFunc, setOpenFunc] = useState(null);
+  const setPerfil = (key, val) => setData(d=>({...d,perfilTrabalho:{...d.perfilTrabalho,[key]:val}}));
 
   const [cpfChecking, setCpfChecking] = useState(false);
   const [fieldErrors, setFieldErrors] = useState([]);
@@ -962,18 +968,30 @@ function WorkerRegister({ onDone, onBack }) {
   const LABELS = [
     "Dados pessoais","Endereço e deslocamento","Funções",
     "Experiência e empresas","Disponibilidade",
-    "Perfil profissional","Informações adicionais","Foto de perfil","Documento e conta",
+    "Perfil de trabalho","Informações adicionais","Foto de perfil","Documento e conta",
   ];
+
+  const CHECKLIST = [
+    {label:"Informações pessoais", step:1},
+    {label:"Endereço",             step:2},
+    {label:"Funções",              step:3},
+    {label:"Experiência",          step:4},
+    {label:"Disponibilidade",      step:5},
+    {label:"Perfil profissional",  step:6},
+    {label:"Confirmar cadastro",   step:9},
+  ];
+  const progressPct = Math.round((step / 9) * 100);
 
   return (
     <div style={{minHeight:"90vh",padding:"32px 20px 80px",background:C.bg}}>
-      <div style={{maxWidth:640,margin:"0 auto"}}>
+      <div style={{maxWidth: step===6 ? 1080 : 640, margin:"0 auto"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
           <button onClick={back} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer"}}>← {step>1?"Voltar":"Cancelar"}</button>
           <Prog step={step} total={9} />
         </div>
         <div style={{...B,fontSize:12,color:C.muted,marginBottom:20}}>{LABELS[step-1]}</div>
 
+        <div className="vorker-step-wrap" style={step===6?{display:"grid",gridTemplateColumns:"minmax(0,1fr) 320px",gap:20,alignItems:"start"}:{}}>
         <div className="fu" key={step} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:16,padding:"32px 36px",boxShadow:"0 2px 16px rgba(0,0,0,.05)"}}>
 
           {/* ── STEP 1: Dados pessoais ── */}
@@ -1259,39 +1277,85 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
           </>}
 
-          {/* ── STEP 6: Perfil profissional ── */}
+          {/* ── STEP 6: Perfil de trabalho ── */}
           {step===6&&<>
-            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Perfil profissional</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Três perguntas rápidas que ajudam as empresas a entender seu perfil de trabalho.</p>
+            <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Seu perfil de trabalho</h2>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:24,lineHeight:1.65}}>Responda de forma rápida e natural. Não existem respostas certas ou erradas — isso ajuda as empresas a te conhecerem melhor e fazerem as melhores escolhas.</p>
 
-            <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,marginBottom:12}}>Você já trabalhou em equipe grande (mais de 10 pessoas)?</div>
-            <div style={{display:"flex",gap:10,marginBottom:24}}>
-              {[{v:true,l:"Sim, tenho experiência"},{v:false,l:"Não ainda"}].map(({v,l})=>(
-                <div key={String(v)} onClick={()=>set("trabalhoEquipe",v)}
-                  style={{flex:1,padding:"12px 16px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${data.trabalhoEquipe===v?C.green:C.border2}`,background:data.trabalhoEquipe===v?C.greenBg:"transparent",textAlign:"center",...B,fontSize:13,fontWeight:data.trabalhoEquipe===v?600:400,color:data.trabalhoEquipe===v?C.green:C.sub,transition:"all .15s"}}>
-                  {l}
+            {[
+              {
+                num:1, key:"corrido",
+                title:"Quando o trabalho está muito corrido, você...",
+                opts:[
+                  {v:"manter",     icon:"⚡", title:"Mantém a velocidade",  desc:"fazendo o melhor possível"},
+                  {v:"equilibrar", icon:"⚖️", title:"Equilibra velocidade", desc:"e atenção"},
+                  {v:"diminuir",   icon:"🐢", title:"Diminui o ritmo",      desc:"para garantir qualidade"},
+                ],
+              },
+              {
+                num:2, key:"diaADia",
+                title:"No dia a dia, o que te identifica mais?",
+                opts:[
+                  {v:"praticas",  icon:"🔧", title:"Tarefas práticas",      desc:"e operacionais"},
+                  {v:"equilibrio",icon:"🎯", title:"Equilíbrio rápido",     desc:"e organização"},
+                  {v:"cuidado",   icon:"🧠", title:"Pensar com cuidado",    desc:"em cada etapa"},
+                ],
+              },
+              {
+                num:3, key:"tarefa",
+                title:"Quando recebe uma tarefa nova, você costuma...",
+                opts:[
+                  {v:"iniciativa", icon:"🚀", title:"Tomar iniciativa",      desc:"sozinho mesmo"},
+                  {v:"perguntar",  icon:"💬", title:"Perguntar",             desc:"se necessário"},
+                  {v:"orientacao", icon:"📋", title:"Pedir orientação",      desc:"antes de começar"},
+                ],
+              },
+              {
+                num:4, key:"diferente",
+                title:"Se algo sai diferente do esperado no trabalho...",
+                opts:[
+                  {v:"ajusta",   icon:"🔄", title:"Me ajusto",            desc:"e sigo em frente"},
+                  {v:"entender", icon:"🔍", title:"Tento entender",       desc:"o que aconteceu"},
+                  {v:"avisar",   icon:"📣", title:"Prefiro avisar",       desc:"alguém antes"},
+                ],
+              },
+              {
+                num:5, key:"imprevisto",
+                title:"Se você marcou um turno e surge um imprevisto pessoal...",
+                opts:[
+                  {v:"resolver", icon:"💪", title:"Tento resolver",        desc:"e cumprir o que assumi"},
+                  {v:"aviso",    icon:"⏰", title:"Aviso o quanto antes",  desc:"para não atrapalhar"},
+                  {v:"cancelar", icon:"❌", title:"Prefiro cancelar",      desc:"se não conseguir"},
+                ],
+              },
+            ].map(q=>(
+              <div key={q.key} style={{marginBottom:24}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                  <div style={{width:26,height:26,borderRadius:13,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <span style={{...H,fontSize:13,fontWeight:800,color:"#fff"}}>{q.num}</span>
+                  </div>
+                  <h3 style={{...H,fontSize:15,fontWeight:800,color:C.navy,margin:0,lineHeight:1.3}}>{q.title}</h3>
                 </div>
-              ))}
-            </div>
+                <div className="vorker-q-grid" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+                  {q.opts.map(o=>{
+                    const on = data.perfilTrabalho?.[q.key] === o.v;
+                    return (
+                      <div key={o.v} onClick={()=>setPerfil(q.key, o.v)}
+                        style={{position:"relative",padding:"16px 14px",borderRadius:12,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"#fff",transition:"all .15s",userSelect:"none"}}>
+                        {on && <div style={{position:"absolute",top:10,right:10,width:14,height:14,borderRadius:7,background:C.green,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:5,height:5,borderRadius:3,background:"#fff"}} /></div>}
+                        <div style={{width:34,height:34,borderRadius:9,background:on?"#DCFCE7":"#F1F5F9",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,fontSize:17}}>{o.icon}</div>
+                        <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginBottom:3,lineHeight:1.3}}>{o.title}</div>
+                        <div style={{...B,fontSize:11.5,color:C.sub,lineHeight:1.4}}>{o.desc}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
 
-            <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,marginBottom:12}}>Tem experiência com atendimento ao cliente?</div>
-            <div style={{display:"flex",gap:10,marginBottom:24}}>
-              {[{v:true,l:"Sim, tenho experiência"},{v:false,l:"Não ainda"}].map(({v,l})=>(
-                <div key={String(v)} onClick={()=>set("atendCliente",v)}
-                  style={{flex:1,padding:"12px 16px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${data.atendCliente===v?C.green:C.border2}`,background:data.atendCliente===v?C.greenBg:"transparent",textAlign:"center",...B,fontSize:13,fontWeight:data.atendCliente===v?600:400,color:data.atendCliente===v?C.green:C.sub,transition:"all .15s"}}>
-                  {l}
-                </div>
-              ))}
-            </div>
-
-            <div style={{...B,fontSize:13,fontWeight:600,color:C.navy,marginBottom:12}}>Você prefere trabalho:</div>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              {["Físico (movimentação, estoque)","Operacional (caixa, reposição)","Ambos"].map(t=>(
-                <div key={t} onClick={()=>set("tipoTrabalho",t)}
-                  style={{flex:1,minWidth:140,padding:"12px 16px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${data.tipoTrabalho===t?C.green:C.border2}`,background:data.tipoTrabalho===t?C.greenBg:"transparent",textAlign:"center",...B,fontSize:13,fontWeight:data.tipoTrabalho===t?600:400,color:data.tipoTrabalho===t?C.green:C.sub,transition:"all .15s"}}>
-                  {t}
-                </div>
-              ))}
+            <div style={{marginTop:8,padding:"12px 16px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:16}}>💚</span>
+              <span style={{...B,fontSize:12.5,color:C.green,lineHeight:1.5}}>Respostas sinceras aumentam suas chances de receber convites das empresas certas.</span>
             </div>
           </>}
 
@@ -1377,6 +1441,46 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
             {submitError&&<Alert type="error">{submitError}</Alert>}
           </>}
+        </div>
+
+        {/* Sidebar progresso (visível apenas no step 6 — desktop ao lado, mobile abaixo) */}
+        {step===6 && (
+          <aside className="vorker-sidebar" style={{display:"flex",flexDirection:"column",gap:14,position:"sticky",top:20}}>
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"22px 22px",boxShadow:"0 2px 12px rgba(0,0,0,.04)"}}>
+              <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>Seu progresso</div>
+              <p style={{...B,fontSize:12,color:C.sub,marginBottom:16,lineHeight:1.5}}>Perfis completos têm até 3x mais chances de receber convites.</p>
+
+              <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:8}}>
+                <span style={{...H,fontSize:32,fontWeight:900,color:C.green,letterSpacing:-1,lineHeight:1}}>{progressPct}%</span>
+                <span style={{...B,fontSize:12,color:C.sub}}>completo</span>
+              </div>
+              <div style={{height:6,borderRadius:3,background:"#E2E8F0",overflow:"hidden",marginBottom:18}}>
+                <div style={{height:"100%",width:`${progressPct}%`,background:C.green,borderRadius:3,transition:"width .3s"}} />
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {CHECKLIST.map(it=>{
+                  const done = step > it.step;
+                  const current = step === it.step;
+                  return (
+                    <div key={it.label} style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:18,height:18,borderRadius:9,background:done?C.green:current?C.greenBg:"#F1F5F9",border:`1.5px solid ${done?C.green:current?C.green:"#E2E8F0"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        {done && <span style={{fontSize:10,color:"#fff",fontWeight:900,lineHeight:1}}>✓</span>}
+                        {current && <div style={{width:6,height:6,borderRadius:3,background:C.green}} />}
+                      </div>
+                      <span style={{...B,fontSize:12.5,fontWeight:current?700:500,color:done?C.navy:current?C.green:C.muted}}>{it.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:14,padding:"18px 18px"}}>
+              <div style={{...H,fontSize:13,fontWeight:800,color:C.green,marginBottom:6}}>💡 Sabia que?</div>
+              <p style={{...B,fontSize:12.5,color:C.text,lineHeight:1.55}}>Vorkers com perfil completo recebem em média <strong style={{color:C.green,fontWeight:700}}>5 convites por semana</strong>.</p>
+            </div>
+          </aside>
+        )}
         </div>
 
         {fieldErrors.length>0&&(
