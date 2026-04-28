@@ -309,13 +309,20 @@ const saveWorker = async (data) => {
     bairro:data.bairro, cidade:data.cidade, estado:data.estado,
     raio_km:data.raioKm, deslocamento:data.deslocamento,
     specs:data.specs,
-    spec_levels:specLevelsFinal,
+    spec_levels:specLevelsFinal,                      // legado (mantido pra compat)
+    func_exp: data.funcExp || {},                     // novo: { [specId]: { tempo } }
+    empresas_selected: data.empresasSelected || [],   // novo: IDs preset
+    empresas_custom:   data.empresasCustom   || [],   // novo: nomes custom
     dias: Object.keys(data.disponibilidade).filter(d=>data.disponibilidade[d].length>0),
     turnos: [...new Set(Object.values(data.disponibilidade).flat())],
     disponibilidade: data.disponibilidade,
+    flexibilidade: data.flexibilidade || null,        // novo
+    perfil_trabalho: data.perfilTrabalho || null,     // novo: { corrido, diaADia, tarefa, diferente, imprevisto }
     trabalho_equipe:data.trabalhoEquipe, atend_cliente:data.atendCliente, tipo_trabalho:data.tipoTrabalho,
     pcd:data.pcd, pcd_tipo:data.pcdTipo,
     doc_tipo:data.docTipo, email:data.email, status:"pending",
+    foto_rosto: data.fotoRosto || null,               // novo: data URL base64
+    selfie_doc: data.selfieDoc || null,               // novo: data URL base64
   }).select().single();
   if(error) throw error;
   return worker;
@@ -801,6 +808,7 @@ function Landing({ onNav }) {
           .vorker-sidebar{position:static!important}
           .vorker-mobile-btn{display:none!important}
           .vorker-mockup{padding:14px!important;gap:12px!important}
+          .vorker-perfil-grid{grid-template-columns:1fr!important}
           .vorker-day-full{display:none!important}
           .vorker-day-short{display:inline!important}
           .vorker-disp-table th{min-width:auto!important;padding:8px 2px!important}
@@ -2559,6 +2567,40 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
   const TABS = [{id:"talent",icon:"🔍",label:"Talent Browser"},{id:"profile",icon:"🏢",label:"Meu Perfil"}];
 
+  // Map de labels do perfil comportamental (vinculado ao step 9 do cadastro)
+  const PERFIL_LABELS = {
+    corrido: { title:"Quando o trabalho está corrido", opts:{
+      manter:"Mantém a velocidade fazendo o melhor possível",
+      equilibrar:"Equilibra velocidade e atenção",
+      diminuir:"Diminui o ritmo para garantir qualidade",
+    }},
+    diaADia: { title:"No dia a dia se identifica com", opts:{
+      praticas:"Tarefas práticas e operacionais",
+      equilibrio:"Equilíbrio rápido e organização",
+      cuidado:"Pensar com cuidado em cada etapa",
+    }},
+    tarefa: { title:"Ao receber uma tarefa nova", opts:{
+      iniciativa:"Toma iniciativa sozinho",
+      perguntar:"Pergunta se necessário",
+      orientacao:"Pede orientação antes de começar",
+    }},
+    diferente: { title:"Se algo sai diferente do esperado", opts:{
+      ajusta:"Ajusta e segue em frente",
+      entender:"Tenta entender o que aconteceu",
+      avisar:"Prefere avisar alguém antes",
+    }},
+    imprevisto: { title:"Se surge imprevisto pessoal num turno", opts:{
+      resolver:"Tenta resolver e cumprir o que assumiu",
+      aviso:"Avisa o quanto antes",
+      cancelar:"Prefere cancelar",
+    }},
+  };
+  const FLEX_LABEL = {
+    "mesmo-dia": { icon:"⚡", label:"Aceita aviso curto",      desc:"Pode ir no mesmo dia" },
+    "algumas-horas": { icon:"🕐", label:"Algumas horas",        desc:"Precisa de algumas horas" },
+    "agendar":   { icon:"📅", label:"Prefere agendar",          desc:"1 dia ou mais antes" },
+  };
+
   // Worker detail modal
   if(selWorker) return (
     <div style={{minHeight:"90vh",background:C.bg}}>
@@ -2570,10 +2612,15 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
             ← Voltar ao Talent Browser
           </button>
           <div style={{display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
-            {/* Avatar */}
-            <div style={{width:90,height:90,borderRadius:45,background:C.green,border:"3px solid rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <span style={{...H,fontSize:36,fontWeight:900,color:"#fff"}}>{selWorker.nome?.[0]}</span>
-            </div>
+            {/* Avatar — foto real se houver, senão inicial */}
+            {selWorker.foto_rosto ? (
+              <img src={selWorker.foto_rosto} alt={selWorker.nome}
+                style={{width:90,height:90,borderRadius:45,objectFit:"cover",border:"3px solid rgba(255,255,255,.2)",flexShrink:0,background:C.bg}} />
+            ) : (
+              <div style={{width:90,height:90,borderRadius:45,background:C.green,border:"3px solid rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{...H,fontSize:36,fontWeight:900,color:"#fff"}}>{selWorker.nome?.[0]}</span>
+              </div>
+            )}
             {/* Name + info */}
             <div style={{flex:1}}>
               <h2 style={{...H,fontSize:30,fontWeight:900,color:"#fff",letterSpacing:-.5,marginBottom:6}}>{selWorker.nome}</h2>
@@ -2596,15 +2643,14 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
             </a>
           </div>
 
-          {/* Specialty chips in hero */}
+          {/* Specialty chips in hero — mostra função + tempo de experiência */}
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:20}}>
             {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
-              const nivel=selWorker.spec_levels?.[s.id]?.nivel||0;
-              const levelColors=["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
+              const tempo = selWorker.func_exp?.[s.id]?.tempo;
               return <div key={s.id} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.15)",borderRadius:20,padding:"5px 12px"}}>
                 <span style={{fontSize:14}}>{s.icon}</span>
                 <span style={{...B,fontSize:12,fontWeight:600,color:"#fff"}}>{s.label}</span>
-                <span style={{...B,fontSize:10,color:levelColors[nivel],background:"rgba(0,0,0,.3)",borderRadius:10,padding:"1px 6px"}}>{LEVELS[nivel]?.label}</span>
+                {tempo&&<span style={{...B,fontSize:10,color:"#4ADE80",background:"rgba(0,0,0,.3)",borderRadius:10,padding:"1px 6px"}}>{tempo}</span>}
               </div>;
             })}
           </div>
@@ -2615,80 +2661,114 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
       <div style={{maxWidth:900,margin:"0 auto",padding:"24px 40px 60px",display:"grid",gridTemplateColumns:"1fr 300px",gap:20,alignItems:"start"}}>
         <div>
 
-          {/* Perfil comportamental — cards */}
+          {/* Perfil comportamental — 5 respostas */}
           <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
-            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Perfil de trabalho</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
-              {[
-                {label:"Trabalho em equipe", value:selWorker.trabalho_equipe?"✓ Sim":"✗ Não", ok:selWorker.trabalho_equipe},
-                {label:"Atend. ao cliente",  value:selWorker.atend_cliente?"✓ Sim":"✗ Não",  ok:selWorker.atend_cliente},
-                {label:"Tipo preferido",     value:selWorker.tipo_trabalho||"—",              ok:!!selWorker.tipo_trabalho},
-              ].map(({label,value,ok})=>(
-                <div key={label} style={{background:ok?C.greenBg:C.bg,border:`1px solid ${ok?C.greenBorder:C.border}`,borderRadius:10,padding:"14px 16px",textAlign:"center"}}>
-                  <div style={{...B,fontSize:11,color:C.muted,marginBottom:6}}>{label}</div>
-                  <div style={{...H,fontSize:14,fontWeight:700,color:ok?C.green:C.sub}}>{value}</div>
-                </div>
-              ))}
-            </div>
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:6}}>Perfil de trabalho</div>
+            <div style={{...B,fontSize:12,color:C.muted,marginBottom:16}}>Como ele se comporta no dia a dia, segundo o que respondeu no cadastro.</div>
+            {selWorker.perfil_trabalho && Object.keys(PERFIL_LABELS).some(k=>selWorker.perfil_trabalho?.[k]) ? (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}} className="vorker-perfil-grid">
+                {Object.entries(PERFIL_LABELS).map(([key, {title, opts}]) => {
+                  const val = selWorker.perfil_trabalho?.[key];
+                  const text = val ? opts[val] : null;
+                  return (
+                    <div key={key} style={{background:text?C.greenBg+"60":C.bg,border:`1px solid ${text?C.greenBorder:C.border}`,borderRadius:10,padding:"12px 14px"}}>
+                      <div style={{...B,fontSize:11,fontWeight:600,color:C.muted,marginBottom:6,letterSpacing:.2,textTransform:"uppercase"}}>{title}</div>
+                      <div style={{...H,fontSize:13,fontWeight:700,color:text?C.green:C.sub,lineHeight:1.35}}>{text || "—"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{...B,fontSize:13,color:C.muted,fontStyle:"italic"}}>Perfil ainda não preenchido.</div>
+            )}
             {selWorker.pcd&&(
-              <div style={{marginTop:12,background:C.blueBg,border:`1px solid ${C.blueBorder}`,borderRadius:9,padding:"10px 14px",...B,fontSize:13,color:C.blue}}>
+              <div style={{marginTop:14,background:C.blueBg,border:`1px solid ${C.blueBorder}`,borderRadius:9,padding:"10px 14px",...B,fontSize:13,color:C.blue}}>
                 ♿ PCD{selWorker.pcd_tipo?` — ${selWorker.pcd_tipo}`:""}
               </div>
             )}
           </div>
 
-          {/* Especialidades */}
+          {/* Flexibilidade — aviso curto */}
+          {selWorker.flexibilidade && FLEX_LABEL[selWorker.flexibilidade] && (
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 24px",marginBottom:16,display:"flex",alignItems:"center",gap:14}}>
+              <div style={{width:44,height:44,borderRadius:11,background:C.greenBg,border:`1px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{FLEX_LABEL[selWorker.flexibilidade].icon}</div>
+              <div>
+                <div style={{...B,fontSize:11,color:C.muted,marginBottom:2,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Flexibilidade</div>
+                <div style={{...H,fontSize:14,fontWeight:800,color:C.navy}}>{FLEX_LABEL[selWorker.flexibilidade].label}</div>
+                <div style={{...B,fontSize:12,color:C.sub,marginTop:1}}>{FLEX_LABEL[selWorker.flexibilidade].desc}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Funções e tempo de experiência */}
           <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
-            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Especialidades e experiência</div>
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Funções e tempo de experiência</div>
             {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
-              const sl=selWorker.spec_levels?.[s.id]; const nivel=sl?.nivel||0;
-              const levelColors=["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
-              const levelWidth=[0,25,50,75,100];
+              const tempo = selWorker.func_exp?.[s.id]?.tempo;
               return (
-                <div key={s.id} style={{background:C.bg,borderRadius:12,padding:"16px 18px",marginBottom:10,border:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <span style={{fontSize:22}}>{s.icon}</span>
-                      <span style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{s.label}</span>
-                    </div>
-                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                      <span style={{...B,fontSize:12,fontWeight:700,color:levelColors[nivel],background:levelColors[nivel]+"18",padding:"3px 10px",borderRadius:20}}>{LEVELS[nivel]?.label||"—"}</span>
-                      {sl?.experiencia&&<span style={{...B,fontSize:11,color:C.muted}}>{sl.experiencia}</span>}
-                    </div>
+                <div key={s.id} style={{background:C.bg,borderRadius:12,padding:"14px 18px",marginBottom:10,border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
+                    <span style={{fontSize:22,flexShrink:0}}>{s.icon}</span>
+                    <span style={{...H,fontSize:15,fontWeight:700,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.label}</span>
                   </div>
-                  <div style={{height:8,borderRadius:4,background:C.border,overflow:"hidden"}}>
-                    <div style={{height:"100%",borderRadius:4,background:levelColors[nivel],width:`${levelWidth[nivel]}%`,transition:"width .3s"}} />
-                  </div>
-                  {sl?.empresas?.length>0&&(
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10,alignItems:"center"}}>
-                      <span style={{...B,fontSize:11,color:C.muted}}>Trabalhou em:</span>
-                      {sl.empresas.map((emp,i)=>(
-                        <span key={i} style={{...B,fontSize:12,fontWeight:600,color:C.navy,background:C.white,border:`1px solid ${C.border2}`,borderRadius:6,padding:"3px 10px"}}>{emp}</span>
-                      ))}
-                    </div>
-                  )}
+                  {tempo
+                    ? <span style={{...B,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,padding:"4px 12px",borderRadius:20,whiteSpace:"nowrap"}}>{tempo}</span>
+                    : <span style={{...B,fontSize:11,color:C.muted,fontStyle:"italic"}}>Sem tempo informado</span>
+                  }
                 </div>
               );
             })}
-            {selWorker.specs?.includes("custom")&&selWorker.spec_levels?.custom&&(
-              <div style={{background:C.bg,borderRadius:12,padding:"16px 18px",border:`1px solid ${C.border}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:22}}>⭐</span><span style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{selWorker.spec_levels.custom.label||"Especialidade própria"}</span></div>
-                  <span style={{...B,fontSize:12,fontWeight:700,color:levelColors[selWorker.spec_levels.custom.nivel||0],background:levelColors[selWorker.spec_levels.custom.nivel||0]+"18",padding:"3px 10px",borderRadius:20}}>{LEVELS[selWorker.spec_levels.custom.nivel||0]?.label}</span>
+            {selWorker.specs?.includes("custom") && (selWorker.spec_levels?.custom?.label || selWorker.func_exp?.custom?.tempo) && (
+              <div style={{background:C.bg,borderRadius:12,padding:"14px 18px",border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
+                  <span style={{fontSize:22}}>⭐</span>
+                  <span style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{selWorker.spec_levels?.custom?.label||"Função própria"}</span>
                 </div>
+                {selWorker.func_exp?.custom?.tempo && (
+                  <span style={{...B,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,padding:"4px 12px",borderRadius:20}}>{selWorker.func_exp.custom.tempo}</span>
+                )}
               </div>
             )}
           </div>
+
+          {/* Empresas onde já trabalhou */}
+          {((selWorker.empresas_selected?.length||0) + (selWorker.empresas_custom?.length||0)) > 0 && (
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
+              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:6}}>Empresas onde já trabalhou</div>
+              <div style={{...B,fontSize:12,color:C.muted,marginBottom:14}}>Histórico declarado pelo Vorker.</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                {(selWorker.empresas_selected||[]).map(id=>{
+                  const e = EMPRESAS_PRESET.find(x=>x.id===id);
+                  return e ? (
+                    <span key={id} style={{...B,fontSize:13,fontWeight:600,color:C.navy,background:C.bg,border:`1px solid ${C.border2}`,borderRadius:8,padding:"6px 12px"}}>{e.label}</span>
+                  ) : null;
+                })}
+                {(selWorker.empresas_custom||[]).map((nome,i)=>(
+                  <span key={`c${i}`} style={{display:"inline-flex",alignItems:"center",gap:5,...B,fontSize:13,fontWeight:600,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"6px 12px"}}>
+                    <span style={{fontSize:11}}>⭐</span> {nome}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Disponibilidade — grade visual */}
           <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24}}>
             <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Disponibilidade</div>
             <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:"4px"}}>
+              <table className="vorker-disp-table" style={{width:"100%",borderCollapse:"separate",borderSpacing:"5px"}}>
                 <thead>
                   <tr>
-                    <th style={{...B,fontSize:11,fontWeight:600,color:C.muted,textAlign:"left",padding:"4px 8px",minWidth:40}}></th>
-                    {SHIFTS.map(sh=><th key={sh.id} style={{...B,fontSize:11,fontWeight:700,color:sh.color,textAlign:"center",padding:"4px 8px",minWidth:80}}>{sh.label}</th>)}
+                    <th style={{padding:"6px 8px",minWidth:80}}></th>
+                    {SHIFTS.map(sh=>(
+                      <th key={sh.id} style={{textAlign:"center",padding:"6px 8px",minWidth:96}}>
+                        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                          <span style={{fontSize:16,lineHeight:1}}>{sh.icon}</span>
+                          <span style={{...H,fontSize:12,fontWeight:700,color:sh.color}}>{sh.label}</span>
+                          <span style={{...B,fontSize:10,color:C.muted}}>{sh.time}</span>
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -2697,12 +2777,15 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                     const hasAny=dayShifts.length>0;
                     return (
                       <tr key={day}>
-                        <td style={{...H,fontSize:13,fontWeight:700,color:hasAny?C.navy:C.muted,padding:"3px 8px"}}>{day}</td>
+                        <td style={{...H,fontSize:12,fontWeight:700,color:hasAny?C.green:C.sub,padding:"8px 6px",borderRight:`1px solid ${C.border}`}}>
+                          <span className="vorker-day-full">{DAY_FULL[day]||day}</span>
+                          <span className="vorker-day-short" style={{display:"none"}}>{day}</span>
+                        </td>
                         {SHIFTS.map(sh=>{
                           const on=dayShifts.includes(sh.id);
-                          return <td key={sh.id} style={{padding:3}}>
-                            <div style={{padding:"8px 6px",borderRadius:8,background:on?sh.color+"18":C.bg,border:`1.5px solid ${on?sh.color:C.border}`,textAlign:"center"}}>
-                              {on?<span style={{...B,fontSize:11,fontWeight:700,color:sh.color}}>✓</span>:<span style={{...B,fontSize:11,color:C.border}}>—</span>}
+                          return <td key={sh.id} style={{padding:2}}>
+                            <div style={{padding:"10px 6px",borderRadius:8,background:on?C.greenBg:"#fff",border:`1.5px solid ${on?C.green:C.border2}`,textAlign:"center",minHeight:38,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                              <span style={{...H,fontSize:14,fontWeight:700,color:on?C.green:"#CBD5E1",lineHeight:1}}>{on?"✓":"—"}</span>
                             </div>
                           </td>;
                         })}
