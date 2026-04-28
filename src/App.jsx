@@ -229,11 +229,12 @@ const EMPRESAS_PRESET = [
   {id:"magalu",      label:"Magalu"},
 ];
 const DAYS   = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+const DAY_FULL = { Seg:"Segunda", Ter:"Terça", Qua:"Quarta", Qui:"Quinta", Sex:"Sexta", "Sáb":"Sábado", Dom:"Domingo" };
 const SHIFTS = [
-  {id:"manha",    label:"Manhã",     color:"#F59E0B"},
-  {id:"tarde",    label:"Tarde",     color:"#3B82F6"},
-  {id:"noite",    label:"Noite",     color:"#6366F1"},
-  {id:"madrugada",label:"Madrugada", color:"#374151"},
+  {id:"manha",    label:"Manhã",     color:"#F59E0B", time:"06h às 12h", icon:"☀️"},
+  {id:"tarde",    label:"Tarde",     color:"#3B82F6", time:"12h às 18h", icon:"🌤"},
+  {id:"noite",    label:"Noite",     color:"#6366F1", time:"18h às 0h",  icon:"🌙"},
+  {id:"madrugada",label:"Madrugada", color:"#374151", time:"0h às 6h",   icon:"🌑"},
 ];
 const SEGS   = ["Supermercado","Atacarejo","Dark Store","Centro de Distribuição","Delivery","Hortifruti","Farmácia","Indústria FMCG","Distribuidor","Outro"];
 const PLANS  = ["Trial (30 dias)","Básico — R$ 299/mês","Profissional — R$ 599/mês","Enterprise — R$ 1.299/mês"];
@@ -794,6 +795,14 @@ function Landing({ onNav }) {
           .vorker-stats{grid-template-columns:1fr 1fr!important;gap:14px!important;padding:0 4px}
           .vorker-dual{grid-template-columns:1fr!important;gap:16px!important;margin-top:28px!important}
           .vorker-dual>div{padding:26px 22px!important}
+          .vorker-flex-grid{grid-template-columns:1fr!important}
+          .vorker-day-full{display:none!important}
+          .vorker-day-short{display:inline!important}
+          .vorker-disp-table th{min-width:auto!important;padding:8px 2px!important}
+          .vorker-disp-table th>div span:nth-child(2){font-size:11.5px!important}
+          .vorker-disp-table th>div span:nth-child(3){font-size:9.5px!important}
+          .vorker-disp-table td{padding:2px!important}
+          .vorker-disp-table td:first-child{padding:8px 6px!important;font-size:12px!important}
           .vorker-ctas{flex-direction:column!important;align-items:stretch!important}
           .vorker-ctas>div{width:100%!important;justify-content:center!important}
           .vorker-hero-stats{gap:14px!important;justify-content:flex-start}
@@ -837,8 +846,9 @@ function WorkerRegister({ onDone, onBack }) {
     empresasCustom:[],             // strings de nomes adicionados livremente
     // (legado) Nível por especialidade — mantido pra compatibilidade caso ainda use em algum lugar
     specLevels:{},
-    // 5 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... })
+    // 5 — Disponibilidade (grid: { Seg: ['manha','tarde'], Ter: ['noite'], ... }) + flexibilidade
     disponibilidade:{},
+    flexibilidade:"",  // "mesmo-dia" | "algumas-horas" | "agendar"
     // 6 — Perfil comportamental
     trabalhoEquipe:false, atendCliente:false, tipoTrabalho:"",
     // 7 — Documentação
@@ -1153,15 +1163,18 @@ function WorkerRegister({ onDone, onBack }) {
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Disponibilidade</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Marque os turnos disponíveis em cada dia. Deixe em branco os dias que não quer trabalhar.</p>
 
-            {/* Grid header */}
             <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"separate",borderSpacing:"4px"}}>
+              <table className="vorker-disp-table" style={{width:"100%",borderCollapse:"separate",borderSpacing:"6px"}}>
                 <thead>
                   <tr>
-                    <th style={{...B,fontSize:12,fontWeight:600,color:C.muted,textAlign:"left",padding:"6px 8px",minWidth:48}}></th>
+                    <th style={{padding:"10px 8px",minWidth:96}}></th>
                     {SHIFTS.map(sh=>(
-                      <th key={sh.id} style={{...B,fontSize:12,fontWeight:700,color:sh.color,textAlign:"center",padding:"6px 8px",minWidth:90}}>
-                        {sh.label}
+                      <th key={sh.id} style={{textAlign:"center",padding:"10px 8px",minWidth:108,verticalAlign:"bottom"}}>
+                        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                          <span style={{fontSize:18,lineHeight:1}}>{sh.icon}</span>
+                          <span style={{...H,fontSize:13,fontWeight:700,color:sh.color}}>{sh.label}</span>
+                          <span style={{...B,fontSize:11,color:C.muted,fontWeight:500}}>{sh.time}</span>
+                        </div>
                       </th>
                     ))}
                   </tr>
@@ -1177,14 +1190,17 @@ function WorkerRegister({ onDone, onBack }) {
                     };
                     return (
                       <tr key={day}>
-                        <td style={{...H,fontSize:13,fontWeight:700,color:hasAny?C.navy:C.muted,padding:"4px 8px",whiteSpace:"nowrap"}}>{day}</td>
+                        <td style={{...H,fontSize:13,fontWeight:700,color:hasAny?C.green:C.sub,padding:"10px 8px",whiteSpace:"nowrap",borderRight:`1px solid ${C.border}`}}>
+                          <span className="vorker-day-full">{DAY_FULL[day]||day}</span>
+                          <span className="vorker-day-short" style={{display:"none"}}>{day}</span>
+                        </td>
                         {SHIFTS.map(sh=>{
                           const on = dayShifts.includes(sh.id);
                           return (
-                            <td key={sh.id} style={{padding:"4px"}}>
+                            <td key={sh.id} style={{padding:"3px"}}>
                               <div onClick={()=>toggle(sh.id)}
-                                style={{padding:"10px 8px",borderRadius:9,cursor:"pointer",border:`1.5px solid ${on?sh.color:C.border2}`,background:on?sh.color+"18":"transparent",textAlign:"center",transition:"all .15s",userSelect:"none"}}>
-                                <span style={{...B,fontSize:12,fontWeight:on?700:400,color:on?sh.color:C.muted}}>{on?"✓":""}</span>
+                                style={{padding:"14px 8px",borderRadius:10,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"#fff",textAlign:"center",transition:"all .15s",userSelect:"none",minHeight:46,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                <span style={{...H,fontSize:18,fontWeight:700,color:on?C.green:"#CBD5E1",lineHeight:1}}>{on?"✓":"+"}</span>
                               </div>
                             </td>
                           );
@@ -1202,7 +1218,7 @@ function WorkerRegister({ onDone, onBack }) {
                 <div style={{...B,fontSize:12,fontWeight:600,color:C.green,marginBottom:8}}>✓ Disponibilidade selecionada</div>
                 {DAYS.filter(d=>(data.disponibilidade[d]||[]).length>0).map(d=>(
                   <div key={d} style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
-                    <span style={{...H,fontSize:12,fontWeight:700,color:C.navy,minWidth:32}}>{d}</span>
+                    <span style={{...H,fontSize:12,fontWeight:700,color:C.navy,minWidth:72}}>{DAY_FULL[d]||d}</span>
                     <div style={{display:"flex",gap:5}}>
                       {(data.disponibilidade[d]||[]).map(sid=>{
                         const sh=SHIFTS.find(s=>s.id===sid);
@@ -1213,6 +1229,34 @@ function WorkerRegister({ onDone, onBack }) {
                 ))}
               </div>
             )}
+
+            {/* Bloco Flexibilidade — Aviso curto */}
+            <Div />
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <div style={{width:26,height:26,borderRadius:13,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{...H,fontSize:13,fontWeight:800,color:"#fff"}}>3</span>
+              </div>
+              <h3 style={{...H,fontSize:17,fontWeight:800,color:C.navy,margin:0}}>Você pode trabalhar com aviso curto?</h3>
+            </div>
+            <p style={{...B,fontSize:13,color:C.sub,marginBottom:16,lineHeight:1.55,marginLeft:36}}>Isso nos ajuda a te chamar mais rápido quando surgir uma oportunidade.</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}} className="vorker-flex-grid">
+              {[
+                {v:"mesmo-dia",     icon:"⚡", iconBg:"#DCFCE7", iconColor:"#16A34A", title:"Sim, posso ir no mesmo dia",    desc:"Tenho flexibilidade para trabalhos de última hora."},
+                {v:"algumas-horas", icon:"🕐", iconBg:"#DBEAFE", iconColor:"#2563EB", title:"Preciso de algumas horas",       desc:"Consigo me organizar com algumas horas de antecedência."},
+                {v:"agendar",       icon:"📅", iconBg:"#DBEAFE", iconColor:"#2563EB", title:"Prefiro agendar antes",          desc:"Prefiro me organizar com 1 dia ou mais de antecedência."},
+              ].map(opt=>{
+                const on=data.flexibilidade===opt.v;
+                return (
+                  <div key={opt.v} onClick={()=>set("flexibilidade",opt.v)}
+                    style={{position:"relative",padding:"18px 16px",borderRadius:12,cursor:"pointer",border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:"#fff",transition:"all .15s",userSelect:"none"}}>
+                    {on && <div style={{position:"absolute",top:12,right:12,width:14,height:14,borderRadius:7,background:C.green,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:5,height:5,borderRadius:3,background:"#fff"}} /></div>}
+                    <div style={{width:36,height:36,borderRadius:9,background:opt.iconBg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12,fontSize:18}}>{opt.icon}</div>
+                    <div style={{...H,fontSize:14,fontWeight:800,color:C.navy,marginBottom:6,lineHeight:1.25}}>{opt.title}</div>
+                    <div style={{...B,fontSize:12,color:C.sub,lineHeight:1.45}}>{opt.desc}</div>
+                  </div>
+                );
+              })}
+            </div>
           </>}
 
           {/* ── STEP 6: Perfil profissional ── */}
