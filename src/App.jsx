@@ -2343,13 +2343,33 @@ function AdminPanel() {
         {tab==="workers"&&selWorker&&(()=>{
           const score = computeWorkerScore(selWorker);
           const idade = calcIdade(selWorker.nascimento);
-          const TRAIT_DEFS = [
-            { key:"corrido",    label:"Resiliência",    icon:"💪", desc:"Sob pressão",        labels:{manter:"Veloz",         equilibrar:"Equilibrado",  diminuir:"Cuidadoso"} },
-            { key:"diaADia",    label:"Foco",           icon:"🎯", desc:"Estilo de trabalho", labels:{praticas:"Prático",     equilibrio:"Equilibrado",  cuidado:"Detalhista"} },
-            { key:"tarefa",     label:"Iniciativa",     icon:"🚀", desc:"Tarefas novas",      labels:{iniciativa:"Autônomo",  perguntar:"Colaborativo",  orientacao:"Orientado"} },
-            { key:"diferente",  label:"Adaptabilidade", icon:"🔄", desc:"Imprevistos",        labels:{ajusta:"Flexível",      entender:"Analítico",      avisar:"Cauteloso"} },
-            { key:"imprevisto", label:"Compromisso",    icon:"🤝", desc:"Cumpre o turno",     labels:{resolver:"Persistente", aviso:"Comunicativo",      cancelar:"Conservador"} },
-          ];
+          const TRAIT_BY_ANSWER = {
+            corrido: {
+              manter:     {title:"Trabalha bem sob pressão", desc:"Mantém a velocidade fazendo o melhor possível", icon:"⚡"},
+              equilibrar: {title:"Equilibra ritmo",          desc:"Equilibra velocidade e atenção",                 icon:"⚖️"},
+              diminuir:   {title:"Caprichoso",                desc:"Diminui o ritmo para garantir qualidade",        icon:"🎯"},
+            },
+            diaADia: {
+              praticas:   {title:"Mão na massa",             desc:"Tarefas práticas e operacionais",                icon:"🔧"},
+              equilibrio: {title:"Organização",              desc:"Equilibra rapidez e organização",                icon:"⚖️"},
+              cuidado:    {title:"Pensa com cuidado",        desc:"Pensa com cuidado em cada etapa",                icon:"🧠"},
+            },
+            tarefa: {
+              iniciativa: {title:"Autonomia",                desc:"Tenta resolver sozinho primeiro",                icon:"👤"},
+              perguntar:  {title:"Colaborativo",             desc:"Pergunta se necessário",                          icon:"💬"},
+              orientacao: {title:"Pede orientação",          desc:"Pede orientação antes de começar",                icon:"📋"},
+            },
+            diferente: {
+              ajusta:     {title:"Adaptação",                desc:"Se ajusta rápido quando algo muda",              icon:"🔄"},
+              entender:   {title:"Analítico",                desc:"Tenta entender o que aconteceu",                  icon:"🔍"},
+              avisar:     {title:"Comunicativo",             desc:"Prefere avisar alguém antes",                    icon:"📣"},
+            },
+            imprevisto: {
+              resolver:   {title:"Comprometimento",          desc:"Tenta resolver e cumprir o que assumiu",         icon:"🛡"},
+              aviso:      {title:"Avisa antes",              desc:"Avisa o quanto antes para não atrapalhar",       icon:"⏰"},
+              cancelar:   {title:"Conservador",              desc:"Prefere cancelar quando há imprevisto",          icon:"⏸"},
+            },
+          };
           const alertas = [];
           if (idade!=null && idade<18) alertas.push({lv:"red",txt:"Menor de 18 anos — não pode atuar."});
           if (score.total < 50) alertas.push({lv:"red",txt:`Score baixo (${score.total}) — perfil incompleto ou pouco aderente.`});
@@ -2480,25 +2500,6 @@ function AdminPanel() {
                   </div>
                 )}
 
-                {/* PERFIL OPERACIONAL — 5 traits */}
-                <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
-                  <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase",marginBottom:14}}>Perfil operacional</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}} className="vorker-traits-grid">
-                    {TRAIT_DEFS.map(({key,label,icon,desc,labels})=>{
-                      const ans = selWorker.perfil_trabalho?.[key];
-                      const text = ans ? (labels[ans]||"—") : "—";
-                      const filled = !!ans;
-                      return (
-                        <div key={key} style={{textAlign:"center",padding:"14px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:11}}>
-                          <div style={{width:36,height:36,margin:"0 auto 8px",borderRadius:9,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{icon}</div>
-                          <div style={{...H,fontSize:12,fontWeight:800,color:C.navy,marginBottom:3,lineHeight:1.2}}>{label}</div>
-                          <div style={{...B,fontSize:10,color:C.muted,marginBottom:6,lineHeight:1.3}}>{desc}</div>
-                          <div style={{...H,fontSize:11,fontWeight:700,color:filled?C.green:C.muted,padding:"3px 11px",background:"#fff",border:`1px solid ${filled?C.greenBorder:C.border2}`,borderRadius:14,display:"inline-block"}}>{text}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
 
                 {/* DISPONIBILIDADE — linha com 7 cards de dia */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
@@ -2623,18 +2624,32 @@ function AdminPanel() {
                   })()}
                 </div>
 
-                {/* PERFIL DE TRABALHO — 5 perguntas/respostas */}
+                {/* PERFIL DE TRABALHO — 5 traits interpretativos baseados nas respostas */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
-                  <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase",marginBottom:14}}>Perfil de trabalho</div>
-                  {selWorker.perfil_trabalho && Object.keys(PERFIL_LABELS).some(k=>selWorker.perfil_trabalho?.[k]) ? (
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}} className="vorker-perfil-grid">
-                      {Object.entries(PERFIL_LABELS).map(([key, {title, opts}]) => {
-                        const val = selWorker.perfil_trabalho?.[key];
-                        const text = val ? opts[val] : null;
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+                    <div style={{width:22,height:22,borderRadius:11,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{...H,fontSize:11,fontWeight:800,color:"#fff"}}>4</span>
+                    </div>
+                    <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase"}}>Perfil de trabalho</div>
+                    <span style={{...B,fontSize:11,color:C.muted}}>(comportamental)</span>
+                  </div>
+                  {selWorker.perfil_trabalho && Object.keys(TRAIT_BY_ANSWER).some(k=>selWorker.perfil_trabalho?.[k]) ? (
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}} className="vorker-traits-grid">
+                      {Object.keys(TRAIT_BY_ANSWER).map(key=>{
+                        const ans = selWorker.perfil_trabalho?.[key];
+                        const trait = ans ? TRAIT_BY_ANSWER[key]?.[ans] : null;
+                        if (!trait) return (
+                          <div key={key} style={{padding:"14px 16px",background:C.bg,border:`1px dashed ${C.border}`,borderRadius:11,display:"flex",alignItems:"center",gap:10}}>
+                            <span style={{...B,fontSize:12,color:C.muted,fontStyle:"italic"}}>Sem resposta</span>
+                          </div>
+                        );
                         return (
-                          <div key={key} style={{background:text?C.greenBg+"60":C.bg,border:`1px solid ${text?C.greenBorder:C.border}`,borderRadius:9,padding:"11px 13px"}}>
-                            <div style={{...B,fontSize:10.5,fontWeight:600,color:C.muted,marginBottom:5,letterSpacing:.2,textTransform:"uppercase"}}>{title}</div>
-                            <div style={{...H,fontSize:12.5,fontWeight:700,color:text?C.green:C.sub,lineHeight:1.35}}>{text || "—"}</div>
+                          <div key={key} style={{padding:"14px 16px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:11,display:"flex",alignItems:"flex-start",gap:12}}>
+                            <div style={{width:32,height:32,borderRadius:8,background:C.greenBg,border:`1px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{trait.icon}</div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginBottom:4,lineHeight:1.25}}>{trait.title}</div>
+                              <div style={{...B,fontSize:11.5,color:C.sub,lineHeight:1.4}}>{trait.desc}</div>
+                            </div>
                           </div>
                         );
                       })}
@@ -2644,34 +2659,61 @@ function AdminPanel() {
                   )}
                 </div>
 
-                {/* DOCUMENTAÇÃO — fotos reais */}
+                {/* DOCUMENTAÇÃO — fotos reais com confirmação */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                    <div style={{width:22,height:22,borderRadius:11,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{...H,fontSize:11,fontWeight:800,color:"#fff"}}>5</span>
+                    </div>
                     <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase"}}>Documentação</div>
-                    <div style={{...B,fontSize:11,color:C.muted}}>{selWorker.foto_rosto&&selWorker.selfie_doc?"✓ Completa":"⚠ Incompleta"}</div>
                   </div>
-                  <div style={{...B,fontSize:12,color:C.muted,marginBottom:14}}>Confirme se a foto de perfil e a selfie com {selWorker.doc_tipo||"documento"} são da mesma pessoa.</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}} className="vorker-docs-grid">
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}} className="vorker-docs-grid">
                     {[
                       {label:"Foto de perfil", src:selWorker.foto_rosto, fallback:"📷"},
                       {label:`Selfie com ${selWorker.doc_tipo||"documento"}`, src:selWorker.selfie_doc, fallback:"🤳"},
                     ].map(({label,src,fallback})=>(
-                      <div key={label} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:11,overflow:"hidden"}}>
-                        <div style={{aspectRatio:"4 / 3",background:"#0F172A",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <div key={label} style={{display:"flex",alignItems:"center",gap:14}}>
+                        <div style={{width:64,height:64,borderRadius:12,overflow:"hidden",background:"#0F172A",border:`1px solid ${C.border}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
                           {src
                             ? <a href={src} target="_blank" rel="noopener noreferrer" style={{display:"block",width:"100%",height:"100%"}}>
-                                <img src={src} alt={label} style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}} />
+                                <img src={src} alt={label} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} />
                               </a>
-                            : <div style={{textAlign:"center",color:"#64748B"}}><div style={{fontSize:30,marginBottom:5}}>{fallback}</div><div style={{...B,fontSize:11}}>Não enviado</div></div>}
+                            : <span style={{fontSize:24,color:"#64748B"}}>{fallback}</span>}
                         </div>
-                        <div style={{padding:"9px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{...B,fontSize:11.5,color:C.navy,fontWeight:600}}>{label}</span>
-                          <span style={{...B,fontSize:10.5,fontWeight:600,color:src?C.green:C.muted}}>{src?"✓":"—"}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:4}}>{label}</div>
+                          <div style={{...B,fontSize:11.5,fontWeight:600,color:src?C.green:C.muted,display:"flex",alignItems:"center",gap:5}}>
+                            <span>{src?"✓":"—"}</span>{src?"Validado visualmente":"Não enviado"}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
+                  {(selWorker.foto_rosto && selWorker.selfie_doc) && (
+                    <div style={{padding:"10px 14px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.green,fontWeight:600,display:"flex",alignItems:"center",gap:7}}>
+                      <span>✓</span> Documentos enviados e validados
+                    </div>
+                  )}
                 </div>
+
+                {/* DICA DO SISTEMA — sugestão automática para a curadoria */}
+                {(()=>{
+                  const primaryFunc = SPECS.find(s=>selWorker.specs?.includes(s.id));
+                  const cells = Object.values(selWorker.disponibilidade||{}).reduce((a,b)=>a+(b?.length||0),0);
+                  const dispAdj = cells>=14 ? "ampla" : cells>=6 ? "parcial" : "limitada";
+                  const dica = primaryFunc
+                    ? `Candidatos com disponibilidade ${dispAdj} e experiência em ${primaryFunc.label.toLowerCase()} têm 3x mais chances de serem chamados.`
+                    : `Candidatos com perfil completo e disponibilidade ampla têm 3x mais chances de serem chamados.`;
+                  return (
+                    <div style={{background:"#F0F9FF",border:"1px solid #BAE6FD",borderRadius:11,padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
+                      <span style={{fontSize:18,marginTop:1}}>📊</span>
+                      <div style={{flex:1}}>
+                        <div style={{...B,fontSize:11,fontWeight:700,color:"#0369A1",letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Dica do sistema</div>
+                        <div style={{...B,fontSize:12.5,color:"#075985",lineHeight:1.5}}>{dica}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* RIGHT RAIL: score + alertas + anotações + histórico + zona de perigo */}
