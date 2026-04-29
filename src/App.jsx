@@ -3645,7 +3645,32 @@ function AuthChoice({ onNav }) {
 
 // ─── AUTH SCREEN (worker only) ─────────────────────────────────
 function AuthScreen({ type, onLogin, onRegister, onBack }) {
-  const [email,setEmail]=useState(""); const [pass,setPass]=useState("");
+  const [email,setEmail]=useState("");
+  const [pass,setPass]=useState("");
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  const handleLogin = async () => {
+    if(!email||!pass){ setError("Preencha e-mail e senha."); return; }
+    setLoading(true); setError("");
+    try {
+      const { data: worker, error: err } = await supabase
+        .from("workers")
+        .select("*")
+        .eq("email", email)
+        .maybeSingle();
+      if(err||!worker){ setError("E-mail não encontrado. Confira ou crie sua conta."); setLoading(false); return; }
+      if(worker.status==="pending"){ setError("Seu cadastro ainda está em análise pela equipe Giobbi's. Em até 24h úteis você receberá retorno."); setLoading(false); return; }
+      if(worker.status==="paused"){ setError("Seu perfil está temporariamente pausado e não aparece nas buscas. Entre em contato com a equipe Giobbi's para reativar."); setLoading(false); return; }
+      if(worker.status==="rejected"){ setError(worker.reject_note ? `Seu cadastro foi reprovado. Motivo: ${worker.reject_note}` : "Seu cadastro foi reprovado. Entre em contato com a equipe Giobbi's."); setLoading(false); return; }
+      onLogin();
+    } catch(e) {
+      setError("Erro ao conectar. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{minHeight:"75vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"60px 20px",background:C.bg}}>
       <div style={{maxWidth:420,width:"100%"}}>
@@ -3655,7 +3680,8 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,boxShadow:"0 4px 20px rgba(0,0,0,.06)"}}>
           <Field label="E-mail" placeholder="seu@email.com" value={email} onChange={setEmail} type="email" />
           <Field label="Senha" placeholder="••••••••" value={pass} onChange={setPass} type="password" />
-          <Btn label="Entrar →" variant="primary" size="lg" full onClick={()=>email&&pass&&onLogin()} />
+          {error&&<Alert type="error">{error}</Alert>}
+          <Btn label="Entrar →" variant="primary" size="lg" full onClick={handleLogin} loading={loading} />
           <div style={{display:"flex",alignItems:"center",gap:12,margin:"16px 0"}}>
             <div style={{flex:1,height:1,background:C.border}} /><span style={{...B,fontSize:12,color:C.muted}}>ou</span><div style={{flex:1,height:1,background:C.border}} />
           </div>
