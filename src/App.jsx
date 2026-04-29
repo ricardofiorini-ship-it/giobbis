@@ -2937,7 +2937,8 @@ function CompanyLogin({ onLogin, onRegister, onBack }) {
 // TALENT BROWSER
 // ═══════════════════════════════════════════════════════════════
 function TalentBrowser({ company, onLogout, onUpdateCompany }) {
-  const [tab,       setTab]       = useState("talent");
+  const [tab,       setTab]       = useState("profile");
+  const [subTab,    setSubTab]    = useState("visao-geral");
   const [selUnit,   setSelUnit]   = useState(null);
   const [workers,   setWorkers]   = useState([]);
   const [filtered,  setFiltered]  = useState([]);
@@ -3378,7 +3379,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
         ))}
       </div>
 
-      <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 32px"}}>
+      <div style={{maxWidth:1280,margin:"0 auto",padding:"28px 32px"}}>
 
         {/* ── TAB: TALENT BROWSER ── */}
         {tab==="talent"&&<>
@@ -3545,50 +3546,185 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
         {/* ── TAB: MEU PERFIL ── */}
         {tab==="profile"&&<>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,alignItems:"start"}}>
-            {/* Dados da empresa */}
-            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28}}>
-              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Dados da empresa</div>
-              <div style={{display:"flex",flexDirection:"column",gap:0}}>
-                {[["Razão social",company.razao],["Nome fantasia",company.nome_fant||"—"],["CNPJ",company.cnpj],["Segmento",company.seg],["Site",company.site||"—"],["Cidade",`${company.cidade}/${company.estado}`],["Responsável",company.resp_nome],["WhatsApp",company.resp_tel],["E-mail",company.resp_email]].map(([k,v])=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
-                    <span style={{...B,fontSize:12,color:C.muted}}>{k}</span>
-                    <span style={{...B,fontSize:13,color:C.navy,fontWeight:600,textAlign:"right",maxWidth:"60%"}}>{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{marginTop:14}}>
-                <Badge status={company.status} />
-                {company.status==="pending"&&<div style={{...B,fontSize:12,color:C.amber,marginTop:8}}>Seu cadastro está em análise pela equipe VORKER. Em até 24h úteis você receberá retorno.</div>}
-              </div>
-            </div>
+          <div style={{display:"grid",gridTemplateColumns:"230px 1fr",gap:24,alignItems:"start"}}>
 
-            {/* Unidades */}
+            {/* SIDEBAR */}
+            <aside style={{background:C.navy,borderRadius:14,padding:"22px 0 14px",position:"sticky",top:20,overflow:"hidden"}}>
+              <div style={{padding:"0 18px 14px",...B,fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:1.5}}>Navegação</div>
+              {[
+                {id:"visao-geral",  icon:"📊", label:"Visão geral"},
+                {id:"aprovacao",    icon:"✅", label:"Pontos de aprovação", soon:true},
+                {id:"unidades",     icon:"📍", label:"Unidades de trabalho"},
+                {id:"usuarios",     icon:"👥", label:"Usuários e acessos", soon:true},
+                {id:"preferencias", icon:"⚙️", label:"Preferências", soon:true},
+              ].map(it=>(
+                <button key={it.id} onClick={()=>!it.soon&&setSubTab(it.id)} disabled={it.soon}
+                  style={{display:"flex",alignItems:"center",gap:11,width:"100%",padding:"11px 18px",background:subTab===it.id?"rgba(34,197,94,.14)":"transparent",border:"none",borderLeft:`3px solid ${subTab===it.id?"#22C55E":"transparent"}`,cursor:it.soon?"default":"pointer",...B,fontSize:13,fontWeight:600,color:it.soon?"rgba(255,255,255,.3)":subTab===it.id?"#fff":"rgba(255,255,255,.7)",transition:"all .15s"}}>
+                  <span style={{fontSize:14}}>{it.icon}</span>
+                  <span style={{flex:1,textAlign:"left"}}>{it.label}</span>
+                  {it.soon&&<span style={{...B,fontSize:9,fontWeight:700,color:"rgba(255,255,255,.35)",background:"rgba(255,255,255,.08)",borderRadius:7,padding:"2px 6px",letterSpacing:.5}}>EM BREVE</span>}
+                </button>
+              ))}
+              <button onClick={onLogout}
+                style={{display:"flex",alignItems:"center",gap:11,width:"100%",padding:"11px 18px",background:"transparent",border:"none",borderLeft:"3px solid transparent",cursor:"pointer",...B,fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)",marginTop:6}}>
+                <span style={{fontSize:14}}>↩</span>
+                <span style={{flex:1,textAlign:"left"}}>Sair</span>
+              </button>
+
+              <div style={{margin:"22px 14px 4px",padding:14,background:"linear-gradient(135deg,#7C3AED,#5B21B6)",borderRadius:12}}>
+                <div style={{...B,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,.7)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:6}}>Time Vorker</div>
+                <div style={{...H,fontSize:13,fontWeight:700,color:"#fff",lineHeight:1.35,marginBottom:10}}>Monte seu time fixo com os melhores Vorkers</div>
+                <button onClick={()=>setSubTab("aprovacao")} style={{...B,fontSize:11,fontWeight:700,color:"#5B21B6",background:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer"}}>Quero saber mais →</button>
+              </div>
+            </aside>
+
+            {/* MAIN */}
             <div>
-              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:14}}>
-                <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Unidades de trabalho</div>
-                {units.length===0&&<Alert type="warning">Nenhuma unidade cadastrada. Adicione abaixo para poder usar o Talent Browser.</Alert>}
-                {units.map(u=>(
-                  <div key={u.id} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"14px 16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{u.nome}</div>
-                      <div style={{...B,fontSize:12,color:C.sub,marginTop:3}}>{u.rua}, {u.numero} — {u.bairro}</div>
-                      <div style={{...B,fontSize:12,color:C.muted}}>{u.cidade}/{u.estado} · CEP {u.cep}</div>
-                    </div>
-                    <button onClick={()=>setDeleteModal({id:u.id,name:u.nome})}
-                      style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",...B,fontSize:12,color:C.red,flexShrink:0}}>Remover</button>
-                  </div>
-                ))}
-              </div>
 
-              {/* Adicionar unidade */}
-              <div style={{background:C.bg,border:`1.5px dashed ${C.border2}`,borderRadius:14,padding:22}}>
-                <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>+ Adicionar unidade</div>
-                <Field label="Nome da unidade" placeholder="Ex: Loja Lapa, CD Guarulhos" value={newUnit.nome} onChange={v=>setNewUnit(u=>({...u,nome:v}))} />
-                <AddressBlock data={newUnit} setData={setNewUnit} loading={uCepLoad} setLoading={setUCepLoad} />
-                <Btn label={savingUnit?"Salvando...":"+ Adicionar unidade"} variant={newUnit.nome&&newUnit.cep&&newUnit.rua&&newUnit.numero?"primary":"ghost"} size="md"
-                  onClick={addUnit} disabled={!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero} loading={savingUnit} />
-              </div>
+              {/* ─── VISÃO GERAL ─── */}
+              {subTab==="visao-geral"&&<>
+                <div style={{marginBottom:24}}>
+                  <h2 style={{...H,fontSize:24,fontWeight:900,color:C.navy,letterSpacing:-.5,marginBottom:6}}>
+                    Bem-vindo, {((company.resp_nome||company.nome_fant||company.razao||"").split(" ")[0])} <span style={{color:C.green}}>👋</span>
+                  </h2>
+                  <p style={{...B,fontSize:14,color:C.sub,margin:0}}>Gerencie as informações da sua empresa, unidades e encontre os melhores Vorkers</p>
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+                  {[
+                    {v:units.length, l:"Unidades",          icon:"🏢", color:C.green, bg:C.greenBg},
+                    {v:0,             l:"Vorkers ativos",     icon:"👥", color:"#7C3AED", bg:"#F3E8FF"},
+                    {v:0,             l:"Convites enviados",  icon:"📨", color:"#F59E0B", bg:"#FEF3C7"},
+                    {v:0,             l:"Vorkers próximos",   icon:"📍", color:"#06B6D4", bg:"#CFFAFE"},
+                  ].map((s,i)=>(
+                    <div key={i} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 18px"}}>
+                      <div style={{width:34,height:34,borderRadius:10,background:s.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,marginBottom:10}}>{s.icon}</div>
+                      <div style={{...H,fontSize:28,fontWeight:900,color:C.navy,letterSpacing:-.5,lineHeight:1}}>{s.v}</div>
+                      <div style={{...B,fontSize:12,color:C.muted,marginTop:5}}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
+                  {/* LEFT — Unidades */}
+                  <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:18}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                      <div style={{...H,fontSize:14,fontWeight:800,color:C.navy}}>Unidades de trabalho</div>
+                    </div>
+                    {units.length===0?(
+                      <div style={{padding:"30px 0",textAlign:"center",...B,fontSize:13,color:C.muted}}>Nenhuma unidade cadastrada ainda.</div>
+                    ):units.map(u=>(
+                      <div key={u.id} style={{padding:"12px 14px",border:`1px solid ${C.border}`,borderRadius:10,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{display:"flex",gap:12,alignItems:"center",minWidth:0}}>
+                          <span style={{width:9,height:9,borderRadius:4.5,background:C.green,flexShrink:0}} />
+                          <div style={{minWidth:0}}>
+                            <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{u.nome}</div>
+                            <div style={{...B,fontSize:11.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.rua}, {u.numero} · {u.bairro} · {u.cidade}/{u.estado}</div>
+                          </div>
+                        </div>
+                        <span style={{...B,fontSize:10.5,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:6,padding:"3px 8px",flexShrink:0,marginLeft:10}}>Ativa</span>
+                      </div>
+                    ))}
+                    <button onClick={()=>setSubTab("unidades")} style={{...B,fontSize:13,fontWeight:600,color:C.green,background:"none",border:"none",cursor:"pointer",padding:"10px 0 0",display:"inline-flex",alignItems:"center",gap:5}}>
+                      + Adicionar nova unidade
+                    </button>
+                  </div>
+
+                  {/* RIGHT — Ações rápidas + Empresa */}
+                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                    <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:18}}>
+                      <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginBottom:8}}>Ações rápidas</div>
+                      {[
+                        {icon:"🔍", title:"Buscar Vorkers",     desc:"Encontre talentos próximos das suas unidades",  onClick:()=>setTab("talent")},
+                        {icon:"➕", title:"Adicionar unidade",  desc:"Cadastre uma nova localização operacional",     onClick:()=>setSubTab("unidades")},
+                        {icon:"👤", title:"Gerenciar acessos",  desc:"Convide novos administradores",                 soon:true},
+                      ].map((a,i,arr)=>(
+                        <button key={i} onClick={a.onClick} disabled={a.soon}
+                          style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 0",background:"transparent",border:"none",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",cursor:a.soon?"default":"pointer",textAlign:"left",opacity:a.soon?.5:1}}>
+                          <span style={{fontSize:16,flexShrink:0}}>{a.icon}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{a.title}</div>
+                            <div style={{...B,fontSize:11,color:C.muted,marginTop:2,lineHeight:1.4}}>{a.desc}</div>
+                          </div>
+                          <span style={{color:C.muted,fontSize:14,flexShrink:0}}>→</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:18}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <div style={{...H,fontSize:13,fontWeight:800,color:C.navy}}>Informações da empresa</div>
+                        <Badge status={company.status} />
+                      </div>
+                      {[
+                        ["Razão social", company.razao],
+                        ["Segmento",     company.seg],
+                        ["Cidade",       `${company.cidade}/${company.estado}`],
+                        ["CNPJ",         company.cnpj],
+                        ["E-mail",       company.resp_email],
+                      ].map(([k,v],i,arr)=>(
+                        <div key={k} style={{padding:"7px 0",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
+                          <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>{k}</div>
+                          <div style={{...B,fontSize:12.5,color:C.navy,fontWeight:600,wordBreak:"break-word"}}>{v||"—"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{marginTop:24,padding:"22px 28px",borderRadius:14,background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{...B,fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,.7)",textTransform:"uppercase",letterSpacing:1.5,marginBottom:6}}>Time Vorker — em breve</div>
+                    <div style={{...H,fontSize:18,fontWeight:900,color:"#fff",lineHeight:1.25,marginBottom:4}}>Monte seu time fixo com a Time Vorker</div>
+                    <div style={{...B,fontSize:13,color:"rgba(255,255,255,.85)",lineHeight:1.5}}>Tenha sua equipe dedicada de Vorkers só para sua marca, com estabilidade e performance.</div>
+                  </div>
+                  <button style={{...B,fontSize:13,fontWeight:700,color:C.green,background:"#fff",border:"none",borderRadius:9,padding:"11px 20px",cursor:"pointer",whiteSpace:"nowrap"}}>Quero saber mais</button>
+                </div>
+              </>}
+
+              {/* ─── UNIDADES DE TRABALHO ─── */}
+              {subTab==="unidades"&&<>
+                <div style={{marginBottom:18}}>
+                  <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,letterSpacing:-.5,marginBottom:4}}>Unidades de trabalho</h2>
+                  <p style={{...B,fontSize:13,color:C.sub,margin:0}}>Cadastre as localizações onde sua empresa precisa de Vorkers.</p>
+                </div>
+
+                <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,marginBottom:14}}>
+                  <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Suas unidades</div>
+                  {units.length===0&&<Alert type="warning">Nenhuma unidade cadastrada. Adicione abaixo para poder usar o Talent Browser.</Alert>}
+                  {units.map(u=>(
+                    <div key={u.id} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"14px 16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>{u.nome}</div>
+                        <div style={{...B,fontSize:12,color:C.sub,marginTop:3}}>{u.rua}, {u.numero} — {u.bairro}</div>
+                        <div style={{...B,fontSize:12,color:C.muted}}>{u.cidade}/{u.estado} · CEP {u.cep}</div>
+                      </div>
+                      <button onClick={()=>setDeleteModal({id:u.id,name:u.nome})}
+                        style={{background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",...B,fontSize:12,color:C.red,flexShrink:0}}>Remover</button>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{background:C.bg,border:`1.5px dashed ${C.border2}`,borderRadius:14,padding:22}}>
+                  <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>+ Adicionar unidade</div>
+                  <Field label="Nome da unidade" placeholder="Ex: Loja Lapa, CD Guarulhos" value={newUnit.nome} onChange={v=>setNewUnit(u=>({...u,nome:v}))} />
+                  <AddressBlock data={newUnit} setData={setNewUnit} loading={uCepLoad} setLoading={setUCepLoad} />
+                  <Btn label={savingUnit?"Salvando...":"+ Adicionar unidade"} variant={newUnit.nome&&newUnit.cep&&newUnit.rua&&newUnit.numero?"primary":"ghost"} size="md"
+                    onClick={addUnit} disabled={!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero} loading={savingUnit} />
+                </div>
+              </>}
+
+              {/* ─── PLACEHOLDERS ─── */}
+              {(subTab==="aprovacao"||subTab==="usuarios"||subTab==="preferencias")&&(
+                <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:60,textAlign:"center"}}>
+                  <div style={{fontSize:42,marginBottom:14}}>🚧</div>
+                  <div style={{...H,fontSize:18,fontWeight:800,color:C.navy,marginBottom:6}}>Em breve</div>
+                  <div style={{...B,fontSize:13,color:C.muted,maxWidth:380,margin:"0 auto",lineHeight:1.6}}>
+                    Essa área está em desenvolvimento e ficará disponível em uma das próximas atualizações.
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </>}
