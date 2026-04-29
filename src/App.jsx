@@ -2059,7 +2059,7 @@ function AdminLogin({ onLogin }) {
 // ═══════════════════════════════════════════════════════════════
 // ADMIN PANEL
 // ═══════════════════════════════════════════════════════════════
-function AdminPanel() {
+function AdminPanel({ onLogout }) {
   const [tab, setTab] = useState("dashboard");
   const [companies, setCompanies] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -2164,6 +2164,19 @@ function AdminPanel() {
   );
 
   return (
+    <>
+    <header className="hdr">
+      <div style={{width:"100%",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:24}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <img src={VORKER_LOGO} alt="Giobbi's" style={{height:38,objectFit:"contain"}} />
+          <span style={{...H,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase",padding:"4px 10px",background:C.greenBg,borderRadius:6,border:`1px solid ${C.greenBorder}`}}>Painel Admin</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <span style={{...B,fontSize:13,color:C.sub}}>Olá, Admin</span>
+          <Btn label="Sair" variant="ghost" size="sm" onClick={onLogout} />
+        </div>
+      </div>
+    </header>
     <div style={{display:"grid",gridTemplateColumns:"220px 1fr",minHeight:"calc(100vh - 60px)"}}>
       {rejectModal&&<RejectModal />}
       {deleteModal&&<AdminDeleteModal />}
@@ -2842,6 +2855,7 @@ function AdminPanel() {
         )}
       </main>
     </div>
+    </>
   );
 }
 
@@ -3688,7 +3702,7 @@ export default function VORKERApp() {
       {!admin&&!company&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
       {!admin&&company  &&screen==="company-app"     &&<TalentBrowser    company={company} onLogout={handleCompanyLogout} onUpdateCompany={setCompany} />}
       {!admin&&!company&&screen==="admin-login"      &&<AdminLogin       onLogin={()=>setAdmin(true)} />}
-      {admin                                         &&<AdminPanel />}
+      {admin                                         &&<AdminPanel onLogout={()=>{setAdmin(false);setScreen("home");}} />}
     </>
   );
 }
