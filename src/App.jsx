@@ -176,6 +176,7 @@ const Badge = ({ status }) => {
   const cfg={
     pending: {label:"Pendente",  bg:C.amberBg, color:C.amber,  icon:"⏳"},
     approved:{label:"Aprovado",  bg:C.greenBg, color:C.green,  icon:"✓"},
+    paused:  {label:"Pausado",   bg:C.blueBg,  color:C.blue,   icon:"⏸"},
     rejected:{label:"Reprovado", bg:C.redBg,   color:C.red,    icon:"✕"},
     trial:   {label:"Trial",     bg:C.blueBg,  color:C.blue,   icon:"★"},
     paid:    {label:"Pago",      bg:C.greenBg, color:C.green,  icon:"💳"},
@@ -2395,6 +2396,7 @@ function AdminPanel() {
           const statusInfo = {
             pending:  { label:"⏱ Aguardando análise",      bg:"#FEF3C7", color:"#92400E", border:"#FDE68A" },
             approved: { label:"✓ Aprovado na plataforma",  bg:C.greenBg, color:C.green,   border:C.greenBorder },
+            paused:   { label:"⏸ Perfil pausado",          bg:C.blueBg,  color:C.blue,    border:C.blueBorder },
             rejected: { label:"✕ Reprovado",               bg:C.redBg,   color:C.red,     border:C.redBorder },
           }[selWorker.status] || { label:"—", bg:C.bg, color:C.muted, border:C.border };
           const cadastradoEm = selWorker.created_at ? new Date(selWorker.created_at).toLocaleDateString("pt-BR") : null;
@@ -2473,9 +2475,28 @@ function AdminPanel() {
 
                 {selWorker.status==="approved" && (<>
                   <div style={{padding:"12px 14px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,...B,fontSize:13,color:C.green,fontWeight:600,textAlign:"center"}}>✓ Perfil ativo</div>
+                  <button onClick={()=>updateWo(selWorker.id,{status:"paused"})} disabled={saving}
+                    style={{background:C.blueBg,color:C.blue,border:`1.5px solid ${C.blueBorder}`,borderRadius:10,padding:"10px 16px",cursor:saving?"default":"pointer",textAlign:"left",opacity:saving?.6:1}}>
+                    <div style={{...H,fontSize:13,fontWeight:800,marginBottom:2}}>⏸ Pausar</div>
+                    <div style={{...B,fontSize:11,color:C.blue,opacity:.8}}>Oculta o perfil das buscas temporariamente</div>
+                  </button>
                   <button onClick={()=>updateWo(selWorker.id,{status:"rejected",reject_note:"Perfil suspenso."})} disabled={saving}
                     style={{background:C.redBg,color:C.red,border:`1.5px solid ${C.redBorder}`,borderRadius:10,padding:"10px 16px",cursor:saving?"default":"pointer",textAlign:"left",opacity:saving?.6:1}}>
-                    <div style={{...H,fontSize:13,fontWeight:800,marginBottom:2}}>⏸ Suspender</div>
+                    <div style={{...H,fontSize:13,fontWeight:800,marginBottom:2}}>⛔ Suspender</div>
+                    <div style={{...B,fontSize:11,color:C.red,opacity:.8}}>Remove o perfil da plataforma</div>
+                  </button>
+                </>)}
+
+                {selWorker.status==="paused" && (<>
+                  <div style={{padding:"12px 14px",background:C.blueBg,border:`1px solid ${C.blueBorder}`,borderRadius:10,...B,fontSize:13,color:C.blue,fontWeight:600,textAlign:"center"}}>⏸ Perfil pausado</div>
+                  <button onClick={()=>updateWo(selWorker.id,{status:"approved"})} disabled={saving}
+                    style={{background:C.greenBg,color:C.green,border:`1.5px solid ${C.greenBorder}`,borderRadius:10,padding:"10px 16px",cursor:saving?"default":"pointer",textAlign:"left",opacity:saving?.6:1}}>
+                    <div style={{...H,fontSize:13,fontWeight:800,marginBottom:2}}>▶ Reativar</div>
+                    <div style={{...B,fontSize:11,color:C.green,opacity:.8}}>Volta a aparecer nas buscas</div>
+                  </button>
+                  <button onClick={()=>updateWo(selWorker.id,{status:"rejected",reject_note:"Perfil suspenso."})} disabled={saving}
+                    style={{background:C.redBg,color:C.red,border:`1.5px solid ${C.redBorder}`,borderRadius:10,padding:"10px 16px",cursor:saving?"default":"pointer",textAlign:"left",opacity:saving?.6:1}}>
+                    <div style={{...H,fontSize:13,fontWeight:800,marginBottom:2}}>⛔ Suspender</div>
                     <div style={{...B,fontSize:11,color:C.red,opacity:.8}}>Remove o perfil da plataforma</div>
                   </button>
                 </>)}
