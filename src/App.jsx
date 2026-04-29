@@ -910,6 +910,13 @@ function Landing({ onNav }) {
           .vorker-admin-body{grid-template-columns:1fr!important;gap:12px!important}
           .vorker-day-row{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
           .vorker-exp-grid{grid-template-columns:1fr!important;gap:10px!important}
+          .vorker-worker-detail{grid-template-columns:1fr!important;gap:12px!important}
+          .vorker-worker-rail{position:static!important}
+          .vorker-worker-head{grid-template-columns:1fr!important;gap:14px!important}
+          .vorker-worker-head>div:nth-child(2){padding-left:0!important;border-left:none!important;border-top:1px solid #E2E8F0;padding-top:14px!important}
+          .vorker-worker-facts{gap:10px!important}
+          .vorker-exp-disp{grid-template-columns:1fr!important}
+          .vorker-verif-emp{grid-template-columns:1fr!important}
           .vorker-traits-grid{grid-template-columns:repeat(2,1fr)!important}
           .vorker-docs-grid{grid-template-columns:1fr!important}
           .vorker-day-full{display:none!important}
@@ -2999,239 +3006,295 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
   const TABS = [{id:"talent",icon:"🔍",label:"Talent Browser"},{id:"profile",icon:"🏢",label:"Meu Perfil"}];
 
-  // Worker detail modal
-  if(selWorker) return (
+  // Worker detail page (visão da empresa)
+  if(selWorker) return (()=>{
+    const score = computeWorkerScore(selWorker);
+    const idade = calcIdade(selWorker.nascimento);
+    const TRAIT_BY_ANSWER = {
+      corrido: {
+        manter:     {title:"Bem sob pressão",    desc:"Mantém velocidade fazendo o melhor possível", icon:"⚡"},
+        equilibrar: {title:"Equilibra ritmo",    desc:"Equilibra velocidade e atenção",              icon:"⚖️"},
+        diminuir:   {title:"Caprichoso",         desc:"Diminui o ritmo para garantir qualidade",     icon:"🎯"},
+      },
+      diaADia: {
+        praticas:   {title:"Foco operacional",   desc:"Tarefas práticas e operacionais",             icon:"🔧"},
+        equilibrio: {title:"Organização",        desc:"Equilibra rapidez e organização",             icon:"⚖️"},
+        cuidado:    {title:"Pensa com cuidado",  desc:"Pensa com cuidado em cada etapa",             icon:"🧠"},
+      },
+      tarefa: {
+        iniciativa: {title:"Autonomia",          desc:"Tenta resolver sozinho primeiro",             icon:"👤"},
+        perguntar:  {title:"Colaborativa",       desc:"Pergunta se necessário",                       icon:"💬"},
+        orientacao: {title:"Pede orientação",    desc:"Pede orientação antes de começar",             icon:"📋"},
+      },
+      diferente: {
+        ajusta:     {title:"Adaptação rápida",   desc:"Se ajusta rápido quando algo muda",           icon:"🔄"},
+        entender:   {title:"Analítica",          desc:"Tenta entender o que aconteceu",               icon:"🔍"},
+        avisar:     {title:"Comunicativa",       desc:"Prefere avisar alguém antes",                  icon:"📣"},
+      },
+      imprevisto: {
+        resolver:   {title:"Comprometida",       desc:"Tenta resolver e cumprir o que assumiu",      icon:"🛡"},
+        aviso:      {title:"Avisa antes",        desc:"Avisa o quanto antes",                          icon:"⏰"},
+        cancelar:   {title:"Conservadora",       desc:"Prefere cancelar quando há imprevisto",        icon:"⏸"},
+      },
+    };
+    const TIER = (tempo) => {
+      if(!tempo) return null;
+      if(tempo==="Menos de 6 meses" || tempo==="6 meses a 1 ano") return {label:"Baixa experiência", bg:"#FEE2E2", color:"#DC2626", border:"#FECACA"};
+      if(tempo==="1 a 3 anos") return {label:"Experiência média", bg:"#FEF3C7", color:"#92400E", border:"#FDE68A"};
+      return {label:"Alta experiência", bg:"#DCFCE7", color:"#16A34A", border:"#BBF7D0"};
+    };
+    const primaryFunc = SPECS.find(s=>selWorker.specs?.includes(s.id));
+    const primaryTempo = primaryFunc ? selWorker.func_exp?.[primaryFunc.id]?.tempo : null;
+    const tier = TIER(primaryTempo);
+    const cellsFilled = Object.values(selWorker.disponibilidade||{}).reduce((a,b)=>a+(b?.length||0),0);
+    const dispTag = cellsFilled>=14 ? {l:"Disponibilidade ampla",c:C.green,bg:C.greenBg,bd:C.greenBorder}
+                    : cellsFilled>=6 ? {l:"Disponibilidade parcial",c:"#CA8A04",bg:"#FEFCE8",bd:"#FDE68A"}
+                    : {l:"Disponibilidade limitada",c:C.red,bg:C.redBg,bd:C.redBorder};
+    const flex = selWorker.flexibilidade && FLEX_LABEL[selWorker.flexibilidade];
+    const empresas = [
+      ...(selWorker.empresas_selected||[]).map(id=>{ const e=EMPRESAS_PRESET.find(x=>x.id===id); return e?{label:e.label,custom:false}:null; }).filter(Boolean),
+      ...(selWorker.empresas_custom||[]).map(nome=>({label:nome,custom:true})),
+    ];
+    const scoreLabel = score.total>=80?"Excelente":score.total>=60?"Bom":score.total>=40?"Regular":"Baixo";
+    const firstName = (selWorker.nome||"").split(" ")[0];
+    const isFem = firstName && /a$/i.test(firstName);
+    const pron = isFem?"ela":"ele";
+    const atencoes = [];
+    if(cellsFilled<6) atencoes.push("Disponibilidade limitada na semana");
+    if(score.breakdown.experiencia<30) atencoes.push("Pouca experiência declarada");
+    if(empresas.length===0) atencoes.push("Sem histórico de empresas");
+
+    return (
     <div style={{minHeight:"90vh",background:C.bg}}>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"24px 32px 60px"}}>
 
-      {/* Hero banner */}
-      <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1E3A5F 100%)`,padding:"32px 40px 28px"}}>
-        <div style={{maxWidth:900,margin:"0 auto"}}>
-          <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:"rgba(255,255,255,.6)",background:"none",border:"none",cursor:"pointer",marginBottom:20,display:"flex",alignItems:"center",gap:6}}>
-            ← Voltar ao Talent Browser
-          </button>
-          <div style={{display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
-            {/* Avatar — foto real se houver, senão inicial */}
-            {selWorker.foto_rosto ? (
-              <img src={selWorker.foto_rosto} alt={selWorker.nome}
-                style={{width:90,height:90,borderRadius:45,objectFit:"cover",border:"3px solid rgba(255,255,255,.2)",flexShrink:0,background:C.bg}} />
-            ) : (
-              <div style={{width:90,height:90,borderRadius:45,background:C.green,border:"3px solid rgba(255,255,255,.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <span style={{...H,fontSize:36,fontWeight:900,color:"#fff"}}>{selWorker.nome?.[0]}</span>
-              </div>
-            )}
-            {/* Name + info */}
-            <div style={{flex:1}}>
-              <h2 style={{...H,fontSize:30,fontWeight:900,color:"#fff",letterSpacing:-.5,marginBottom:6}}>{selWorker.nome}</h2>
-              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-                <span style={{...B,fontSize:13,color:"rgba(255,255,255,.7)"}}>📍 {selWorker.cidade}/{selWorker.estado}</span>
-                <span style={{...B,fontSize:13,color:"#4ADE80",fontWeight:600}}>📏 {selWorker.distLabel} desta unidade</span>
-                <span style={{...B,fontSize:13,color:"rgba(255,255,255,.7)"}}>🔄 Aceita vagas em até {selWorker.raio_km||10}km</span>
-                <span style={{...B,fontSize:13,color:"rgba(255,255,255,.7)"}}>🚌 {selWorker.deslocamento||"—"}</span>
-              </div>
-            </div>
-            {/* WhatsApp CTA — hero */}
-            <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",flexShrink:0}}>
-              <div style={{background:"#25D366",borderRadius:12,padding:"14px 24px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
-                <span style={{fontSize:22}}>💬</span>
-                <div>
-                  <div style={{...H,fontSize:15,fontWeight:700,color:"#fff"}}>Convidar pelo WhatsApp</div>
-                  <div style={{...B,fontSize:11,color:"rgba(255,255,255,.8)"}}>Mensagem pré-formatada</div>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          {/* Specialty chips in hero — mostra função + tempo de experiência */}
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:20}}>
-            {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
-              const tempo = selWorker.func_exp?.[s.id]?.tempo;
-              return <div key={s.id} style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.15)",borderRadius:20,padding:"5px 12px"}}>
-                <span style={{fontSize:14}}>{s.icon}</span>
-                <span style={{...B,fontSize:12,fontWeight:600,color:"#fff"}}>{s.label}</span>
-                {tempo&&<span style={{...B,fontSize:10,color:"#4ADE80",background:"rgba(0,0,0,.3)",borderRadius:10,padding:"1px 6px"}}>{tempo}</span>}
-              </div>;
-            })}
-          </div>
+        {/* Top nav */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:12,flexWrap:"wrap"}}>
+          <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5}}>← Voltar ao Talent Browser</button>
+          <button style={{...B,fontSize:12.5,color:C.red,background:"none",border:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,opacity:.85}}><span>⚠</span> Denunciar perfil</button>
         </div>
-      </div>
 
-      {/* Content */}
-      <div style={{maxWidth:900,margin:"0 auto",padding:"24px 40px 60px",display:"grid",gridTemplateColumns:"1fr 300px",gap:20,alignItems:"start"}}>
-        <div>
+        {/* 2-column layout */}
+        <div className="vorker-worker-detail" style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:18,alignItems:"flex-start"}}>
 
-          {/* Perfil comportamental — 5 respostas */}
-          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
-            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:6}}>Perfil de trabalho</div>
-            <div style={{...B,fontSize:12,color:C.muted,marginBottom:16}}>Como ele se comporta no dia a dia, segundo o que respondeu no cadastro.</div>
-            {selWorker.perfil_trabalho && Object.keys(PERFIL_LABELS).some(k=>selWorker.perfil_trabalho?.[k]) ? (
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}} className="vorker-perfil-grid">
-                {Object.entries(PERFIL_LABELS).map(([key, {title, opts}]) => {
-                  const val = selWorker.perfil_trabalho?.[key];
-                  const text = val ? opts[val] : null;
-                  return (
-                    <div key={key} style={{background:text?C.greenBg+"60":C.bg,border:`1px solid ${text?C.greenBorder:C.border}`,borderRadius:10,padding:"12px 14px"}}>
-                      <div style={{...B,fontSize:11,fontWeight:600,color:C.muted,marginBottom:6,letterSpacing:.2,textTransform:"uppercase"}}>{title}</div>
-                      <div style={{...H,fontSize:13,fontWeight:700,color:text?C.green:C.sub,lineHeight:1.35}}>{text || "—"}</div>
+          {/* MAIN COLUMN */}
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+            {/* Header card: identity + score */}
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24}}>
+              <div className="vorker-worker-head" style={{display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:24,alignItems:"flex-start"}}>
+
+                <div>
+                  <div style={{display:"flex",gap:14,alignItems:"center",marginBottom:14}}>
+                    {selWorker.foto_rosto ? (
+                      <img src={selWorker.foto_rosto} alt={selWorker.nome} style={{width:72,height:72,borderRadius:36,objectFit:"cover",border:`2px solid ${C.greenBorder}`,flexShrink:0}} />
+                    ) : (
+                      <div style={{width:72,height:72,borderRadius:36,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{...H,fontSize:28,fontWeight:900,color:"#fff"}}>{selWorker.nome?.[0]}</span>
+                      </div>
+                    )}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"inline-flex",alignItems:"center",gap:5,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:6,padding:"3px 9px",marginBottom:6,...B,fontSize:11,fontWeight:700,color:C.green}}>✓ {isFem?"Pronta":"Pronto"} para trabalhar</div>
+                      <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,letterSpacing:-.4,lineHeight:1.15}}>{selWorker.nome}</h2>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{...B,fontSize:13,color:C.muted,fontStyle:"italic"}}>Perfil ainda não preenchido.</div>
-            )}
-            {selWorker.pcd&&(
-              <div style={{marginTop:14,background:C.blueBg,border:`1px solid ${C.blueBorder}`,borderRadius:9,padding:"10px 14px",...B,fontSize:13,color:C.blue}}>
-                ♿ PCD{selWorker.pcd_tipo?` — ${selWorker.pcd_tipo}`:""}
-              </div>
-            )}
-          </div>
-
-          {/* Flexibilidade — aviso curto */}
-          {selWorker.flexibilidade && FLEX_LABEL[selWorker.flexibilidade] && (
-            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 24px",marginBottom:16,display:"flex",alignItems:"center",gap:14}}>
-              <div style={{width:44,height:44,borderRadius:11,background:C.greenBg,border:`1px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{FLEX_LABEL[selWorker.flexibilidade].icon}</div>
-              <div>
-                <div style={{...B,fontSize:11,color:C.muted,marginBottom:2,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Flexibilidade</div>
-                <div style={{...H,fontSize:14,fontWeight:800,color:C.navy}}>{FLEX_LABEL[selWorker.flexibilidade].label}</div>
-                <div style={{...B,fontSize:12,color:C.sub,marginTop:1}}>{FLEX_LABEL[selWorker.flexibilidade].desc}</div>
-              </div>
-            </div>
-          )}
-
-          {/* Funções e tempo de experiência */}
-          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
-            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Funções e tempo de experiência</div>
-            {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
-              const tempo = selWorker.func_exp?.[s.id]?.tempo;
-              return (
-                <div key={s.id} style={{background:C.bg,borderRadius:12,padding:"14px 18px",marginBottom:10,border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
-                    <span style={{fontSize:22,flexShrink:0}}>{s.icon}</span>
-                    <span style={{...H,fontSize:15,fontWeight:700,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.label}</span>
                   </div>
-                  {tempo
-                    ? <span style={{...B,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,padding:"4px 12px",borderRadius:20,whiteSpace:"nowrap"}}>{tempo}</span>
-                    : <span style={{...B,fontSize:11,color:C.muted,fontStyle:"italic"}}>Sem tempo informado</span>
-                  }
+                  <div className="vorker-worker-facts" style={{display:"flex",gap:16,paddingTop:14,borderTop:`1px solid ${C.border}`,flexWrap:"wrap"}}>
+                    {[
+                      {icon:"🎂", value:idade!=null?`${idade} anos`:"—"},
+                      {icon:"📍", value:`${selWorker.cidade||"—"}/${selWorker.estado||""}`},
+                      {icon:"🚗", value:selWorker.deslocamento||"—"},
+                      flex && {icon:flex.icon, value:flex.label},
+                      primaryTempo && {icon:"⏱", value:primaryTempo},
+                    ].filter(Boolean).map((f,i)=>(
+                      <div key={i} style={{display:"inline-flex",alignItems:"center",gap:6,...B,fontSize:12.5,color:C.navy,fontWeight:600}}>
+                        <span style={{fontSize:14}}>{f.icon}</span><span>{f.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              );
-            })}
-            {selWorker.specs?.includes("custom") && (selWorker.spec_levels?.custom?.label || selWorker.func_exp?.custom?.tempo) && (
-              <div style={{background:C.bg,borderRadius:12,padding:"14px 18px",border:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
-                  <span style={{fontSize:22}}>⭐</span>
-                  <span style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{selWorker.spec_levels?.custom?.label||"Função própria"}</span>
-                </div>
-                {selWorker.func_exp?.custom?.tempo && (
-                  <span style={{...B,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,padding:"4px 12px",borderRadius:20}}>{selWorker.func_exp.custom.tempo}</span>
-                )}
-              </div>
-            )}
-          </div>
 
-          {/* Empresas onde já trabalhou */}
-          {((selWorker.empresas_selected?.length||0) + (selWorker.empresas_custom?.length||0)) > 0 && (
-            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24,marginBottom:16}}>
-              <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:6}}>Empresas onde já trabalhou</div>
-              <div style={{...B,fontSize:12,color:C.muted,marginBottom:14}}>Histórico declarado pelo Vorker.</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {(selWorker.empresas_selected||[]).map(id=>{
-                  const e = EMPRESAS_PRESET.find(x=>x.id===id);
-                  return e ? (
-                    <span key={id} style={{...B,fontSize:13,fontWeight:600,color:C.navy,background:C.bg,border:`1px solid ${C.border2}`,borderRadius:8,padding:"6px 12px"}}>{e.label}</span>
-                  ) : null;
-                })}
-                {(selWorker.empresas_custom||[]).map((nome,i)=>(
-                  <span key={`c${i}`} style={{display:"inline-flex",alignItems:"center",gap:5,...B,fontSize:13,fontWeight:600,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"6px 12px"}}>
-                    <span style={{fontSize:11}}>⭐</span> {nome}
-                  </span>
-                ))}
+                <div style={{textAlign:"center",paddingLeft:20,borderLeft:`1px solid ${C.border}`}}>
+                  <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.4,textTransform:"uppercase",marginBottom:8}}>Recomendação do Vorker</div>
+                  <div style={{display:"flex",alignItems:"baseline",justifyContent:"center",gap:5,marginBottom:8}}>
+                    <span style={{...H,fontSize:46,fontWeight:900,color:scoreColor(score.total),letterSpacing:-1.5,lineHeight:1}}>{score.total}</span>
+                    <span style={{...B,fontSize:14,color:C.muted,fontWeight:600}}>/100</span>
+                  </div>
+                  <div style={{height:6,borderRadius:3,background:"#E2E8F0",overflow:"hidden",marginBottom:8,maxWidth:200,marginLeft:"auto",marginRight:"auto"}}>
+                    <div style={{height:"100%",borderRadius:3,background:scoreColor(score.total),width:`${score.total}%`,transition:"width .3s"}} />
+                  </div>
+                  <div style={{...B,fontSize:12,fontWeight:700,color:scoreColor(score.total)}}>{scoreLabel}</div>
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Disponibilidade — grade visual */}
-          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24}}>
-            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:16}}>Disponibilidade</div>
-            <div style={{overflowX:"auto"}}>
-              <table className="vorker-disp-table" style={{width:"100%",borderCollapse:"separate",borderSpacing:"5px"}}>
-                <thead>
-                  <tr>
-                    <th style={{padding:"6px 8px",minWidth:80}}></th>
-                    {SHIFTS.map(sh=>(
-                      <th key={sh.id} style={{textAlign:"center",padding:"6px 8px",minWidth:96}}>
-                        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                          <span style={{fontSize:16,lineHeight:1}}>{sh.icon}</span>
-                          <span style={{...H,fontSize:12,fontWeight:700,color:sh.color}}>{sh.label}</span>
-                          <span style={{...B,fontSize:10,color:C.muted}}>{sh.time}</span>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {DAYS.map(day=>{
-                    const dayShifts=selWorker.disponibilidade?.[day]||[];
-                    const hasAny=dayShifts.length>0;
+            {/* Como ela trabalha no dia a dia */}
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
+              <div style={{...H,fontSize:14,fontWeight:800,color:C.navy,marginBottom:14}}>Como {pron} trabalha no dia a dia</div>
+              {selWorker.perfil_trabalho && Object.keys(TRAIT_BY_ANSWER).some(k=>selWorker.perfil_trabalho?.[k]) ? (
+                <div className="vorker-traits-grid" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+                  {Object.keys(TRAIT_BY_ANSWER).map(key=>{
+                    const ans = selWorker.perfil_trabalho?.[key];
+                    const trait = ans ? TRAIT_BY_ANSWER[key]?.[ans] : null;
+                    if(!trait) return (
+                      <div key={key} style={{padding:"12px 10px",textAlign:"center",background:C.bg,border:`1px dashed ${C.border}`,borderRadius:10}}>
+                        <div style={{...B,fontSize:11,color:C.muted,fontStyle:"italic"}}>—</div>
+                      </div>
+                    );
                     return (
-                      <tr key={day}>
-                        <td style={{...H,fontSize:12,fontWeight:700,color:hasAny?C.green:C.sub,padding:"8px 6px",borderRight:`1px solid ${C.border}`}}>
-                          <span className="vorker-day-full">{DAY_FULL[day]||day}</span>
-                          <span className="vorker-day-short" style={{display:"none"}}>{day}</span>
-                        </td>
-                        {SHIFTS.map(sh=>{
-                          const on=dayShifts.includes(sh.id);
-                          return <td key={sh.id} style={{padding:2}}>
-                            <div style={{padding:"10px 6px",borderRadius:8,background:on?C.greenBg:"#fff",border:`1.5px solid ${on?C.green:C.border2}`,textAlign:"center",minHeight:38,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                              <span style={{...H,fontSize:14,fontWeight:700,color:on?C.green:"#CBD5E1",lineHeight:1}}>{on?"✓":"—"}</span>
-                            </div>
-                          </td>;
-                        })}
-                      </tr>
+                      <div key={key} style={{padding:"14px 12px",textAlign:"center",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10}}>
+                        <div style={{width:34,height:34,margin:"0 auto 8px",borderRadius:9,background:C.greenBg,border:`1px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{trait.icon}</div>
+                        <div style={{...H,fontSize:12,fontWeight:800,color:C.navy,marginBottom:3,lineHeight:1.25}}>{trait.title}</div>
+                        <div style={{...B,fontSize:10.5,color:C.sub,lineHeight:1.4}}>{trait.desc}</div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              ) : (
+                <div style={{...B,fontSize:13,color:C.muted,fontStyle:"italic"}}>Perfil de trabalho ainda não preenchido.</div>
+              )}
             </div>
+
+            {/* Experiência + Disponibilidade */}
+            <div className="vorker-exp-disp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
+                <div style={{...H,fontSize:14,fontWeight:800,color:C.navy,marginBottom:12}}>Experiência profissional</div>
+                {primaryFunc ? (
+                  <>
+                    <div style={{padding:"12px 14px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg,marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{...B,fontSize:10.5,color:C.muted,marginBottom:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Função principal</div>
+                          <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>{primaryFunc.icon}</span>{primaryFunc.label}</div>
+                        </div>
+                        {tier && <span style={{...B,fontSize:10.5,fontWeight:700,color:tier.color,background:tier.bg,border:`1px solid ${tier.border}`,padding:"3px 9px",borderRadius:7,whiteSpace:"nowrap"}}>{tier.label}</span>}
+                      </div>
+                      {primaryTempo && <div style={{...B,fontSize:11.5,color:C.sub,marginTop:6}}>{primaryTempo}</div>}
+                    </div>
+                    {selWorker.specs?.length>1 && (
+                      <div style={{...B,fontSize:11,color:C.muted}}>+ {selWorker.specs.length-1} outra{selWorker.specs.length>2?"s":""} função: {SPECS.filter(s=>selWorker.specs?.includes(s.id)).slice(1).map(s=>s.label).join(", ")}</div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{...B,fontSize:13,color:C.muted,fontStyle:"italic"}}>Nenhuma função informada.</div>
+                )}
+              </div>
+
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:6}}>
+                  <div style={{...H,fontSize:14,fontWeight:800,color:C.navy}}>Disponibilidade semanal</div>
+                  <span style={{...B,fontSize:10.5,fontWeight:700,color:dispTag.c,background:dispTag.bg,border:`1px solid ${dispTag.bd}`,padding:"2px 8px",borderRadius:12}}>{dispTag.l}</span>
+                </div>
+                <div className="vorker-day-row" style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5}}>
+                  {DAYS.map(day=>{
+                    const shifts=selWorker.disponibilidade?.[day]||[];
+                    const primary = SHIFTS.find(s=>shifts.includes(s.id));
+                    const hasAny = shifts.length>0;
+                    return (
+                      <div key={day} style={{textAlign:"center",padding:"8px 3px",borderRadius:7,background:hasAny?"#fff":C.bg,border:`1.5px solid ${C.border}`}}>
+                        <div style={{...H,fontSize:10.5,fontWeight:800,color:hasAny?C.green:C.muted}}>{day}</div>
+                        <div style={{fontSize:14,lineHeight:1,marginTop:3}}>{primary?primary.icon:"·"}</div>
+                        <div style={{...B,fontSize:9.5,fontWeight:600,color:primary?primary.color:C.muted,marginTop:3}}>{primary?primary.label:"—"}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {flex && <div style={{marginTop:10,...B,fontSize:11.5,color:C.sub,display:"flex",alignItems:"center",gap:5}}><span>{flex.icon}</span><span><strong style={{color:C.navy,fontWeight:700}}>{flex.desc}</strong></span></div>}
+              </div>
+            </div>
+
+            {/* Verificação + Empresas */}
+            <div className="vorker-verif-emp" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
+                <div style={{...H,fontSize:14,fontWeight:800,color:C.navy,marginBottom:12}}>Verificação e segurança</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {[
+                    {ok:!!selWorker.foto_rosto,        label:"Foto de perfil verificada"},
+                    {ok:!!selWorker.selfie_doc,        label:`Documento (${selWorker.doc_tipo||"RG/CNH"}) verificado`},
+                    {ok:!!selWorker.cpf,               label:"CPF validado"},
+                    {ok:selWorker.status==="approved", label:"Aprovado pela curadoria Vorker"},
+                  ].map(({ok,label})=>(
+                    <div key={label} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:ok?C.greenBg+"60":C.bg,border:`1px solid ${ok?C.greenBorder:C.border}`,borderRadius:7}}>
+                      <span style={{fontSize:13,color:ok?C.green:C.muted,fontWeight:900}}>{ok?"✓":"·"}</span>
+                      <span style={{...B,fontSize:12,fontWeight:600,color:ok?C.green:C.muted}}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
+                <div style={{...H,fontSize:14,fontWeight:800,color:C.navy,marginBottom:12}}>Empresas onde já trabalhou</div>
+                {empresas.length>0 ? (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {empresas.map((e,i)=>(
+                      <span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,...B,fontSize:11.5,fontWeight:600,color:e.custom?C.green:C.navy,background:e.custom?C.greenBg:C.bg,border:`1px solid ${e.custom?C.greenBorder:C.border2}`,borderRadius:7,padding:"4px 10px"}}>
+                        {e.custom && <span style={{fontSize:9}}>⭐</span>}{e.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{...B,fontSize:12,color:C.muted,fontStyle:"italic"}}>Sem histórico declarado.</div>
+                )}
+              </div>
+            </div>
+
+            <div style={{...B,fontSize:11.5,color:C.muted,textAlign:"center",fontStyle:"italic",padding:"8px 16px"}}>💡 Dica Vorker: ao convidar pelo WhatsApp, seja {isFem?"clara":"claro"} sobre datas, horários e remuneração para aumentar a chance de aceite.</div>
           </div>
-        </div>
 
-        {/* Sticky action panel */}
-        <div style={{position:"sticky",top:20}}>
-          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
-            <div style={{background:C.navy,padding:"18px 20px"}}>
-              <div style={{...H,fontSize:16,fontWeight:800,color:"#fff",marginBottom:2}}>Convidar {selWorker.nome.split(" ")[0]}</div>
-              <div style={{...B,fontSize:12,color:"rgba(255,255,255,.6)"}}>para a unidade {selUnit?.nome}</div>
-            </div>
-            <div style={{padding:20}}>
-              <div style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"12px 14px",marginBottom:16}}>
-                <div style={{...B,fontSize:11,color:C.muted,marginBottom:4}}>Distância até a unidade</div>
-                <div style={{...H,fontSize:24,fontWeight:900,color:C.green}}>{selWorker.distLabel}</div>
-                <div style={{...B,fontSize:11,color:C.muted,marginTop:2}}>Raio aceito: {selWorker.raio_km||10}km ✓</div>
-              </div>
+          {/* RIGHT RAIL */}
+          <div className="vorker-worker-rail" style={{display:"flex",flexDirection:"column",gap:14,position:"sticky",top:20}}>
 
-              <div style={{...B,fontSize:12,color:C.sub,marginBottom:14,lineHeight:1.65}}>
-                O WhatsApp vai abrir com uma mensagem já pronta para {selWorker.nome.split(" ")[0]}. Você pode editar antes de enviar.
-              </div>
-
-              <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>
-                <div style={{background:"#25D366",borderRadius:10,padding:"14px 18px",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-                  <span style={{fontSize:22}}>💬</span>
-                  <span style={{...H,fontSize:15,fontWeight:700,color:"#fff"}}>Abrir WhatsApp</span>
+            <div style={{background:C.white,border:`2px solid ${C.greenBorder}`,borderRadius:14,padding:20,boxShadow:"0 4px 20px rgba(22,163,74,.08)"}}>
+              <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>Convide {firstName} agora</div>
+              <p style={{...B,fontSize:12,color:C.sub,marginBottom:14,lineHeight:1.5}}>Mensagem pré-formatada será enviada via WhatsApp para a unidade <strong style={{color:C.navy}}>{selUnit?.nome}</strong>. Você pode editar antes de enviar.</p>
+              <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",display:"block"}}>
+                <div style={{background:"#25D366",borderRadius:10,padding:"14px 16px",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 4px 12px rgba(37,211,102,.3)"}}>
+                  <span style={{fontSize:18}}>💬</span>
+                  <span style={{...H,fontSize:14,fontWeight:800,color:"#fff"}}>Convidar pelo WhatsApp</span>
                 </div>
               </a>
+              <div style={{marginTop:10,padding:"8px 12px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                <span style={{...B,fontSize:11,color:C.sub,fontWeight:600}}>📍 Distância da unidade</span>
+                <span style={{...H,fontSize:14,fontWeight:900,color:C.green}}>{selWorker.distLabel}</span>
+              </div>
+            </div>
 
-              <Div />
-              <div style={{...B,fontSize:12,color:C.muted,lineHeight:1.7}}>
-                <div>📍 <strong style={{color:C.navy}}>{selUnit?.nome}</strong></div>
-                <div style={{marginTop:4}}>🔄 Se desloca de <strong style={{color:C.navy}}>{selWorker.deslocamento||"—"}</strong></div>
+            {atencoes.length>0 && (
+              <div style={{background:"#FEFCE8",border:"1px solid #FDE68A",borderRadius:14,padding:18}}>
+                <div style={{...H,fontSize:12,fontWeight:800,color:"#92400E",marginBottom:10,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}><span>⚠</span> Atenção</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {atencoes.map((a,i)=>(
+                    <div key={i} style={{...B,fontSize:12,color:"#92400E",lineHeight:1.45,display:"flex",gap:6,alignItems:"flex-start"}}>
+                      <span style={{flexShrink:0}}>·</span><span>{a}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:18}}>
+              <div style={{...H,fontSize:12,fontWeight:800,color:C.navy,marginBottom:10,letterSpacing:.3,textTransform:"uppercase"}}>Por que convidar pelo WhatsApp?</div>
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                {[
+                  "Resposta rápida — Vorkers respondem em média em 2h",
+                  "Sem login extra ou cadastro adicional",
+                  "Mensagem já vem formatada com sua unidade",
+                  "Conversa direta sem intermediários",
+                ].map((t,i)=>(
+                  <div key={i} style={{display:"flex",gap:7,alignItems:"flex-start"}}>
+                    <span style={{color:C.green,fontSize:12,fontWeight:900,marginTop:1}}>✓</span>
+                    <span style={{...B,fontSize:11.5,color:C.sub,lineHeight:1.45}}>{t}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+    );
+  })();
 
   return (
     <div style={{minHeight:"90vh",background:C.bg}}>
