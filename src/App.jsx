@@ -3643,30 +3643,246 @@ function AuthChoice({ onNav }) {
   );
 }
 
-// ─── WORKER DASHBOARD ──────────────────────────────────────────
-function WorkerDashboard({ worker, onLogout }) {
-  const firstName = (worker.nome||"").split(" ")[0] || "colaborador";
+// ─── WORKER PROFILE (self-view com edição por seção) ──────────
+const WInfoLine = ({ icon, label, value }) => (
+  <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0"}}>
+    <span style={{fontSize:18}}>{icon}</span>
+    <div>
+      <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>{label}</div>
+      <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{value||"—"}</div>
+    </div>
+  </div>
+);
+
+function WorkerProfile({ worker, onLogout, onUpdate }) {
+  const [w, setW] = useState(worker);
+  const [editingContact, setEditingContact] = useState(false);
+  const [contact, setContact] = useState(null);
+  const [cepLoad, setCepLoad] = useState(false);
+  const [addingEmpresa, setAddingEmpresa] = useState(false);
+  const [newEmpresa, setNewEmpresa] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const flash = (type,msg,ms=4000) => { setToast({type,msg}); setTimeout(()=>setToast(null), ms); };
+
+  const startEditContact = () => {
+    setContact({
+      telefone:w.telefone||"", email:w.email||"",
+      cep:w.cep||"", rua:w.rua||"", numero:w.numero||"", complemento:w.complemento||"",
+      bairro:w.bairro||"", cidade:w.cidade||"", estado:w.estado||"",
+      raio_km:w.raio_km||10, deslocamento:w.deslocamento||"",
+    });
+    setEditingContact(true);
+  };
+
+  const saveContact = async () => {
+    setSaving(true);
+    try {
+      await updateWorkerDB(w.id, contact);
+      const newW = {...w, ...contact};
+      setW(newW); onUpdate(newW);
+      setEditingContact(false);
+      flash("success","Dados de contato atualizados.");
+    } catch(e){ flash("error","Erro ao salvar. Tente novamente."); }
+    finally { setSaving(false); }
+  };
+
+  const addEmpresa = async () => {
+    const nome = newEmpresa.trim();
+    if(!nome) return;
+    setSaving(true);
+    const empresas_custom = [...(w.empresas_custom||[]), nome];
+    const changes = { empresas_custom, status:"pending", reject_note:"" };
+    try {
+      await updateWorkerDB(w.id, changes);
+      const newW = {...w, ...changes};
+      setW(newW); onUpdate(newW);
+      setNewEmpresa(""); setAddingEmpresa(false);
+      flash("warning","Experiência adicionada. Seu cadastro voltou para análise.",6000);
+    } catch(e){ flash("error","Erro ao salvar. Tente novamente."); }
+    finally { setSaving(false); }
+  };
+
+  const especialidades = [
+    ...SPECS.filter(s=>w.specs?.includes(s.id)).map(s=>({id:s.id,label:s.label,icon:s.icon,tempo:w.func_exp?.[s.id]?.tempo})),
+    ...(w.specs?.includes("custom")?[{id:"custom",label:w.spec_levels?.custom?.label||"Função própria",icon:"⭐",tempo:w.func_exp?.custom?.tempo}]:[]),
+  ];
+  const empresas = [
+    ...(w.empresas_selected||[]).map(id=>{ const e=EMPRESAS_PRESET.find(x=>x.id===id); return e?{label:e.label,custom:false}:null; }).filter(Boolean),
+    ...(w.empresas_custom||[]).map(nome=>({label:nome,custom:true})),
+  ];
+
   return (
-    <div style={{minHeight:"75vh",padding:"60px 20px",background:C.bg}}>
-      <div style={{maxWidth:720,margin:"0 auto"}}>
-        <SL>Painel do Colaborador</SL>
-        <h2 style={{...H,fontSize:32,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:24}}>Olá, {firstName}!</h2>
+    <div style={{padding:"40px 20px",background:C.bg,minHeight:"calc(100vh - 60px)"}}>
+      <div style={{maxWidth:920,margin:"0 auto"}}>
+        {toast && <Alert type={toast.type}>{toast.msg}</Alert>}
 
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:16,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}}>
-          <Badge status={worker.status} />
-          <h3 style={{...H,fontSize:20,fontWeight:800,color:C.navy,marginTop:14,marginBottom:8}}>Seu perfil está visível para as empresas</h3>
-          <p style={{...B,fontSize:14,color:C.sub,lineHeight:1.6,margin:0}}>
-            Empresas da sua região já podem te encontrar pelas suas especialidades, disponibilidade e nível. Quando alguma quiser te convidar, vai aparecer aqui.
-          </p>
+        {/* HEADER CARD */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:16,padding:24,marginBottom:14,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}}>
+          <div style={{display:"flex",gap:18,alignItems:"flex-start"}}>
+            {w.foto_rosto ? (
+              <img src={w.foto_rosto} alt={w.nome} style={{width:88,height:88,borderRadius:44,objectFit:"cover",border:`2px solid ${C.greenBorder}`,flexShrink:0}} />
+            ) : (
+              <div style={{width:88,height:88,borderRadius:44,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{...H,fontSize:34,fontWeight:900,color:"#fff"}}>{w.nome?.[0]}</span>
+              </div>
+            )}
+            <div style={{flex:1,minWidth:0}}>
+              <SL>Meu Perfil</SL>
+              <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginTop:4,marginBottom:8}}>{w.nome}</h2>
+              <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap"}}>
+                <Badge status={w.status} />
+                {w.cidade && <span style={{...B,fontSize:13,color:C.sub}}>📍 {w.cidade}/{w.estado}</span>}
+                {w.raio_km && <span style={{...B,fontSize:13,color:C.sub}}>{w.raio_km}km de raio</span>}
+              </div>
+            </div>
+          </div>
+          {w.status==="approved" && (
+            <div style={{marginTop:16,padding:"10px 14px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.green,lineHeight:1.55}}>
+              ✓ Seu perfil está visível para empresas. Você será notificado por e-mail quando alguma quiser te convidar.
+            </div>
+          )}
+          {w.status==="pending" && (
+            <div style={{marginTop:16,padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.amber,lineHeight:1.55}}>
+              ⏳ Seu cadastro está em análise pela equipe Giobbi's. Em até 24h úteis você terá retorno por e-mail.
+            </div>
+          )}
         </div>
 
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:32,textAlign:"center"}}>
-          <div style={{fontSize:48,marginBottom:12}}>📨</div>
-          <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Sem convites por enquanto</div>
-          <div style={{...B,fontSize:13,color:C.muted,lineHeight:1.55}}>Você será notificado por e-mail assim que alguma empresa se interessar pelo seu perfil.</div>
+        {/* CONTATO E ENDEREÇO (editável, sem reaprovação) */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>📱 Contato e endereço</div>
+            {!editingContact && <Btn label="Editar" variant="ghost" size="sm" onClick={startEditContact} />}
+          </div>
+
+          {!editingContact ? (
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}}>
+                <WInfoLine icon="📱" label="WhatsApp"  value={w.telefone} />
+                <WInfoLine icon="✉️" label="E-mail"    value={w.email} />
+                <WInfoLine icon="🚗" label="Veículo"   value={w.deslocamento} />
+                <WInfoLine icon="📍" label="Raio"      value={w.raio_km?`${w.raio_km}km`:"—"} />
+              </div>
+              {(w.rua||w.cep) && (
+                <div style={{padding:"10px 14px",background:C.bg,borderRadius:9,...B,fontSize:13,color:C.sub,lineHeight:1.65}}>
+                  {w.rua}{w.numero?`, ${w.numero}`:""}{w.complemento?` — ${w.complemento}`:""}
+                  {w.bairro && <><br/>{w.bairro} · {w.cidade}/{w.estado}</>}
+                  {w.cep && <>{` · CEP ${w.cep}`}</>}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14}}>
+                <Field label="WhatsApp" value={contact.telefone} onChange={v=>setContact({...contact,telefone:maskPhone(v)})} maxLength={15} />
+                <Field label="E-mail" value={contact.email} onChange={v=>setContact({...contact,email:v})} type="email" />
+              </div>
+              <AddressBlock data={contact} setData={setContact} loading={cepLoad} setLoading={setCepLoad} />
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
+                <SelectField label="Como se desloca?" value={contact.deslocamento} onChange={v=>setContact({...contact,deslocamento:v})} options={DESLOCAMENTOS} />
+                <Field label="Raio (km)" value={String(contact.raio_km||"")} onChange={v=>setContact({...contact,raio_km:parseInt(v.replace(/\D/g,""))||0})} maxLength={3} />
+              </div>
+              <div style={{display:"flex",gap:10,marginTop:10}}>
+                <Btn label="Salvar alterações" variant="primary" size="md" onClick={saveContact} loading={saving} />
+                <Btn label="Cancelar" variant="ghost" size="md" onClick={()=>setEditingContact(false)} />
+              </div>
+              <div style={{marginTop:10,...B,fontSize:11.5,color:C.muted,fontStyle:"italic"}}>Atualizar contato e endereço NÃO volta seu cadastro para análise.</div>
+            </div>
+          )}
         </div>
 
-        <div style={{marginTop:24,textAlign:"center"}}>
+        {/* DISPONIBILIDADE (read-only) */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
+          <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>📅 Disponibilidade</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+            {DAYS.map(d=>{
+              const turnos = w.disponibilidade?.[d]||[];
+              return (
+                <div key={d} style={{textAlign:"center"}}>
+                  <div style={{...H,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:6}}>{d}</div>
+                  {turnos.length===0
+                    ? <div style={{height:24,background:C.bg,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",...B,fontSize:10,color:C.muted}}>—</div>
+                    : turnos.map(tid=>{ const sh=SHIFTS.find(x=>x.id===tid); return sh ? <div key={tid} style={{background:sh.color+"22",border:`1px solid ${sh.color}66`,color:sh.color,borderRadius:5,padding:"3px 0",marginBottom:3,...B,fontSize:10,fontWeight:700}}>{sh.label}</div> : null; })
+                  }
+                </div>
+              );
+            })}
+          </div>
+          {w.flexibilidade && FLEX_LABEL[w.flexibilidade] && (
+            <div style={{marginTop:14,padding:"10px 14px",background:C.bg,borderRadius:9,...B,fontSize:13,color:C.sub,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:14}}>{FLEX_LABEL[w.flexibilidade].icon}</span>
+              <span><strong style={{color:C.navy,fontWeight:700}}>{FLEX_LABEL[w.flexibilidade].desc}</strong></span>
+            </div>
+          )}
+        </div>
+
+        {/* ESPECIALIDADES (read-only) */}
+        {especialidades.length>0 && (
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
+            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>🛠️ Especialidades</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {especialidades.map(s=>(
+                <div key={s.id} style={{padding:"10px 14px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:18}}>{s.icon}</span>
+                  <div>
+                    <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{s.label}</div>
+                    {s.tempo && <div style={{...B,fontSize:11,color:C.muted}}>{s.tempo}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* EMPRESAS (editável - adiciona, gera reaprovação) */}
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>🏢 Empresas onde já trabalhou</div>
+            {!addingEmpresa && <Btn label="+ Adicionar" variant="ghost" size="sm" onClick={()=>setAddingEmpresa(true)} />}
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:addingEmpresa?14:0}}>
+            {empresas.length===0 && <div style={{...B,fontSize:13,color:C.muted}}>Nenhuma empresa cadastrada ainda.</div>}
+            {empresas.map((e,i)=>(
+              <div key={i} style={{padding:"7px 11px",background:e.custom?C.amberBg:C.bg,border:`1px solid ${e.custom?C.amberBorder:C.border}`,borderRadius:8,...B,fontSize:12,color:e.custom?C.amber:C.navy,fontWeight:600}}>{e.label}</div>
+            ))}
+          </div>
+          {addingEmpresa && (
+            <div style={{padding:14,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10}}>
+              <div style={{...B,fontSize:12,color:C.amber,marginBottom:10,lineHeight:1.55}}>
+                ⚠️ Adicionar nova experiência fará seu cadastro voltar para análise da equipe Giobbi's. Em até 24h úteis você terá retorno.
+              </div>
+              <Field label="Nome da empresa" placeholder="Ex: Mercado Local LTDA" value={newEmpresa} onChange={setNewEmpresa} />
+              <div style={{display:"flex",gap:10}}>
+                <Btn label="Adicionar e enviar para análise" variant="primary" size="md" onClick={addEmpresa} loading={saving} disabled={!newEmpresa.trim()} />
+                <Btn label="Cancelar" variant="ghost" size="md" onClick={()=>{setAddingEmpresa(false);setNewEmpresa("");}} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* DOCUMENTAÇÃO (read-only) */}
+        {(w.foto_rosto || w.selfie_doc) && (
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
+            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>📷 Documentação</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              {[
+                {label:"Foto de perfil", src:w.foto_rosto, fallback:"📷"},
+                {label:`Selfie com ${w.doc_tipo||"documento"}`, src:w.selfie_doc, fallback:"🤳"},
+              ].map(d=>(
+                <div key={d.label} style={{padding:14,background:C.bg,borderRadius:10,textAlign:"center"}}>
+                  {d.src
+                    ? <img src={d.src} alt={d.label} style={{width:"100%",maxWidth:160,height:160,objectFit:"cover",borderRadius:9,marginBottom:8}} />
+                    : <div style={{fontSize:42,marginBottom:8}}>{d.fallback}</div>}
+                  <div style={{...B,fontSize:12,color:C.sub,fontWeight:600}}>{d.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{textAlign:"center",marginTop:24}}>
           <Btn label="Sair" variant="ghost" size="md" onClick={onLogout} />
         </div>
       </div>
@@ -3757,7 +3973,7 @@ export default function VORKERApp() {
       {!admin&&!company&&!worker&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("auth-choice")} onLogin={handleWorkerLogin} onRegister={()=>onNav("worker-register")} />}
       {!admin&&!company&&!worker&&screen==="worker-register"  &&<WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
       {!admin&&!company&&!worker&&screen==="worker-success"   &&<WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
-      {!admin&&!company&& worker&&screen==="worker-app"       &&<WorkerDashboard  worker={worker} onLogout={handleWorkerLogout} />}
+      {!admin&&!company&& worker&&screen==="worker-app"       &&<WorkerProfile    worker={worker} onLogout={handleWorkerLogout} onUpdate={setWorker} />}
       {!admin&&!company&&screen==="company-auth"     &&<CompanyLogin     onBack={()=>onNav("auth-choice")} onLogin={handleCompanyLogin} onRegister={()=>onNav("company-register")} />}
       {!admin&&!company&&screen==="company-register" &&<CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
       {!admin&&!company&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
