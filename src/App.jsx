@@ -909,6 +909,7 @@ function Landing({ onNav }) {
           .vorker-admin-facts{grid-template-columns:repeat(2,1fr)!important;gap:12px!important}
           .vorker-admin-body{grid-template-columns:1fr!important;gap:12px!important}
           .vorker-day-row{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
+          .vorker-exp-grid{grid-template-columns:1fr!important;gap:10px!important}
           .vorker-traits-grid{grid-template-columns:repeat(2,1fr)!important}
           .vorker-docs-grid{grid-template-columns:1fr!important}
           .vorker-day-full{display:none!important}
@@ -2343,16 +2344,12 @@ function AdminPanel() {
           const score = computeWorkerScore(selWorker);
           const idade = calcIdade(selWorker.nascimento);
           const TRAIT_DEFS = [
-            { key:"corrido",    label:"Resiliência",    icon:"💪", desc:"Sob pressão",       pts:{manter:3,equilibrar:2,diminuir:1} },
-            { key:"diaADia",    label:"Foco",           icon:"🎯", desc:"Estilo de trabalho",pts:{praticas:3,equilibrio:2,cuidado:1} },
-            { key:"tarefa",     label:"Iniciativa",     icon:"🚀", desc:"Tarefas novas",     pts:{iniciativa:3,perguntar:2,orientacao:1} },
-            { key:"diferente",  label:"Adaptabilidade", icon:"🔄", desc:"Imprevistos",       pts:{ajusta:3,entender:2,avisar:1} },
-            { key:"imprevisto", label:"Compromisso",    icon:"🤝", desc:"Cumpre o turno",    pts:{resolver:3,aviso:2,cancelar:1} },
+            { key:"corrido",    label:"Resiliência",    icon:"💪", desc:"Sob pressão",        labels:{manter:"Veloz",         equilibrar:"Equilibrado",  diminuir:"Cuidadoso"} },
+            { key:"diaADia",    label:"Foco",           icon:"🎯", desc:"Estilo de trabalho", labels:{praticas:"Prático",     equilibrio:"Equilibrado",  cuidado:"Detalhista"} },
+            { key:"tarefa",     label:"Iniciativa",     icon:"🚀", desc:"Tarefas novas",      labels:{iniciativa:"Autônomo",  perguntar:"Colaborativo",  orientacao:"Orientado"} },
+            { key:"diferente",  label:"Adaptabilidade", icon:"🔄", desc:"Imprevistos",        labels:{ajusta:"Flexível",      entender:"Analítico",      avisar:"Cauteloso"} },
+            { key:"imprevisto", label:"Compromisso",    icon:"🤝", desc:"Cumpre o turno",     labels:{resolver:"Persistente", aviso:"Comunicativo",      cancelar:"Conservador"} },
           ];
-          const traitLevel = (pts) => pts>=3 ? {label:"Alta",color:"#16A34A",bg:"#F0FDF4"}
-                                      : pts>=2 ? {label:"Média",color:"#CA8A04",bg:"#FEFCE8"}
-                                      : pts>=1 ? {label:"Baixa",color:"#DC2626",bg:"#FEF2F2"}
-                                      : {label:"—",color:C.muted,bg:C.bg};
           const alertas = [];
           if (idade!=null && idade<18) alertas.push({lv:"red",txt:"Menor de 18 anos — não pode atuar."});
           if (score.total < 50) alertas.push({lv:"red",txt:`Score baixo (${score.total}) — perfil incompleto ou pouco aderente.`});
@@ -2487,16 +2484,16 @@ function AdminPanel() {
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
                   <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase",marginBottom:14}}>Perfil operacional</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}} className="vorker-traits-grid">
-                    {TRAIT_DEFS.map(({key,label,icon,desc,pts})=>{
+                    {TRAIT_DEFS.map(({key,label,icon,desc,labels})=>{
                       const ans = selWorker.perfil_trabalho?.[key];
-                      const points = ans ? (pts[ans]||0) : 0;
-                      const lvl = traitLevel(points);
+                      const text = ans ? (labels[ans]||"—") : "—";
+                      const filled = !!ans;
                       return (
-                        <div key={key} style={{textAlign:"center",padding:"14px 10px",background:lvl.bg,border:`1px solid ${C.border}`,borderRadius:11}}>
+                        <div key={key} style={{textAlign:"center",padding:"14px 10px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:11}}>
                           <div style={{width:36,height:36,margin:"0 auto 8px",borderRadius:9,background:"#fff",border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{icon}</div>
                           <div style={{...H,fontSize:12,fontWeight:800,color:C.navy,marginBottom:3,lineHeight:1.2}}>{label}</div>
                           <div style={{...B,fontSize:10,color:C.muted,marginBottom:6,lineHeight:1.3}}>{desc}</div>
-                          <div style={{...H,fontSize:11,fontWeight:700,color:lvl.color,padding:"2px 8px",background:"#fff",border:`1px solid ${lvl.color}40`,borderRadius:6,display:"inline-block"}}>{lvl.label}</div>
+                          <div style={{...H,fontSize:11,fontWeight:700,color:filled?C.green:C.muted,padding:"3px 11px",background:"#fff",border:`1px solid ${filled?C.greenBorder:C.border2}`,borderRadius:14,display:"inline-block"}}>{text}</div>
                         </div>
                       );
                     })}
@@ -2551,51 +2548,79 @@ function AdminPanel() {
                   )}
                 </div>
 
-                {/* EXPERIÊNCIA */}
+                {/* EXPERIÊNCIA — 2 colunas: função principal + empresas */}
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22}}>
-                  <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase",marginBottom:14}}>Experiência</div>
-                  <div style={{...B,fontSize:12,color:C.muted,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Funções e tempo</div>
-                  {SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>{
-                    const tempo = selWorker.func_exp?.[s.id]?.tempo;
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                    <div style={{width:22,height:22,borderRadius:11,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{...H,fontSize:11,fontWeight:800,color:"#fff"}}>3</span>
+                    </div>
+                    <div style={{...B,fontSize:11,fontWeight:700,color:C.green,letterSpacing:.5,textTransform:"uppercase"}}>Experiência</div>
+                  </div>
+
+                  {(()=>{
+                    const TIER = (tempo) => {
+                      if(!tempo) return null;
+                      if(tempo==="Menos de 6 meses" || tempo==="6 meses a 1 ano") return {label:"Baixa experiência", bg:"#FEE2E2", color:"#DC2626", border:"#FECACA"};
+                      if(tempo==="1 a 3 anos") return {label:"Experiência média", bg:"#FEF3C7", color:"#92400E", border:"#FDE68A"};
+                      return {label:"Alta experiência", bg:"#DCFCE7", color:"#16A34A", border:"#BBF7D0"};
+                    };
+                    const list = [
+                      ...SPECS.filter(s=>selWorker.specs?.includes(s.id)).map(s=>({id:s.id,label:s.label,icon:s.icon,tempo:selWorker.func_exp?.[s.id]?.tempo})),
+                      ...(selWorker.specs?.includes("custom") ? [{id:"custom",label:selWorker.spec_levels?.custom?.label||"Função própria",icon:"⭐",tempo:selWorker.func_exp?.custom?.tempo}] : []),
+                    ];
+                    const primary = list[0];
+                    const others = list.slice(1);
+                    const tier = primary ? TIER(primary.tempo) : null;
+
+                    if(!primary) return <div style={{...B,fontSize:13,color:C.muted}}>Nenhuma função selecionada.</div>;
+
+                    const empresas = [
+                      ...(selWorker.empresas_selected||[]).map(id=>{ const e=EMPRESAS_PRESET.find(x=>x.id===id); return e ? {label:e.label,custom:false} : null; }).filter(Boolean),
+                      ...(selWorker.empresas_custom||[]).map(nome=>({label:nome,custom:true})),
+                    ];
+
                     return (
-                      <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:C.bg,border:`1px solid ${C.border}`,marginBottom:6,flexWrap:"wrap"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:9}}>
-                          <span style={{fontSize:16}}>{s.icon}</span>
-                          <span style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{s.label}</span>
+                      <div className="vorker-exp-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+
+                        {/* Função principal */}
+                        <div style={{padding:"16px 18px",border:`1px solid ${C.border}`,borderRadius:11,background:"#fff"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{...B,fontSize:11,color:C.muted,marginBottom:5,fontWeight:600}}>Função principal</div>
+                              <div style={{...H,fontSize:17,fontWeight:800,color:C.navy,display:"flex",alignItems:"center",gap:8,lineHeight:1.2}}>
+                                <span style={{fontSize:18}}>{primary.icon}</span><span>{primary.label}</span>
+                              </div>
+                              {others.length>0 && <div style={{...B,fontSize:11,color:C.muted,marginTop:6,lineHeight:1.4}}>+ {others.length} outra{others.length>1?"s":""}: {others.map(o=>o.label).join(", ")}</div>}
+                            </div>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              {primary.tempo ? (<>
+                                {tier && <span style={{...B,fontSize:11,fontWeight:700,color:tier.color,background:tier.bg,border:`1px solid ${tier.border}`,padding:"3px 10px",borderRadius:7,whiteSpace:"nowrap"}}>{tier.label}</span>}
+                                <div style={{...B,fontSize:11.5,color:C.muted,marginTop:6}}>{primary.tempo}</div>
+                              </>) : <span style={{...B,fontSize:11,color:C.muted,fontStyle:"italic"}}>Sem tempo informado</span>}
+                            </div>
+                          </div>
                         </div>
-                        {tempo
-                          ? <span style={{...B,fontSize:11,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,padding:"2px 9px",borderRadius:12}}>{tempo}</span>
-                          : <span style={{...B,fontSize:11,color:C.muted,fontStyle:"italic"}}>sem tempo</span>}
+
+                        {/* Empresas */}
+                        <div style={{padding:"16px 18px",border:`1px solid ${C.border}`,borderRadius:11,background:"#fff"}}>
+                          <div style={{...B,fontSize:11,color:C.muted,marginBottom:8,fontWeight:600}}>Empresas onde já trabalhou</div>
+                          {empresas.length>0 ? (<>
+                            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                              {empresas.map((e,i)=>(
+                                <span key={i} style={{display:"inline-flex",alignItems:"center",gap:4,...B,fontSize:11.5,fontWeight:600,color:e.custom?C.green:C.navy,background:e.custom?C.greenBg:C.bg,border:`1px solid ${e.custom?C.greenBorder:C.border2}`,borderRadius:7,padding:"4px 11px"}}>
+                                  {e.custom && <span style={{fontSize:9}}>⭐</span>}{e.label}
+                                </span>
+                              ))}
+                            </div>
+                            <div style={{...B,fontSize:11,color:C.muted,fontStyle:"italic"}}>Período não informado</div>
+                          </>) : (
+                            <div style={{...B,fontSize:12,color:C.muted,fontStyle:"italic"}}>Nenhuma empresa informada</div>
+                          )}
+                        </div>
+
                       </div>
                     );
-                  })}
-                  {selWorker.specs?.includes("custom") && (selWorker.spec_levels?.custom?.label || selWorker.func_exp?.custom?.tempo) && (
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:C.bg,border:`1px solid ${C.border}`,marginBottom:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:9}}>
-                        <span style={{fontSize:16}}>⭐</span>
-                        <span style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{selWorker.spec_levels?.custom?.label||"Função própria"}</span>
-                      </div>
-                      {selWorker.func_exp?.custom?.tempo && <span style={{...B,fontSize:11,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,padding:"2px 9px",borderRadius:12}}>{selWorker.func_exp.custom.tempo}</span>}
-                    </div>
-                  )}
-                  {(!selWorker.specs||selWorker.specs.length===0)&&<div style={{...B,fontSize:13,color:C.muted}}>Nenhuma função selecionada.</div>}
-
-                  {((selWorker.empresas_selected?.length||0) + (selWorker.empresas_custom?.length||0)) > 0 && (
-                    <div style={{marginTop:14}}>
-                      <div style={{...B,fontSize:12,color:C.muted,marginBottom:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Empresas onde já trabalhou</div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                        {(selWorker.empresas_selected||[]).map(id=>{
-                          const e = EMPRESAS_PRESET.find(x=>x.id===id);
-                          return e ? <span key={id} style={{...B,fontSize:11.5,fontWeight:600,color:C.navy,background:C.bg,border:`1px solid ${C.border2}`,borderRadius:7,padding:"4px 10px"}}>{e.label}</span> : null;
-                        })}
-                        {(selWorker.empresas_custom||[]).map((nome,i)=>(
-                          <span key={`c${i}`} style={{display:"inline-flex",alignItems:"center",gap:4,...B,fontSize:11.5,fontWeight:600,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:7,padding:"4px 10px"}}>
-                            <span style={{fontSize:9}}>⭐</span> {nome}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  })()}
                 </div>
 
                 {/* PERFIL DE TRABALHO — 5 perguntas/respostas */}
