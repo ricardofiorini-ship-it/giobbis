@@ -3549,32 +3549,32 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
           <div style={{display:"grid",gridTemplateColumns:"230px 1fr",gap:24,alignItems:"start"}}>
 
             {/* SIDEBAR */}
-            <aside style={{background:C.navy,borderRadius:14,padding:"22px 0 14px",position:"sticky",top:20,overflow:"hidden"}}>
-              <div style={{padding:"0 18px 14px",...B,fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:1.5}}>Navegação</div>
+            <aside style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 12px 14px",position:"sticky",top:20}}>
+              <div style={{padding:"0 14px 12px",...B,fontSize:10.5,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:1.5}}>Navegação</div>
               {[
-                {id:"visao-geral",  icon:"📊", label:"Visão geral"},
-                {id:"aprovacao",    icon:"✅", label:"Pontos de aprovação", soon:true},
-                {id:"unidades",     icon:"📍", label:"Unidades de trabalho"},
-                {id:"usuarios",     icon:"👥", label:"Usuários e acessos", soon:true},
-                {id:"preferencias", icon:"⚙️", label:"Preferências", soon:true},
+                {id:"visao-geral",   icon:"📊", label:"Visão geral"},
+                {id:"dados-empresa", icon:"🏢", label:"Dados da empresa"},
+                {id:"unidades",      icon:"📍", label:"Unidades de trabalho"},
+                {id:"usuarios",      icon:"👥", label:"Usuários e acesso", soon:true},
+                {id:"preferencias",  icon:"⚙️", label:"Preferências", soon:true},
+                {id:"planos",        icon:"💳", label:"Planos e faturamento", soon:true},
               ].map(it=>(
                 <button key={it.id} onClick={()=>!it.soon&&setSubTab(it.id)} disabled={it.soon}
-                  style={{display:"flex",alignItems:"center",gap:11,width:"100%",padding:"11px 18px",background:subTab===it.id?"rgba(34,197,94,.14)":"transparent",border:"none",borderLeft:`3px solid ${subTab===it.id?"#22C55E":"transparent"}`,cursor:it.soon?"default":"pointer",...B,fontSize:13,fontWeight:600,color:it.soon?"rgba(255,255,255,.3)":subTab===it.id?"#fff":"rgba(255,255,255,.7)",transition:"all .15s"}}>
+                  style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 14px",background:subTab===it.id?C.greenBg:"transparent",border:"none",borderRadius:9,cursor:it.soon?"default":"pointer",...B,fontSize:13,fontWeight:subTab===it.id?700:600,color:it.soon?C.muted:subTab===it.id?C.green:C.sub,marginBottom:2,transition:"all .15s"}}>
                   <span style={{fontSize:14}}>{it.icon}</span>
                   <span style={{flex:1,textAlign:"left"}}>{it.label}</span>
-                  {it.soon&&<span style={{...B,fontSize:9,fontWeight:700,color:"rgba(255,255,255,.35)",background:"rgba(255,255,255,.08)",borderRadius:7,padding:"2px 6px",letterSpacing:.5}}>EM BREVE</span>}
+                  {it.soon&&<span style={{...B,fontSize:9,fontWeight:700,color:"#7C3AED",background:"#F3E8FF",borderRadius:7,padding:"2px 7px",letterSpacing:.5}}>EM BREVE</span>}
                 </button>
               ))}
-              <button onClick={onLogout}
-                style={{display:"flex",alignItems:"center",gap:11,width:"100%",padding:"11px 18px",background:"transparent",border:"none",borderLeft:"3px solid transparent",cursor:"pointer",...B,fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)",marginTop:6}}>
-                <span style={{fontSize:14}}>↩</span>
-                <span style={{flex:1,textAlign:"left"}}>Sair</span>
-              </button>
 
-              <div style={{margin:"22px 14px 4px",padding:14,background:"linear-gradient(135deg,#7C3AED,#5B21B6)",borderRadius:12}}>
-                <div style={{...B,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,.7)",textTransform:"uppercase",letterSpacing:1.2,marginBottom:6}}>Time Vorker</div>
-                <div style={{...H,fontSize:13,fontWeight:700,color:"#fff",lineHeight:1.35,marginBottom:10}}>Monte seu time fixo com os melhores Vorkers</div>
-                <button onClick={()=>setSubTab("aprovacao")} style={{...B,fontSize:11,fontWeight:700,color:"#5B21B6",background:"#fff",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer"}}>Quero saber mais →</button>
+              <div style={{marginTop:18,padding:14,background:C.white,border:`1px solid ${C.border}`,borderRadius:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8,flexWrap:"wrap"}}>
+                  <span style={{width:28,height:28,borderRadius:8,background:"#F3E8FF",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>⚡</span>
+                  <span style={{...H,fontSize:13,fontWeight:800,color:C.navy}}>Time Vorker</span>
+                  <span style={{...B,fontSize:9,fontWeight:700,color:"#7C3AED",background:"#F3E8FF",borderRadius:6,padding:"2px 6px",letterSpacing:.5}}>EM BREVE</span>
+                </div>
+                <div style={{...B,fontSize:11.5,color:C.sub,lineHeight:1.55,marginBottom:12}}>Monte seu time fixo com os melhores Vorkers.</div>
+                <button style={{...B,fontSize:12,fontWeight:700,color:"#7C3AED",background:"#fff",border:"1.5px solid #7C3AED",borderRadius:9,padding:"9px 14px",cursor:"pointer",width:"100%"}}>Quero saber mais</button>
               </div>
             </aside>
 
@@ -3714,8 +3714,60 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                 </div>
               </>}
 
+              {/* ─── DADOS DA EMPRESA ─── */}
+              {subTab==="dados-empresa"&&<>
+                <div style={{marginBottom:18}}>
+                  <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,letterSpacing:-.5,marginBottom:4}}>Dados da empresa</h2>
+                  <p style={{...B,fontSize:13,color:C.sub,margin:0}}>Informações cadastrais e do responsável pelo acesso.</p>
+                </div>
+
+                <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+                    <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>Empresa</div>
+                    <Badge status={company.status} />
+                  </div>
+
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:24,rowGap:0}}>
+                    {[
+                      ["Razão social",  company.razao],
+                      ["Nome fantasia", company.nome_fant||"—"],
+                      ["CNPJ",          company.cnpj],
+                      ["Segmento",      company.seg],
+                      ["Site",          company.site||"—"],
+                      ["Cidade",        `${company.cidade}/${company.estado}`],
+                    ].map(([k,v])=>(
+                      <div key={k} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                        <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>{k}</div>
+                        <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,wordBreak:"break-word"}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginTop:24,marginBottom:14,textTransform:"uppercase",letterSpacing:.5}}>Responsável pelo acesso</div>
+
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:24,rowGap:0}}>
+                    {[
+                      ["Nome",     company.resp_nome],
+                      ["WhatsApp", company.resp_tel],
+                      ["E-mail",   company.resp_email],
+                    ].map(([k,v])=>(
+                      <div key={k} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                        <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>{k}</div>
+                        <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,wordBreak:"break-word"}}>{v||"—"}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {company.status==="pending"&&(
+                    <div style={{marginTop:18,padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.amber,lineHeight:1.55}}>
+                      ⏳ Seu cadastro está em análise pela equipe Vorker. Em até 24h úteis você receberá retorno.
+                    </div>
+                  )}
+                </div>
+              </>}
+
               {/* ─── PLACEHOLDERS ─── */}
-              {(subTab==="aprovacao"||subTab==="usuarios"||subTab==="preferencias")&&(
+              {(subTab==="usuarios"||subTab==="preferencias"||subTab==="planos")&&(
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:60,textAlign:"center"}}>
                   <div style={{fontSize:42,marginBottom:14}}>🚧</div>
                   <div style={{...H,fontSize:18,fontWeight:800,color:C.navy,marginBottom:6}}>Em breve</div>
