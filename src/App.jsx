@@ -2920,7 +2920,14 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
   useEffect(()=>{
     let list=workers;
-    if(fSpecV!=="all") list=list.filter(w=>w.specs?.includes(fSpecV)&&(w.spec_levels?.[fSpecV]?.nivel||0)>=fLevelV);
+    if(fSpecV!=="all"){
+      list=list.filter(w=>{
+        if(!w.specs?.includes(fSpecV)) return false;
+        if(fLevelV<=0) return true;
+        const t = w.func_exp?.[fSpecV]?.tempo;
+        return (TEMPO_PTS[t]||0) >= fLevelV;
+      });
+    }
     if(fDiaV!=="all")  list=list.filter(w=>(w.disponibilidade?.[fDiaV]||[]).length>0);
     if(fTurnoV!=="all") list=list.filter(w=>Object.values(w.disponibilidade||{}).some(t=>t.includes(fTurnoV)));
     setFiltered(list);
@@ -3326,10 +3333,14 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                 </div>
                 {fSpecV!=="all"&&(
                   <div>
-                    <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>NÍVEL MÍNIMO</label>
+                    <label style={{...B,fontSize:11,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>EXPERIÊNCIA MÍNIMA</label>
                     <select value={fLevelV} onChange={e=>setFLevel(parseInt(e.target.value))}
                       style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,cursor:"pointer"}}>
-                      {LEVELS.map(l=><option key={l.value} value={l.value}>{l.label}</option>)}
+                      <option value={0}>Qualquer experiência</option>
+                      <option value={2}>6 meses ou mais</option>
+                      <option value={3}>1 ano ou mais</option>
+                      <option value={4}>3 anos ou mais</option>
+                      <option value={5}>5 anos ou mais</option>
                     </select>
                   </div>
                 )}
@@ -3371,35 +3382,55 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
             )}
             {!loading&&filtered.length>0&&(
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
-                {filtered.map(w=>(
+                {filtered.map(w=>{
+                  const tempoShort = (t) => t==="Menos de 6 meses"?"<6m":t==="6 meses a 1 ano"?"6m-1a":t==="1 a 3 anos"?"1-3a":t==="3 a 5 anos"?"3-5a":t==="Mais de 5 anos"?"+5a":t;
+                  const flex = w.flexibilidade && FLEX_LABEL[w.flexibilidade];
+                  return (
                   <div key={w.id} onClick={()=>setSelWorker(w)}
                     style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20,cursor:"pointer",transition:"all .18s"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green;e.currentTarget.style.boxShadow="0 4px 16px rgba(22,163,74,.1)";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
                     <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:14}}>
-                      <div style={{width:46,height:46,borderRadius:23,background:C.greenBg,border:`2px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <span style={{...H,fontSize:16,fontWeight:900,color:C.green}}>{w.nome?.[0]}</span>
-                      </div>
-                      <div style={{flex:1}}>
-                        <div style={{...H,fontSize:15,fontWeight:700,color:C.navy}}>{w.nome}</div>
+                      {w.foto_rosto ? (
+                        <img src={w.foto_rosto} alt={w.nome} style={{width:46,height:46,borderRadius:23,objectFit:"cover",border:`2px solid ${C.greenBorder}`,flexShrink:0}} />
+                      ) : (
+                        <div style={{width:46,height:46,borderRadius:23,background:C.greenBg,border:`2px solid ${C.greenBorder}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <span style={{...H,fontSize:16,fontWeight:900,color:C.green}}>{w.nome?.[0]}</span>
+                        </div>
+                      )}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{w.nome}</div>
                         <div style={{...B,fontSize:12,color:C.muted}}>{w.cidade}/{w.estado}</div>
                       </div>
-                      <div style={{textAlign:"right"}}>
+                      <div style={{textAlign:"right",flexShrink:0}}>
                         <div style={{...H,fontSize:16,fontWeight:900,color:C.green}}>{w.distLabel}</div>
                         <div style={{...B,fontSize:10,color:C.muted}}>distância</div>
                       </div>
                     </div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
                       {SPECS.filter(s=>w.specs?.includes(s.id)).slice(0,3).map(s=>{
-                        const nivel=w.spec_levels?.[s.id]?.nivel||0;
-                        return <div key={s.id} style={{display:"flex",alignItems:"center",gap:5,background:levelColors[nivel]+"12",border:`1px solid ${levelColors[nivel]}30`,borderRadius:7,padding:"4px 10px"}}><span style={{fontSize:13}}>{s.icon}</span><span style={{...B,fontSize:11,fontWeight:600,color:levelColors[nivel]}}>{s.label}</span></div>;
+                        const tempo = w.func_exp?.[s.id]?.tempo;
+                        return (
+                          <div key={s.id} style={{display:"inline-flex",alignItems:"center",gap:5,background:C.bg,border:`1px solid ${C.border2}`,borderRadius:7,padding:"3px 9px"}}>
+                            <span style={{fontSize:13}}>{s.icon}</span>
+                            <span style={{...B,fontSize:11,fontWeight:600,color:C.navy}}>{s.label}</span>
+                            {tempo && <span style={{...B,fontSize:9.5,color:C.green,fontWeight:700,background:C.greenBg,border:`1px solid ${C.greenBorder}`,padding:"0 5px",borderRadius:5,marginLeft:1}}>{tempoShort(tempo)}</span>}
+                          </div>
+                        );
                       })}
                       {(w.specs?.length||0)>3&&<span style={{...B,fontSize:11,color:C.muted,padding:"4px 6px"}}>+{w.specs.length-3}</span>}
                     </div>
+                    {flex && (
+                      <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:10,...B,fontSize:11,color:C.sub}}>
+                        <span style={{fontSize:12}}>{flex.icon}</span>
+                        <span style={{fontWeight:600,color:C.navy}}>{flex.label}</span>
+                      </div>
+                    )}
                     <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,display:"flex",gap:4,flexWrap:"wrap",marginBottom:12}}>
                       {DAYS.filter(d=>(w.disponibilidade?.[d]||[]).length>0).map(d=>(
                         <span key={d} style={{...B,fontSize:10,fontWeight:600,color:C.green,background:C.greenBg,padding:"2px 6px",borderRadius:4}}>{d}</span>
                       ))}
+                      {DAYS.every(d=>!(w.disponibilidade?.[d]?.length>0)) && <span style={{...B,fontSize:10,color:C.muted,fontStyle:"italic"}}>Sem disponibilidade marcada</span>}
                     </div>
                     <div onClick={e=>{e.stopPropagation();window.open(whatsappMsg(w),"_blank");}}
                       style={{background:"#25D366",borderRadius:8,padding:"9px 14px",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
@@ -3407,7 +3438,8 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                       <span style={{...H,fontSize:13,fontWeight:700,color:"#fff"}}>Convidar pelo WhatsApp</span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>}
