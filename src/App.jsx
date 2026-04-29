@@ -3643,6 +3643,37 @@ function AuthChoice({ onNav }) {
   );
 }
 
+// ─── WORKER DASHBOARD ──────────────────────────────────────────
+function WorkerDashboard({ worker, onLogout }) {
+  const firstName = (worker.nome||"").split(" ")[0] || "colaborador";
+  return (
+    <div style={{minHeight:"75vh",padding:"60px 20px",background:C.bg}}>
+      <div style={{maxWidth:720,margin:"0 auto"}}>
+        <SL>Painel do Colaborador</SL>
+        <h2 style={{...H,fontSize:32,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:24}}>Olá, {firstName}!</h2>
+
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:28,marginBottom:16,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}}>
+          <Badge status={worker.status} />
+          <h3 style={{...H,fontSize:20,fontWeight:800,color:C.navy,marginTop:14,marginBottom:8}}>Seu perfil está visível para as empresas</h3>
+          <p style={{...B,fontSize:14,color:C.sub,lineHeight:1.6,margin:0}}>
+            Empresas da sua região já podem te encontrar pelas suas especialidades, disponibilidade e nível. Quando alguma quiser te convidar, vai aparecer aqui.
+          </p>
+        </div>
+
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:32,textAlign:"center"}}>
+          <div style={{fontSize:48,marginBottom:12}}>📨</div>
+          <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Sem convites por enquanto</div>
+          <div style={{...B,fontSize:13,color:C.muted,lineHeight:1.55}}>Você será notificado por e-mail assim que alguma empresa se interessar pelo seu perfil.</div>
+        </div>
+
+        <div style={{marginTop:24,textAlign:"center"}}>
+          <Btn label="Sair" variant="ghost" size="md" onClick={onLogout} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── AUTH SCREEN (worker only) ─────────────────────────────────
 function AuthScreen({ type, onLogin, onRegister, onBack }) {
   const [email,setEmail]=useState("");
@@ -3663,7 +3694,7 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
       if(worker.status==="pending"){ setError("Seu cadastro ainda está em análise pela equipe Giobbi's. Em até 24h úteis você receberá retorno."); setLoading(false); return; }
       if(worker.status==="paused"){ setError("Seu perfil está temporariamente pausado e não aparece nas buscas. Entre em contato com a equipe Giobbi's para reativar."); setLoading(false); return; }
       if(worker.status==="rejected"){ setError(worker.reject_note ? `Seu cadastro foi reprovado. Motivo: ${worker.reject_note}` : "Seu cadastro foi reprovado. Entre em contato com a equipe Giobbi's."); setLoading(false); return; }
-      onLogin();
+      onLogin(worker);
     } catch(e) {
       setError("Erro ao conectar. Tente novamente.");
     } finally {
@@ -3700,29 +3731,33 @@ export default function VORKERApp() {
   const [wData,   setWData]   = useState(null);
   const [cData,   setCData]   = useState(null);
   const [company, setCompany] = useState(null);
+  const [worker,  setWorker]  = useState(null);
   const [admin,   setAdmin]   = useState(false);
 
-  const userType = admin?"admin":company?"company":null;
-  const userName = admin?"Admin":company?(company.nome_fant||company.razao):null;
+  const userType = admin?"admin":company?"company":worker?"worker":null;
+  const userName = admin?"Admin":company?(company.nome_fant||company.razao):worker?(worker.nome||"").split(" ")[0]:null;
 
   const onNav = s => {
-    if(s==="home"){ setAdmin(false); if(!company) setScreen("home"); else setScreen("home"); }
+    if(s==="home"){ setAdmin(false); setWorker(null); if(!company) setScreen("home"); else setScreen("home"); }
     setScreen(s);
   };
 
   const handleCompanyLogin = (co) => { setCompany(co); setScreen("company-app"); };
   const handleCompanyLogout = () => { setCompany(null); setScreen("home"); };
 
+  const handleWorkerLogin  = (w) => { setWorker(w); setScreen("worker-app"); };
+  const handleWorkerLogout = () => { setWorker(null); setScreen("home"); };
+
   return (
     <>
       <GlobalStyles />
-      {!admin&&!company&&<Header onNav={onNav} user={userName} type={userType} landing={screen==="home"||screen==="worker-app"} />}
-      {!admin&&!company&&screen==="home"             &&<Landing          onNav={onNav} />}
-      {!admin&&!company&&screen==="auth-choice"      &&<AuthChoice       onNav={onNav} />}
-      {!admin&&!company&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("auth-choice")} onLogin={()=>onNav("worker-app")} onRegister={()=>onNav("worker-register")} />}
-      {!admin&&!company&&screen==="worker-register"  &&<WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
-      {!admin&&!company&&screen==="worker-success"   &&<WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
-      {!admin&&!company&&screen==="worker-app"       &&<Landing          onNav={onNav} />}
+      {!admin&&!company&&<Header onNav={onNav} user={userName} type={userType} landing={screen==="home"||(screen==="worker-app"&&!worker)} />}
+      {!admin&&!company&&!worker&&screen==="home"             &&<Landing          onNav={onNav} />}
+      {!admin&&!company&&!worker&&screen==="auth-choice"      &&<AuthChoice       onNav={onNav} />}
+      {!admin&&!company&&!worker&&screen==="worker-auth"      &&<AuthScreen       type="worker"  onBack={()=>onNav("auth-choice")} onLogin={handleWorkerLogin} onRegister={()=>onNav("worker-register")} />}
+      {!admin&&!company&&!worker&&screen==="worker-register"  &&<WorkerRegister   onBack={()=>onNav("worker-auth")} onDone={d=>{setWData(d);onNav("worker-success");}} />}
+      {!admin&&!company&&!worker&&screen==="worker-success"   &&<WorkerSuccess    data={wData} onEnter={()=>onNav("home")} />}
+      {!admin&&!company&& worker&&screen==="worker-app"       &&<WorkerDashboard  worker={worker} onLogout={handleWorkerLogout} />}
       {!admin&&!company&&screen==="company-auth"     &&<CompanyLogin     onBack={()=>onNav("auth-choice")} onLogin={handleCompanyLogin} onRegister={()=>onNav("company-register")} />}
       {!admin&&!company&&screen==="company-register" &&<CompanyRegister  onBack={()=>onNav("company-auth")} onDone={d=>{setCData(d);onNav("company-success");}} />}
       {!admin&&!company&&screen==="company-success"  &&<CompanySuccess   data={cData} onEnter={()=>onNav("home")} />}
