@@ -3713,6 +3713,25 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                 <div style={{background:C.bg,border:`1.5px dashed ${C.border2}`,borderRadius:14,padding:22}}>
                   <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>+ Adicionar unidade</div>
                   <Field label="Nome da unidade" placeholder="Ex: Loja Lapa, CD Guarulhos" value={newUnit.nome} onChange={v=>setNewUnit(u=>({...u,nome:v}))} />
+
+                  {company.cep&&(
+                    <button onClick={()=>setNewUnit({
+                      nome: newUnit.nome || "Sede",
+                      cep: company.cep, rua: company.rua, numero: company.numero,
+                      complemento: company.complemento || "", bairro: company.bairro,
+                      cidade: company.cidade, estado: company.estado,
+                    })}
+                      style={{display:"flex",alignItems:"center",gap:11,width:"100%",padding:"12px 14px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,cursor:"pointer",marginBottom:14,textAlign:"left",transition:"all .15s"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="#DCFCE7"}
+                      onMouseLeave={e=>e.currentTarget.style.background=C.greenBg}>
+                      <span style={{fontSize:18,flexShrink:0}}>📋</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{...H,fontSize:13,fontWeight:700,color:C.green,marginBottom:2}}>Usar o mesmo endereço do cadastro da empresa</div>
+                        <div style={{...B,fontSize:11.5,color:C.sub,lineHeight:1.4}}>Para empresas sem filiais — preenche o endereço com os dados do cadastro</div>
+                      </div>
+                    </button>
+                  )}
+
                   <AddressBlock data={newUnit} setData={setNewUnit} loading={uCepLoad} setLoading={setUCepLoad} />
                   <Btn label={savingUnit?"Salvando...":"+ Adicionar unidade"} variant={newUnit.nome&&newUnit.cep&&newUnit.rua&&newUnit.numero?"primary":"ghost"} size="md"
                     onClick={addUnit} disabled={!newUnit.nome||!newUnit.cep||!newUnit.rua||!newUnit.numero} loading={savingUnit} />
