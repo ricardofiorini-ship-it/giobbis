@@ -3392,7 +3392,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
           <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,marginBottom:20}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
               <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Selecione a unidade onde precisa de colaboradores</div>
-              {units.length===0&&<Btn label="+ Adicionar unidade" variant="outline" size="sm" onClick={()=>setTab("profile")} />}
+              {units.length===0&&<Btn label="+ Cadastrar unidade" variant="outline" size="sm" onClick={()=>{setTab("profile");setSubTab("unidades");}} />}
             </div>
             {units.length===0
               ? <div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:10,padding:"16px 20px",display:"flex",alignItems:"center",gap:14}}>
@@ -3400,7 +3400,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                   <div>
                     <div style={{...H,fontSize:14,fontWeight:700,color:C.amber,marginBottom:4}}>Nenhuma unidade cadastrada</div>
                     <div style={{...B,fontSize:13,color:C.sub,marginBottom:10}}>Você precisa cadastrar ao menos uma unidade para buscar colaboradores na região.</div>
-                    <Btn label="Ir para Meu Perfil →" variant="amber" size="sm" onClick={()=>setTab("profile")} />
+                    <Btn label="+ Cadastrar unidade →" variant="amber" size="sm" onClick={()=>{setTab("profile");setSubTab("unidades");}} />
                   </div>
                 </div>
               : <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
