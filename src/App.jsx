@@ -2959,6 +2959,11 @@ function CompanyLogin({ onLogin, onRegister, onBack }) {
 function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const [tab,       setTab]       = useState("profile");
   const [subTab,    setSubTab]    = useState("visao-geral");
+  const [editingCompany, setEditingCompany] = useState(false);
+  const [editData,  setEditData]  = useState(null);
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [editCepLoad, setEditCepLoad] = useState(false);
+  const [companyToast, setCompanyToast] = useState(null);
   const [selUnit,   setSelUnit]   = useState(null);
   const [workers,   setWorkers]   = useState([]);
   const [filtered,  setFiltered]  = useState([]);
@@ -3016,6 +3021,29 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
       setCalcMsg(`${available.length} colaboradores disponíveis na região`);
     } catch(e) { setCalcMsg("Erro ao buscar colaboradores."); }
     finally { setLoading(false); }
+  };
+
+  const startEditCompany = () => {
+    setEditData({
+      razao:company.razao||"", nome_fant:company.nome_fant||"", seg:company.seg||"", site:company.site||"",
+      cep:company.cep||"", rua:company.rua||"", numero:company.numero||"", complemento:company.complemento||"",
+      bairro:company.bairro||"", cidade:company.cidade||"", estado:company.estado||"",
+      resp_nome:company.resp_nome||"", resp_cargo:company.resp_cargo||"", resp_tel:company.resp_tel||"", resp_email:company.resp_email||"",
+    });
+    setEditingCompany(true);
+  };
+
+  const saveCompanyEdit = async () => {
+    setSavingCompany(true);
+    try {
+      const changes = {...editData, status:"pending", reject_note:""};
+      await updateCompanyDB(company.id, changes);
+      onUpdateCompany({...company, ...changes});
+      setEditingCompany(false);
+      setCompanyToast({type:"warning", msg:"Dados atualizados. Seu cadastro voltou para análise da equipe Vorker."});
+      setTimeout(()=>setCompanyToast(null), 6000);
+    } catch(e){ setCompanyToast({type:"error", msg:"Erro ao salvar. Tente novamente."}); setTimeout(()=>setCompanyToast(null), 4000); }
+    finally { setSavingCompany(false); }
   };
 
   const addUnit = async () => {
@@ -3745,47 +3773,91 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                   <p style={{...B,fontSize:13,color:C.sub,margin:0}}>Informações cadastrais e do responsável pelo acesso.</p>
                 </div>
 
+                {companyToast&&<Alert type={companyToast.type}>{companyToast.msg}</Alert>}
+
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:24}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-                    <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>Empresa</div>
-                    <Badge status={company.status} />
-                  </div>
-
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:24,rowGap:0}}>
-                    {[
-                      ["Razão social",  company.razao],
-                      ["Nome fantasia", company.nome_fant||"—"],
-                      ["CNPJ",          company.cnpj],
-                      ["Segmento",      company.seg],
-                      ["Site",          company.site||"—"],
-                      ["Cidade",        `${company.cidade}/${company.estado}`],
-                    ].map(([k,v])=>(
-                      <div key={k} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
-                        <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>{k}</div>
-                        <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,wordBreak:"break-word"}}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginTop:24,marginBottom:14,textTransform:"uppercase",letterSpacing:.5}}>Responsável pelo acesso</div>
-
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:24,rowGap:0}}>
-                    {[
-                      ["Nome",     company.resp_nome],
-                      ["WhatsApp", company.resp_tel],
-                      ["E-mail",   company.resp_email],
-                    ].map(([k,v])=>(
-                      <div key={k} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
-                        <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>{k}</div>
-                        <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,wordBreak:"break-word"}}>{v||"—"}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {company.status==="pending"&&(
-                    <div style={{marginTop:18,padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.amber,lineHeight:1.55}}>
-                      ⏳ Seu cadastro está em análise pela equipe Vorker. Em até 24h úteis você receberá retorno.
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:12,flexWrap:"wrap"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>Empresa</div>
+                      <Badge status={company.status} />
                     </div>
+                    {!editingCompany && <Btn label="Editar dados" variant="ghost" size="sm" onClick={startEditCompany} />}
+                  </div>
+
+                  {!editingCompany ? (
+                    <>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:24,rowGap:0}}>
+                        {[
+                          ["Razão social",  company.razao],
+                          ["Nome fantasia", company.nome_fant||"—"],
+                          ["CNPJ",          company.cnpj],
+                          ["Segmento",      company.seg],
+                          ["Site",          company.site||"—"],
+                          ["Cidade",        `${company.cidade}/${company.estado}`],
+                        ].map(([k,v])=>(
+                          <div key={k} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                            <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>{k}</div>
+                            <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,wordBreak:"break-word"}}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginTop:24,marginBottom:14,textTransform:"uppercase",letterSpacing:.5}}>Responsável pelo acesso</div>
+
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:24,rowGap:0}}>
+                        {[
+                          ["Nome",     company.resp_nome],
+                          ["Cargo",    company.resp_cargo||"—"],
+                          ["WhatsApp", company.resp_tel],
+                          ["E-mail",   company.resp_email],
+                        ].map(([k,v])=>(
+                          <div key={k} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                            <div style={{...B,fontSize:10.5,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>{k}</div>
+                            <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,wordBreak:"break-word"}}>{v||"—"}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {company.status==="pending"&&(
+                        <div style={{marginTop:18,padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.amber,lineHeight:1.55}}>
+                          ⏳ Seu cadastro está em análise pela equipe Vorker. Em até 24h úteis você receberá retorno.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div style={{padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.amber,lineHeight:1.55,marginBottom:18}}>
+                        ⚠️ Editar dados do cadastro fará seu cadastro voltar para análise da equipe Vorker. Em até 24h úteis você terá retorno.
+                      </div>
+
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:14,rowGap:0}}>
+                        <Field label="Razão social" value={editData.razao} onChange={v=>setEditData({...editData,razao:v})} required />
+                        <Field label="Nome fantasia" value={editData.nome_fant} onChange={v=>setEditData({...editData,nome_fant:v})} />
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:14,rowGap:0}}>
+                        <Field label="CNPJ" value={company.cnpj} disabled hint="Não pode ser alterado" />
+                        <SelectField label="Segmento" value={editData.seg} onChange={v=>setEditData({...editData,seg:v})} options={SEGS} required />
+                      </div>
+                      <Field label="Site" placeholder="https://..." value={editData.site} onChange={v=>setEditData({...editData,site:v})} />
+
+                      <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginTop:18,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Endereço</div>
+                      <AddressBlock data={editData} setData={setEditData} loading={editCepLoad} setLoading={setEditCepLoad} />
+
+                      <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,marginTop:18,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Responsável pelo acesso</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:14,rowGap:0}}>
+                        <Field label="Nome" value={editData.resp_nome} onChange={v=>setEditData({...editData,resp_nome:v})} required />
+                        <Field label="Cargo" value={editData.resp_cargo} onChange={v=>setEditData({...editData,resp_cargo:v})} />
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",columnGap:14,rowGap:0}}>
+                        <Field label="WhatsApp" value={editData.resp_tel} onChange={v=>setEditData({...editData,resp_tel:maskPhone(v)})} maxLength={15} />
+                        <Field label="E-mail" value={editData.resp_email} onChange={v=>setEditData({...editData,resp_email:v})} type="email" required />
+                      </div>
+
+                      <div style={{display:"flex",gap:10,marginTop:18,flexWrap:"wrap"}}>
+                        <Btn label="Salvar e enviar para análise" variant="primary" size="md" onClick={saveCompanyEdit} loading={savingCompany} disabled={!editData.razao||!editData.seg||!editData.resp_nome||!editData.resp_email} />
+                        <Btn label="Cancelar" variant="ghost" size="md" onClick={()=>setEditingCompany(false)} disabled={savingCompany} />
+                      </div>
+                    </>
                   )}
                 </div>
               </>}
