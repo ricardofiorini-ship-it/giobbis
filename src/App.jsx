@@ -51,6 +51,26 @@ function GlobalStyles() {
       .level-fill{height:100%;border-radius:3px;background:#16A34A;transition:width .3s}
       .toggle-btn{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;cursor:pointer;border:1.5px solid #CBD5E1;background:#fff;transition:all .15s;user-select:none}
       .toggle-btn.on{border-color:#16A34A;background:#F0FDF4}
+      .tab-pill{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;font-weight:600;font-size:13px;transition:all .18s;cursor:pointer;border:none;background:transparent;color:#475569;font-family:'General Sans',sans-serif;white-space:nowrap}
+      .tab-pill:hover{background:#F1F5F9;color:#0A1628}
+      .tab-pill.active{background:#F0FDF4;color:#16A34A}
+      .tab-pill.active:hover{background:#DCFCE7}
+      .tab-pill.disabled{color:#CBD5E1;cursor:default}
+      .tab-pill.disabled:hover{background:transparent;color:#CBD5E1}
+      .cta-green{background:#16A34A;color:#fff;border:none;border-radius:9px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(22,163,74,.25);transition:all .18s;font-family:'Cabinet Grotesk',sans-serif;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+      .cta-green:hover{background:#15803D;box-shadow:0 4px 14px rgba(22,163,74,.35);transform:translateY(-1px)}
+      .cta-green:active{transform:translateY(0);box-shadow:0 2px 6px rgba(22,163,74,.25)}
+      .icon-btn{background:transparent;border:1px solid #E2E8F0;border-radius:9px;padding:0;cursor:pointer;transition:all .15s;color:#475569;font-size:16px;display:inline-flex;align-items:center;justify-content:center;height:36px;width:36px}
+      .icon-btn:hover{background:#F1F5F9;border-color:#CBD5E1;color:#0A1628}
+      .avatar-circle{width:36px;height:36px;border-radius:18px;background:#0A1628;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;cursor:pointer;transition:all .18s;border:2px solid transparent;font-family:'Cabinet Grotesk',sans-serif}
+      .avatar-circle:hover{border-color:#16A34A}
+      .hamburger-btn{display:none}
+      @media(max-width:980px){.tab-pill-bar{display:none!important}.hamburger-btn{display:inline-flex!important}}
+      @media(max-width:680px){.breadcrumb-text{display:none!important}.cta-green-label{display:none}}
+      .menu-item{display:flex;align-items:center;gap:9px;width:100%;padding:9px 12px;background:transparent;border:none;cursor:pointer;font-family:'General Sans',sans-serif;font-size:13px;color:#475569;text-align:left;border-radius:7px;transition:all .12s}
+      .menu-item:hover{background:#F1F5F9;color:#0A1628}
+      .menu-item.danger{color:#DC2626}
+      .menu-item.danger:hover{background:#FEF2F2;color:#DC2626}
       @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
       @keyframes popIn{0%{transform:scale(.88);opacity:0}70%{transform:scale(1.03)}100%{transform:scale(1);opacity:1}}
       @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
@@ -3336,45 +3356,30 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     <div style={{minHeight:"90vh",background:C.bg}}>
       {deleteModal&&<DeleteModal />}
 
-      {/* Header */}
-      <div style={{background:C.navy,padding:"20px 32px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <img src={VORKER_LOGO} alt="VORKER" style={{height:52,objectFit:"contain",filter:"brightness(0) invert(1)",flexShrink:0}} />
-          <div>
-            <div style={{...H,fontSize:18,fontWeight:900,color:"#fff"}}>{company.nome_fant||company.razao}</div>
-            <div style={{...B,fontSize:12,color:"rgba(255,255,255,.5)"}}>{company.seg} · {company.cidade}/{company.estado}</div>
+      {/* Header — mesmo estilo do colaborador/landing/admin */}
+      <header className="hdr">
+        <div style={{width:"100%",padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:18}}>
+          <img src={VORKER_LOGO} alt="Vorker" style={{height:44,objectFit:"contain"}} />
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{...B,fontSize:13,color:C.sub}} className="breadcrumb-text">Olá, {(company.resp_nome||company.nome_fant||company.razao||"").split(" ")[0]}</span>
+            <Btn label="Sair" variant="ghost" size="sm" onClick={onLogout} />
           </div>
         </div>
-        <div style={{display:"flex",gap:10,alignItems:"center"}}>
-          <Badge status={company.status} />
-          <button onClick={onLogout} style={{...B,fontSize:13,fontWeight:600,color:"rgba(255,255,255,.7)",background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"7px 16px",cursor:"pointer"}}>Sair</button>
-        </div>
-      </div>
+      </header>
 
-      {/* Tabs */}
-      <div style={{background:C.navy,borderBottom:`3px solid rgba(255,255,255,.08)`,display:"flex",padding:"0 32px",gap:4}}>
+      {/* Tab bar — sub-header branco com pílulas */}
+      <div style={{background:"#fff",borderBottom:`1px solid ${C.border}`,padding:"8px 20px",display:"flex",gap:4,position:"sticky",top:60,zIndex:200,overflowX:"auto"}}>
         {[
-          {id:"talent", icon:"🔍", label:"Talent Browser"},
-          {id:"profile", icon:"🏢", label:"Meu Perfil"},
-          {id:"vorker-team", icon:"⚡", label:"Time VORKER", soon:true},
+          {id:"talent",      icon:"🔍", label:"Talent Browser"},
+          {id:"profile",     icon:"🏢", label:"Meu Perfil"},
+          {id:"vorker-team", icon:"⚡", label:"Time Vorker", soon:true},
         ].map(t=>(
           <button key={t.id}
             onClick={()=>!t.soon&&setTab(t.id)}
-            style={{
-              ...B, fontSize:13, fontWeight:600,
-              padding:"14px 20px",
-              background:"transparent",
-              border:"none",
-              borderBottom:`3px solid ${tab===t.id?"#fff":"transparent"}`,
-              color: t.soon?"rgba(255,255,255,.3)": tab===t.id?"#fff":"rgba(255,255,255,.6)",
-              cursor:t.soon?"default":"pointer",
-              display:"flex", alignItems:"center", gap:7,
-              transition:"all .15s",
-              marginBottom:-3,
-            }}>
-            <span style={{fontSize:15}}>{t.icon}</span>
+            className={`tab-pill ${tab===t.id?"active":""} ${t.soon?"disabled":""}`}>
+            <span style={{fontSize:14}}>{t.icon}</span>
             {t.label}
-            {t.soon&&<span style={{...B,fontSize:10,fontWeight:700,color:"rgba(255,255,255,.35)",background:"rgba(255,255,255,.08)",borderRadius:10,padding:"2px 8px",letterSpacing:.5}}>EM BREVE</span>}
+            {t.soon&&<span style={{fontSize:9,fontWeight:700,color:"#7C3AED",background:"#F3E8FF",borderRadius:5,padding:"1px 5px",letterSpacing:.4,marginLeft:3}}>EM BREVE</span>}
           </button>
         ))}
       </div>
