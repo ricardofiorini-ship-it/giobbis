@@ -3939,8 +3939,11 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [empresaNew, setEmpresaNew] = useState("");
+  const [welcomeShown, setWelcomeShown] = useState(()=>{ try { return !localStorage.getItem("vorker:welcome_dismissed"); } catch { return true; } });
   const fotoRef = useRef(null);
   const selfieRef = useRef(null);
+
+  const dismissWelcome = () => { try { localStorage.setItem("vorker:welcome_dismissed","1"); } catch {} setWelcomeShown(false); };
 
   const flash = (type,msg,ms=5000) => { setToast({type,msg}); setTimeout(()=>setToast(null), ms); };
   const readFile = (file,key) => { const r=new FileReader(); r.onload=e=>setD(prev=>({...prev,[key]:e.target.result})); r.readAsDataURL(file); };
@@ -4092,21 +4095,41 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
       <div style={{padding:"10px 14px",background:C.blueBg,border:`1px solid ${C.blueBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.blue,lineHeight:1.55,marginBottom:14,display:"flex",alignItems:"flex-start",gap:10}}>
         <span style={{fontSize:16,flexShrink:0,marginTop:1}}>💡</span>
         <div style={{flex:1}}>
-          <strong>Aumente suas chances de ser chamado:</strong> falta {list.join(", ")}.{" "}
-          <button onClick={()=>startEdit(section)} style={{...B,fontSize:12.5,fontWeight:700,color:C.blue,background:"transparent",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>Editar agora →</button>
+          <strong>Pra ser chamado mais vezes, falta:</strong> {list.join(", ")}.{" "}
+          <button onClick={()=>startEdit(section)} style={{...B,fontSize:12.5,fontWeight:700,color:C.blue,background:"transparent",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>Alterar agora →</button>
         </div>
       </div>
     );
   };
 
   const sectionStyle = {background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14};
-  const headStyle    = {display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"};
-  const titleStyle   = {...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5};
+  const colorMap = {
+    green:  {bg:C.greenBg,  border:C.greenBorder},
+    blue:   {bg:C.blueBg,   border:C.blueBorder},
+    amber:  {bg:C.amberBg,  border:C.amberBorder},
+    violet: {bg:"#F3E8FF",  border:"#E9D5FF"},
+  };
+
+  const SectionHeader = ({ id, icon, color="green", title, subtitle }) => {
+    const c = colorMap[color] || colorMap.green;
+    return (
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:14,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0,flex:1}}>
+          <div style={{width:48,height:48,borderRadius:12,background:c.bg,border:`1.5px solid ${c.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{icon}</div>
+          <div style={{minWidth:0}}>
+            <div style={{...H,fontSize:16,fontWeight:800,color:C.navy,marginBottom:2,lineHeight:1.2}}>{title}</div>
+            <div style={{...B,fontSize:12,color:C.muted,lineHeight:1.4}}>{subtitle}</div>
+          </div>
+        </div>
+        {editing!==id && <Btn label="✏️ Alterar" variant="outline" size="md" onClick={()=>startEdit(id)} />}
+      </div>
+    );
+  };
 
   const SaveCancel = ({ canSave=true }) => (
     <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${C.border}`}}>
-      <div style={{padding:"8px 12px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12,color:C.amber,lineHeight:1.5,marginBottom:12}}>
-        ⚠️ Salvar essa edição volta seu cadastro para análise da equipe Vorker.
+      <div style={{padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:13,color:C.amber,lineHeight:1.5,marginBottom:12}}>
+        ⚠️ Quando você salvar, seu cadastro vai voltar pra análise. Em até 1 dia útil a equipe Vorker te dá retorno.
       </div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
         <Btn label="Salvar e enviar para análise" variant="primary" size="md" onClick={saveSection} loading={saving} disabled={!canSave} />
@@ -4119,6 +4142,18 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
     <div style={{padding:"40px 20px",background:C.bg,minHeight:"calc(100vh - 60px)"}}>
       <div style={{maxWidth:920,margin:"0 auto"}}>
         {toast && <Alert type={toast.type}>{toast.msg}</Alert>}
+
+        {welcomeShown && (
+          <div style={{background:C.greenBg,border:`1.5px solid ${C.greenBorder}`,borderRadius:12,padding:"16px 18px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:14}}>
+            <div style={{fontSize:32,flexShrink:0,lineHeight:1}}>👋</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{...H,fontSize:15,fontWeight:800,color:C.green,marginBottom:6}}>Olá! Bem-vindo ao seu perfil</div>
+              <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.6,marginBottom:5}}>Aqui você pode alterar seus dados a qualquer momento. Toque no botão <strong style={{color:C.green}}>✏️ Alterar</strong> em cada caixa pra preencher ou mudar.</div>
+              <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.6}}>As caixas com <strong style={{color:C.blue}}>💡</strong> mostram o que ainda falta. Quanto mais completo, mais empresas vão te chamar pra trabalhar.</div>
+            </div>
+            <button onClick={dismissWelcome} aria-label="Fechar" style={{background:"transparent",border:"none",cursor:"pointer",color:C.green,fontSize:24,padding:"0 4px",flexShrink:0,lineHeight:1,fontWeight:700}}>×</button>
+          </div>
+        )}
 
         {/* HEADER CARD */}
         <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:16,padding:24,marginBottom:14,boxShadow:"0 4px 20px rgba(0,0,0,.04)"}}>
@@ -4167,10 +4202,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* IDENTIDADE / FOTOS */}
         <div style={sectionStyle}>
-          <div style={headStyle}>
-            <div style={titleStyle}>👤 Foto e identidade</div>
-            {editing!=="identidade" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("identidade")} />}
-          </div>
+          <SectionHeader id="identidade" icon="👤" color="green" title="Sua foto e documento" subtitle="Foto sua e a foto do seu RG ou CNH" />
           {renderMissing("identidade")}
           {editing!=="identidade" ? (
             <div>
@@ -4224,16 +4256,13 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* CONTATO E ENDEREÇO */}
         <div style={sectionStyle}>
-          <div style={headStyle}>
-            <div style={titleStyle}>📱 Contato e endereço</div>
-            {editing!=="contato" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("contato")} />}
-          </div>
+          <SectionHeader id="contato" icon="📱" color="blue" title="Como falar com você" subtitle="WhatsApp e onde você mora" />
           {editing!=="contato" ? (
             <div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}}>
-                <WInfoLine icon="📱" label="WhatsApp" value={w.telefone} />
-                <WInfoLine icon="🚗" label="Veículo"  value={w.deslocamento} />
-                <WInfoLine icon="📍" label="Raio"     value={w.raio_km?`${w.raio_km}km`:"—"} />
+                <WInfoLine icon="📱" label="WhatsApp"  value={w.telefone} />
+                <WInfoLine icon="🚗" label="Transporte" value={w.deslocamento} />
+                <WInfoLine icon="📍" label="Distância" value={w.raio_km?`${w.raio_km}km`:"—"} />
               </div>
               {(w.rua||w.cep) && (
                 <div style={{padding:"10px 14px",background:C.bg,borderRadius:9,...B,fontSize:13,color:C.sub,lineHeight:1.65}}>
@@ -4248,8 +4277,8 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               <Field label="WhatsApp" value={d.telefone} onChange={v=>setD({...d,telefone:maskPhone(v)})} maxLength={15} />
               <AddressBlock data={d} setData={setD} loading={cepLoad} setLoading={setCepLoad} />
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
-                <SelectField label="Como se desloca?" value={d.deslocamento} onChange={v=>setD({...d,deslocamento:v})} options={DESLOCAMENTOS} />
-                <Field label="Raio (km)" value={String(d.raio_km||"")} onChange={v=>setD({...d,raio_km:parseInt(v.replace(/\D/g,""))||0})} maxLength={3} />
+                <SelectField label="Como você vai pro trabalho?" value={d.deslocamento} onChange={v=>setD({...d,deslocamento:v})} options={DESLOCAMENTOS} />
+                <Field label="Distância máxima (km)" value={String(d.raio_km||"")} onChange={v=>setD({...d,raio_km:parseInt(v.replace(/\D/g,""))||0})} maxLength={3} />
               </div>
               <SaveCancel canSave={!!(d.telefone && d.cep && d.rua && d.numero)} />
             </div>
@@ -4258,10 +4287,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* DISPONIBILIDADE */}
         <div style={sectionStyle}>
-          <div style={headStyle}>
-            <div style={titleStyle}>📅 Disponibilidade e flexibilidade</div>
-            {editing!=="disponibilidade" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("disponibilidade")} />}
-          </div>
+          <SectionHeader id="disponibilidade" icon="📅" color="amber" title="Quando você pode trabalhar" subtitle="Dias da semana e turnos disponíveis" />
           {renderMissing("disponibilidade")}
           {editing!=="disponibilidade" ? (
             <div>
@@ -4287,7 +4313,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             </div>
           ) : (
             <div>
-              <div style={{...B,fontSize:12,color:C.sub,marginBottom:10}}>Marque os turnos disponíveis em cada dia da semana.</div>
+              <div style={{...B,fontSize:13,color:C.sub,marginBottom:12,lineHeight:1.5}}>Toque nos turnos que você pode trabalhar em cada dia. Quanto mais turnos você marcar, mais empresas conseguem te chamar.</div>
               <div>
                 {DAYS.map(day=>(
                   <div key={day} style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:10,alignItems:"center",marginBottom:8}}>
@@ -4306,7 +4332,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                   </div>
                 ))}
               </div>
-              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginTop:18,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Flexibilidade para aceitar turnos</div>
+              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginTop:18,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Você aceita ser chamado em cima da hora?</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                 {Object.entries(FLEX_LABEL).map(([key,val])=>(
                   <button key={key} onClick={()=>setD({...d,flexibilidade:key})}
@@ -4323,10 +4349,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* ESPECIALIDADES */}
         <div style={sectionStyle}>
-          <div style={headStyle}>
-            <div style={titleStyle}>🛠️ Especialidades</div>
-            {editing!=="especialidades" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("especialidades")} />}
-          </div>
+          <SectionHeader id="especialidades" icon="🛠️" color="green" title="O que você sabe fazer" subtitle="Funções e há quanto tempo você faz cada uma" />
           {renderMissing("especialidades")}
           {editing!=="especialidades" ? (
             especialidades.length>0 ? (
@@ -4344,7 +4367,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             ) : <div style={{...B,fontSize:13,color:C.muted}}>Nenhuma especialidade cadastrada ainda.</div>
           ) : (
             <div>
-              <div style={{...B,fontSize:12,color:C.sub,marginBottom:10}}>Selecione as funções que você sabe executar e o tempo de experiência em cada.</div>
+              <div style={{...B,fontSize:13,color:C.sub,marginBottom:12,lineHeight:1.5}}>Marque o que você sabe fazer. Pode marcar mais de um. Depois diga há quanto tempo você faz cada coisa.</div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
                 {SPECS.map(s=>{
                   const on = d.specs.includes(s.id);
@@ -4365,7 +4388,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               )}
               {d.specs.length>0 && (
                 <>
-                  <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Tempo de experiência por função</div>
+                  <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Há quanto tempo você faz cada função?</div>
                   {d.specs.map(sid=>{
                     const spec = sid==="custom" ? {id:"custom",icon:"⭐",label:d.specCustom||"Função própria"} : SPECS.find(x=>x.id===sid);
                     if(!spec) return null;
@@ -4389,10 +4412,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* EMPRESAS */}
         <div style={sectionStyle}>
-          <div style={headStyle}>
-            <div style={titleStyle}>🏢 Empresas onde já trabalhou</div>
-            {editing!=="empresas" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("empresas")} />}
-          </div>
+          <SectionHeader id="empresas" icon="🏢" color="blue" title="Onde você já trabalhou" subtitle="Mercados, lojas ou outras empresas" />
           {renderMissing("empresas")}
           {editing!=="empresas" ? (
             empresasView.length>0 ? (
@@ -4404,7 +4424,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             ) : <div style={{...B,fontSize:13,color:C.muted}}>Nenhuma empresa cadastrada ainda.</div>
           ) : (
             <div>
-              <div style={{...B,fontSize:12,color:C.sub,marginBottom:10}}>Marque as redes onde já trabalhou. Pode adicionar empresas que não estão na lista abaixo.</div>
+              <div style={{...B,fontSize:13,color:C.sub,marginBottom:12,lineHeight:1.5}}>Toque nas empresas onde você já trabalhou. Se a sua não estiver na lista, adicione embaixo.</div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
                 {EMPRESAS_PRESET.map(e=>{
                   const on = d.empresas_selected.includes(e.id);
@@ -4438,10 +4458,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* PERFIL COMPORTAMENTAL */}
         <div style={sectionStyle}>
-          <div style={headStyle}>
-            <div style={titleStyle}>🧠 Perfil comportamental</div>
-            {editing!=="perfil" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("perfil")} />}
-          </div>
+          <SectionHeader id="perfil" icon="🧠" color="violet" title="Como você trabalha" subtitle="5 perguntas rápidas sobre o seu jeito" />
           {renderMissing("perfil")}
           {editing!=="perfil" ? (
             <div>
@@ -4481,17 +4498,14 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* OUTROS */}
         <div style={sectionStyle}>
-          <div style={headStyle}>
-            <div style={titleStyle}>📋 Outras informações</div>
-            {editing!=="outros" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("outros")} />}
-          </div>
+          <SectionHeader id="outros" icon="📋" color="amber" title="Suas preferências" subtitle="Tipo de trabalho que você gosta e PCD" />
           {renderMissing("outros")}
           {editing!=="outros" ? (
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
               <WInfoLine icon="♿" label="PCD" value={w.pcd ? (w.pcd_tipo||"Sim") : "Não"} />
-              <WInfoLine icon="🤝" label="Trabalho em equipe" value={w.trabalho_equipe} />
-              <WInfoLine icon="💬" label="Atendimento ao cliente" value={w.atend_cliente} />
-              <WInfoLine icon="🛒" label="Tipo de trabalho" value={w.tipo_trabalho} />
+              <WInfoLine icon="🤝" label="Em equipe ou sozinho" value={w.trabalho_equipe} />
+              <WInfoLine icon="💬" label="Atende cliente?" value={w.atend_cliente} />
+              <WInfoLine icon="🛒" label="Onde gosta de trabalhar" value={w.tipo_trabalho} />
             </div>
           ) : (
             <div>
@@ -4500,9 +4514,9 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                 <button onClick={()=>setD({...d,pcd:false,pcd_tipo:""})} style={{flex:1,padding:"10px 14px",borderRadius:9,border:`1.5px solid ${!d.pcd?C.green:C.border2}`,background:!d.pcd?C.greenBg:C.white,cursor:"pointer",...B,fontSize:13,color:!d.pcd?C.green:C.sub,fontWeight:!d.pcd?700:600}}>Não sou PCD</button>
               </div>
               {d.pcd && <Field label="Tipo de PCD" placeholder="Ex: Auditiva, motora, visual..." value={d.pcd_tipo} onChange={v=>setD({...d,pcd_tipo:v})} />}
-              <SelectField label="Trabalho em equipe" value={d.trabalho_equipe} onChange={v=>setD({...d,trabalho_equipe:v})} options={["Prefiro trabalhar em equipe","Prefiro trabalhar sozinho","Os dois"]} />
-              <SelectField label="Atendimento ao cliente" value={d.atend_cliente} onChange={v=>setD({...d,atend_cliente:v})} options={["Gosto e tenho experiência","Gosto, mas tenho pouca experiência","Prefiro funções de bastidor"]} />
-              <SelectField label="Tipo de trabalho preferido" value={d.tipo_trabalho} onChange={v=>setD({...d,tipo_trabalho:v})} options={["Loja / atendimento","Estoque / depósito","Centro de distribuição","Dark store / delivery","Tanto faz"]} />
+              <SelectField label="Você prefere trabalhar:" value={d.trabalho_equipe} onChange={v=>setD({...d,trabalho_equipe:v})} options={["Prefiro trabalhar em equipe","Prefiro trabalhar sozinho","Os dois"]} />
+              <SelectField label="Você gosta de atender clientes?" value={d.atend_cliente} onChange={v=>setD({...d,atend_cliente:v})} options={["Gosto e tenho experiência","Gosto, mas tenho pouca experiência","Prefiro funções de bastidor"]} />
+              <SelectField label="Onde você prefere trabalhar?" value={d.tipo_trabalho} onChange={v=>setD({...d,tipo_trabalho:v})} options={["Loja / atendimento","Estoque / depósito","Centro de distribuição","Dark store / delivery","Tanto faz"]} />
               <SaveCancel />
             </div>
           )}
