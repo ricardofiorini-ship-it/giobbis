@@ -468,7 +468,7 @@ const createInvite = async ({company_id, worker_id, unit_id, message}) => {
   return data;
 };
 const fetchInvitesByCompany = async (companyId) => {
-  const { data, error } = await supabase.from("invites").select("*").eq("company_id", companyId).order("created_at", {ascending:false});
+  const { data, error } = await supabase.from("invites").select("*, workers(nome, foto_rosto, telefone, email, cidade, estado), company_units(nome)").eq("company_id", companyId).order("created_at", {ascending:false});
   if(error) throw error;
   return data || [];
 };
@@ -3762,9 +3762,9 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
                   {[
-                    {v:units.length, l:"Unidades",          icon:"🏢", color:C.green, bg:C.greenBg},
-                    {v:0,             l:"Vorkers ativos",     icon:"👥", color:"#7C3AED", bg:"#F3E8FF"},
-                    {v:0,             l:"Convites enviados",  icon:"📨", color:"#F59E0B", bg:"#FEF3C7"},
+                    {v:units.length, l:"Unidades",          icon:"🏢", color:C.green,   bg:C.greenBg},
+                    {v:invites.filter(i=>i.status==="accepted").length, l:"Convites aceitos", icon:"✓", color:"#7C3AED", bg:"#F3E8FF"},
+                    {v:invites.filter(i=>i.status==="pending").length,  l:"Convites enviados", icon:"📨", color:"#F59E0B", bg:"#FEF3C7"},
                     {v:0,             l:"Vorkers próximos",   icon:"📍", color:"#06B6D4", bg:"#CFFAFE"},
                   ].map((s,i)=>(
                     <div key={i} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 18px"}}>
@@ -3840,6 +3840,50 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                       ))}
                     </div>
                   </div>
+                </div>
+
+                <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:18,marginTop:14}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"}}>
+                    <div style={{...H,fontSize:14,fontWeight:800,color:C.navy}}>📨 Convites enviados</div>
+                    <div style={{...B,fontSize:12,color:C.muted}}>{invites.length} no total · {invites.filter(i=>i.status==="pending").length} pendentes</div>
+                  </div>
+                  {invites.length===0 ? (
+                    <div style={{padding:"24px 0",textAlign:"center",...B,fontSize:13,color:C.muted}}>
+                      Você ainda não enviou nenhum convite.<br/>
+                      <button onClick={()=>setTab("talent")} style={{...B,fontSize:13,fontWeight:600,color:C.green,background:"none",border:"none",cursor:"pointer",marginTop:8,textDecoration:"underline"}}>Ir para o Talent Browser →</button>
+                    </div>
+                  ) : (
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {invites.slice(0,8).map(inv=>{
+                        const statusCfg = {
+                          pending:  {label:"⏳ Aguardando resposta", bg:C.amberBg, color:C.amber, border:C.amberBorder},
+                          accepted: {label:"✓ Aceito",                bg:C.greenBg, color:C.green, border:C.greenBorder},
+                          declined: {label:"✕ Recusado",              bg:C.redBg,   color:C.red,   border:C.redBorder},
+                        }[inv.status] || {label:inv.status, bg:C.bg, color:C.muted, border:C.border};
+                        return (
+                          <div key={inv.id} style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:10,display:"flex",gap:10,alignItems:"center"}}>
+                            {inv.workers?.foto_rosto
+                              ? <img src={inv.workers.foto_rosto} alt="" style={{width:36,height:36,borderRadius:18,objectFit:"cover",flexShrink:0}} />
+                              : <div style={{width:36,height:36,borderRadius:18,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,...H,fontSize:14,fontWeight:800,color:"#fff"}}>{inv.workers?.nome?.[0]||"?"}</div>}
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{inv.workers?.nome||"Worker"}</div>
+                              <div style={{...B,fontSize:11.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                                {inv.company_units?.nome ? `${inv.company_units.nome} · ` : ""}{new Date(inv.created_at).toLocaleDateString("pt-BR")}
+                              </div>
+                            </div>
+                            <span style={{...B,fontSize:10.5,fontWeight:700,color:statusCfg.color,background:statusCfg.bg,border:`1px solid ${statusCfg.border}`,borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0}}>{statusCfg.label}</span>
+                            {inv.status==="accepted" && inv.workers?.telefone && (
+                              <a href={`https://wa.me/55${inv.workers.telefone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer"
+                                style={{textDecoration:"none",background:"#25D366",borderRadius:8,padding:"6px 10px",...H,fontSize:11.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:5}}>
+                                💬 Conversar
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {invites.length>8 && <div style={{...B,fontSize:11.5,color:C.muted,textAlign:"center",paddingTop:6}}>e mais {invites.length-8}…</div>}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{marginTop:24,padding:"22px 28px",borderRadius:14,background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:20,flexWrap:"wrap"}}>
