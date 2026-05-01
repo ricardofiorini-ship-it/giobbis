@@ -4013,6 +4013,63 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
     ...(w.empresas_custom||[]).map(nome=>({label:nome,custom:true})),
   ];
 
+  const getMissing = (section) => {
+    if(section==="identidade"){
+      const list=[];
+      if(!w.foto_rosto) list.push("uma foto de perfil");
+      if(!w.selfie_doc) list.push(`a foto do seu ${w.doc_tipo||"documento"}`);
+      return list;
+    }
+    if(section==="disponibilidade"){
+      const list=[];
+      const cells = Object.values(w.disponibilidade||{}).reduce((a,b)=>a+(b?.length||0),0);
+      if(cells===0)      list.push("seus turnos disponíveis");
+      else if(cells<6)   list.push(`mais turnos (você marcou só ${cells})`);
+      if(!w.flexibilidade) list.push("sua flexibilidade pra avisos curtos");
+      return list;
+    }
+    if(section==="especialidades"){
+      const list=[];
+      if(!w.specs?.length) list.push("suas especialidades");
+      else {
+        const sem = w.specs.filter(s=>!w.func_exp?.[s]?.tempo);
+        if(sem.length>0) list.push(`o tempo de experiência em ${sem.length} função(ões)`);
+      }
+      return list;
+    }
+    if(section==="empresas"){
+      const total = (w.empresas_selected?.length||0)+(w.empresas_custom?.length||0);
+      return total===0 ? ["as empresas onde já trabalhou"] : [];
+    }
+    if(section==="perfil"){
+      const ans = Object.keys(PERFIL_LABELS).filter(k=>w.perfil_trabalho?.[k]).length;
+      return ans<5 ? [`as ${5-ans} pergunta(s) restantes`] : [];
+    }
+    if(section==="outros"){
+      const list=[];
+      if(!w.trabalho_equipe) list.push("preferência de trabalho em equipe");
+      if(!w.atend_cliente)   list.push("experiência com atendimento");
+      if(!w.tipo_trabalho)   list.push("tipo de trabalho preferido");
+      return list;
+    }
+    return [];
+  };
+
+  const renderMissing = (section) => {
+    if(editing===section) return null;
+    const list = getMissing(section);
+    if(list.length===0) return null;
+    return (
+      <div style={{padding:"10px 14px",background:C.blueBg,border:`1px solid ${C.blueBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.blue,lineHeight:1.55,marginBottom:14,display:"flex",alignItems:"flex-start",gap:10}}>
+        <span style={{fontSize:16,flexShrink:0,marginTop:1}}>💡</span>
+        <div style={{flex:1}}>
+          <strong>Aumente suas chances de ser chamado:</strong> falta {list.join(", ")}.{" "}
+          <button onClick={()=>startEdit(section)} style={{...B,fontSize:12.5,fontWeight:700,color:C.blue,background:"transparent",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>Editar agora →</button>
+        </div>
+      </div>
+    );
+  };
+
   const sectionStyle = {background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14};
   const headStyle    = {display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"};
   const titleStyle   = {...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5};
@@ -4072,6 +4129,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             <div style={titleStyle}>👤 Foto e identidade</div>
             {editing!=="identidade" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("identidade")} />}
           </div>
+          {renderMissing("identidade")}
           {editing!=="identidade" ? (
             <div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:14}}>
@@ -4162,6 +4220,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             <div style={titleStyle}>📅 Disponibilidade e flexibilidade</div>
             {editing!=="disponibilidade" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("disponibilidade")} />}
           </div>
+          {renderMissing("disponibilidade")}
           {editing!=="disponibilidade" ? (
             <div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
@@ -4226,6 +4285,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             <div style={titleStyle}>🛠️ Especialidades</div>
             {editing!=="especialidades" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("especialidades")} />}
           </div>
+          {renderMissing("especialidades")}
           {editing!=="especialidades" ? (
             especialidades.length>0 ? (
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -4291,6 +4351,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             <div style={titleStyle}>🏢 Empresas onde já trabalhou</div>
             {editing!=="empresas" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("empresas")} />}
           </div>
+          {renderMissing("empresas")}
           {editing!=="empresas" ? (
             empresasView.length>0 ? (
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -4339,6 +4400,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             <div style={titleStyle}>🧠 Perfil comportamental</div>
             {editing!=="perfil" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("perfil")} />}
           </div>
+          {renderMissing("perfil")}
           {editing!=="perfil" ? (
             <div>
               {Object.entries(PERFIL_LABELS).map(([key,cfg])=>{
@@ -4381,6 +4443,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             <div style={titleStyle}>📋 Outras informações</div>
             {editing!=="outros" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("outros")} />}
           </div>
+          {renderMissing("outros")}
           {editing!=="outros" ? (
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
               <WInfoLine icon="♿" label="PCD" value={w.pcd ? (w.pcd_tipo||"Sim") : "Não"} />
