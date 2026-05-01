@@ -456,6 +456,25 @@ const fetchWorkers = async () => {
 const updateCompanyDB = async (id, changes) => { const {error}=await supabase.from("companies").update(changes).eq("id",id); if(error) throw error; };
 const updateWorkerDB  = async (id, changes) => { const {error}=await supabase.from("workers").update(changes).eq("id",id); if(error) throw error; };
 
+// ─── WORKER DRAFTS ─────────────────────────────────────────────
+const sha256Hex = async (txt) => {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+};
+const upsertWorkerDraft = async ({email, password_hash, data, step}) => {
+  const { error } = await supabase.from("worker_drafts").upsert({email, password_hash, data, step, updated_at: new Date().toISOString()}, {onConflict:"email"});
+  if(error) throw error;
+};
+const fetchWorkerDraftByEmail = async (email) => {
+  const { data, error } = await supabase.from("worker_drafts").select("*").eq("email", email).maybeSingle();
+  if(error) throw error;
+  return data;
+};
+const deleteWorkerDraft = async (email) => {
+  const { error } = await supabase.from("worker_drafts").delete().eq("email", email);
+  if(error) throw error;
+};
+
 // ─── INVITES ───────────────────────────────────────────────────
 const PLAN_QUOTA = {
   "Trial (30 dias)":           5,
@@ -1185,6 +1204,7 @@ function WorkerRegister({ onDone, onBack }) {
     try {
       const saved=await saveWorker(data);
       try { localStorage.removeItem("vorker:worker_register_draft"); } catch {}
+      if(data.email) { try { await deleteWorkerDraft(data.email); } catch {} }
       onDone({...data,id:saved.id});
     }
     catch(e){ setSubmitError(e.message||"Erro ao salvar. Tente novamente."); }
@@ -1192,11 +1212,17 @@ function WorkerRegister({ onDone, onBack }) {
   };
   const back = ()=>{ setFieldErrors([]); step>1?setStep(s=>s-1):onBack(); };
 
-  // Salvar e continuar depois (localStorage)
+  // Salvar e continuar depois (localStorage + Supabase)
   const DRAFT_KEY = "vorker:worker_register_draft";
   const [draftPrompt, setDraftPrompt] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState(null);
   const [savedToast, setSavedToast] = useState(false);
+  const [cloudDraft, setCloudDraft] = useState(null); // {email, password_hash, data, step} encontrado no Supabase
+  const [cloudPwdInput, setCloudPwdInput] = useState("");
+  const [cloudPwdError, setCloudPwdError] = useState("");
+  const [cloudPwdLoading, setCloudPwdLoading] = useState(false);
+  const [lastCheckedEmail, setLastCheckedEmail] = useState("");
+  const [cloudDraftCreated, setCloudDraftCreated] = useState(false);
 
   useEffect(() => {
     try {
@@ -1212,24 +1238,76 @@ function WorkerRegister({ onDone, onBack }) {
   }, []);
 
   // Auto-save: salva o draft no localStorage a cada mudança (debounced 600ms)
+  // E também no Supabase quando email + senha estão preenchidos
   useEffect(() => {
-    if(draftPrompt) return; // não salva enquanto o prompt de continuar/descartar tá aberto
+    if(draftPrompt || cloudDraft) return; // não salva enquanto algum prompt tá aberto
     if(!data.nome && !data.cpf && !data.email && !data.telefone) return; // skip drafts vazios
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
         setDraftSavedAt(Date.now());
       } catch {}
-    }, 600);
+      // Cloud save quando email válido + senha >= 8 chars
+      if(data.email && emailValid(data.email) && data.senha && data.senha.length>=8 && step>=2) {
+        try {
+          const hash = await sha256Hex(data.senha);
+          await upsertWorkerDraft({email: data.email, password_hash: hash, data, step});
+          setCloudDraftCreated(true);
+        } catch {}
+      }
+    }, 800);
     return () => clearTimeout(t);
-  }, [data, step, draftPrompt]);
+  }, [data, step, draftPrompt, cloudDraft]);
+
+  // Detecta cloud draft quando usuário entra com e-mail no step 2
+  useEffect(() => {
+    if(step !== 2) return;
+    if(!data.email || !emailValid(data.email)) return;
+    if(lastCheckedEmail === data.email) return;
+    if(cloudDraftCreated) return;
+    if(draftPrompt || cloudDraft) return;
+    const t = setTimeout(async () => {
+      setLastCheckedEmail(data.email);
+      try {
+        const found = await fetchWorkerDraftByEmail(data.email);
+        if(found && found.data) setCloudDraft(found);
+      } catch {}
+    }, 900);
+    return () => clearTimeout(t);
+  }, [data.email, step, lastCheckedEmail, cloudDraftCreated, draftPrompt, cloudDraft]);
+
+  const resumeCloudDraft = async () => {
+    setCloudPwdError("");
+    if(!cloudPwdInput || cloudPwdInput.length<1) { setCloudPwdError("Digite a senha original"); return; }
+    setCloudPwdLoading(true);
+    try {
+      const hash = await sha256Hex(cloudPwdInput);
+      if(hash !== cloudDraft.password_hash) {
+        setCloudPwdError("Senha incorreta. Confirme a senha original do cadastro.");
+        setCloudPwdLoading(false);
+        return;
+      }
+      // Match — carrega o draft
+      setData({...cloudDraft.data, senha: cloudPwdInput, senha2: cloudPwdInput});
+      setStep(cloudDraft.step || 2);
+      setCloudDraft(null);
+      setCloudPwdInput("");
+      setCloudDraftCreated(true);
+      setLastCheckedEmail(cloudDraft.data.email||"");
+    } catch(e) { setCloudPwdError("Erro ao verificar senha. Tente novamente."); }
+    finally { setCloudPwdLoading(false); }
+  };
+  const dismissCloudDraft = () => { setCloudDraft(null); setCloudPwdInput(""); setCloudPwdError(""); };
 
   const restoreDraft = () => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed?.data) setData(parsed.data);
+        if (parsed?.data) {
+          setData(parsed.data);
+          if(parsed.data.email) setLastCheckedEmail(parsed.data.email); // pula cloud check pra esse e-mail
+        }
         if (parsed?.step) setStep(parsed.step);
       }
     } catch {}
@@ -1283,6 +1361,27 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
             <button onClick={restoreDraft} style={{padding:"8px 14px",borderRadius:8,background:C.green,border:"none",color:"#fff",...B,fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>Continuar</button>
             <button onClick={discardDraft} style={{padding:"8px 14px",borderRadius:8,background:"transparent",border:`1.5px solid ${C.border2}`,color:C.sub,...B,fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Descartar</button>
+          </div>
+        )}
+
+        {/* Modal: cadastro em andamento detectado em outro dispositivo (Supabase) */}
+        {cloudDraft && (
+          <div onClick={dismissCloudDraft} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.6)",backdropFilter:"blur(4px)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,maxWidth:460,width:"100%",padding:"28px 28px 22px",boxShadow:"0 24px 60px rgba(0,0,0,.3)",position:"relative"}}>
+              <div style={{fontSize:36,marginBottom:10}}>📱→💻</div>
+              <div style={{...H,fontSize:18,fontWeight:800,color:C.navy,marginBottom:6}}>Cadastro em andamento detectado</div>
+              <p style={{...B,fontSize:13,color:C.sub,marginBottom:6,lineHeight:1.55}}>Encontramos um cadastro em andamento com o e-mail <strong style={{color:C.navy}}>{cloudDraft.data?.email}</strong> iniciado em outro dispositivo ou navegador.</p>
+              <p style={{...B,fontSize:13,color:C.sub,marginBottom:14,lineHeight:1.55}}>Para continuar de onde você parou, confirme com a senha original que cadastrou.</p>
+              <Field label="Senha original" placeholder="••••••••" type="password" value={cloudPwdInput} onChange={setCloudPwdInput} />
+              {cloudPwdError && <Alert type="error">{cloudPwdError}</Alert>}
+              <div style={{display:"flex",gap:10,marginTop:12,flexWrap:"wrap"}}>
+                <Btn label="Continuar cadastro" variant="primary" size="md" onClick={resumeCloudDraft} loading={cloudPwdLoading} disabled={!cloudPwdInput} />
+                <Btn label="Começar do zero" variant="ghost" size="md" onClick={dismissCloudDraft} disabled={cloudPwdLoading} />
+              </div>
+              <div style={{marginTop:14,padding:"10px 12px",background:C.bg,borderRadius:9,...B,fontSize:11.5,color:C.muted,lineHeight:1.5}}>
+                Se você usar "Começar do zero" e quiser, depois pode voltar pra esse cadastro pelo mesmo e-mail e senha.
+              </div>
+            </div>
           </div>
         )}
 
