@@ -79,6 +79,81 @@ function GlobalStyles() {
       .prog{display:flex;gap:4px;align-items:center}
       .prog-s{height:4px;border-radius:2px;transition:all .3s}
       input:focus,select:focus,textarea:focus{outline:none;border-color:#16A34A!important}
+
+      /* ─── RESPONSIVE: classes globais (antes ficavam scoped no Landing) ─── */
+      @media(max-width:768px){
+        .vorker-hero{min-height:0!important}
+        .vorker-hero-grid{padding:24px 20px 0!important}
+        .vorker-hero-text{max-width:none!important}
+        .vorker-h1{font-size:32px!important;line-height:1.1!important}
+        .vorker-chips{grid-template-columns:1fr 1fr!important}
+        .vorker-stats{grid-template-columns:1fr 1fr!important;gap:14px!important;padding:0 4px}
+        .vorker-dual{grid-template-columns:1fr!important;gap:16px!important;margin-top:28px!important}
+        .vorker-dual>div{padding:26px 22px!important}
+        .vorker-flex-grid{grid-template-columns:1fr!important}
+        .vorker-q-grid{grid-template-columns:1fr!important}
+        .vorker-step-wrap{grid-template-columns:1fr!important;gap:14px!important}
+        .vorker-sidebar{position:static!important}
+        .vorker-mobile-btn{display:none!important}
+        .vorker-mockup{padding:14px!important;gap:12px!important}
+        .vorker-perfil-grid{grid-template-columns:1fr!important}
+        .vorker-admin-top{grid-template-columns:1fr!important;gap:12px!important}
+        .vorker-admin-header{grid-template-columns:1fr!important;gap:18px!important;padding:18px!important}
+        .vorker-admin-decision{padding-left:0!important;border-left:none!important;border-top:1px solid #E2E8F0;padding-top:16px!important}
+        .vorker-admin-facts{grid-template-columns:repeat(2,1fr)!important;gap:12px!important}
+        .vorker-admin-body{grid-template-columns:1fr!important;gap:12px!important}
+        .vorker-day-row{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
+        .vorker-exp-grid{grid-template-columns:1fr!important;gap:10px!important}
+        .vorker-worker-detail{grid-template-columns:1fr!important;gap:12px!important}
+        .vorker-worker-rail{position:static!important}
+        .vorker-worker-head{grid-template-columns:1fr!important;gap:14px!important}
+        .vorker-worker-head>div:nth-child(2){padding-left:0!important;border-left:none!important;border-top:1px solid #E2E8F0;padding-top:14px!important}
+        .vorker-worker-facts{gap:10px!important}
+        .vorker-exp-disp{grid-template-columns:1fr!important}
+        .vorker-verif-emp{grid-template-columns:1fr!important}
+        .vorker-traits-grid{grid-template-columns:repeat(2,1fr)!important}
+        .vorker-docs-grid{grid-template-columns:1fr!important}
+        .vorker-day-full{display:none!important}
+        .vorker-day-short{display:inline!important}
+        .vorker-ctas{flex-direction:column!important;align-items:stretch!important}
+        .vorker-ctas>div{width:100%!important;justify-content:center!important}
+        .vorker-hero-stats{gap:14px!important;justify-content:flex-start}
+        .vorker-trust{gap:10px!important;padding:14px 20px!important;flex-direction:column;align-items:flex-start!important}
+        .vorker-hero-photo{position:static!important;width:100%!important;height:auto!important;margin-top:24px;display:block;border-radius:0;object-position:center center!important}
+        .vorker-hero-mask,.vorker-hero-glow{display:none!important}
+        .vorker-hero-darken{background:linear-gradient(180deg, transparent 0%, rgba(10,22,40,.4) 100%)!important;top:auto!important;bottom:0;height:30%}
+        .vorker-badge-km,.vorker-badge-invite{display:none!important}
+        .vorker-hdr-center{display:none!important}
+        .hdr .vorker-greet{display:none!important}
+        .hdr img{height:36px!important}
+      }
+      @media(max-width:1024px) and (min-width:769px){
+        .vorker-hdr-center{display:none!important}
+      }
+
+      /* ─── RESPONSIVE: pega grids inline com style específico ─── */
+      @media(max-width:780px){
+        /* Stats com 4 colunas viram 2 */
+        [style*="grid-template-columns:repeat(4,1fr)"]{grid-template-columns:repeat(2,1fr)!important}
+        /* Layouts 2-col-1 (sidebar+main, info+rail) viram 1 coluna */
+        [style*="grid-template-columns:2fr 1fr"]{grid-template-columns:1fr!important}
+        [style*="grid-template-columns:1fr 280px"]{grid-template-columns:1fr!important}
+        [style*="grid-template-columns:1fr 320px"]{grid-template-columns:1fr!important}
+        [style*="grid-template-columns:230px 1fr"]{grid-template-columns:1fr!important}
+        [style*="grid-template-columns:220px 1fr"]{grid-template-columns:1fr!important}
+        [style*="grid-template-columns:1fr auto"]{grid-template-columns:1fr!important}
+        /* Datas empresa: 2 colunas viram 1 em mobile */
+        [style*="grid-template-columns:repeat(2,1fr)"]{grid-template-columns:1fr!important}
+      }
+      @media(max-width:480px){
+        [style*="grid-template-columns:repeat(4,1fr)"]{grid-template-columns:1fr!important}
+        [style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:1fr!important}
+      }
+
+      /* ─── HEADER MOBILE: container do logo + olá não estoura ─── */
+      @media(max-width:480px){
+        .hdr{padding:0!important}
+      }
     `;
     document.head.appendChild(s);
     document.body.style.overflowX = "hidden";
