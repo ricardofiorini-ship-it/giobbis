@@ -3875,7 +3875,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                             {inv.status==="accepted" && inv.workers?.telefone && (
                               <a href={`https://wa.me/55${inv.workers.telefone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer"
                                 style={{textDecoration:"none",background:"#25D366",borderRadius:8,padding:"6px 10px",...H,fontSize:11.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:5}}>
-                                💬 Conversar
+                                💬 Conversar pelo WhatsApp
                               </a>
                             )}
                           </div>
