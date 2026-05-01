@@ -457,9 +457,24 @@ const updateCompanyDB = async (id, changes) => { const {error}=await supabase.fr
 const updateWorkerDB  = async (id, changes) => { const {error}=await supabase.from("workers").update(changes).eq("id",id); if(error) throw error; };
 
 // ─── INVITES ───────────────────────────────────────────────────
-const createInvite = async ({company_id, worker_id, unit_id, message}) => {
-  const { count } = await supabase.from("invites").select("*", {count:"exact", head:true}).eq("company_id", company_id).eq("status", "pending");
-  if((count||0) >= 5) throw new Error("Você atingiu o limite de 5 convites pendentes. Aguarde respostas para convidar mais workers.");
+const PLAN_QUOTA = {
+  "Trial (30 dias)":           5,
+  "Básico — R$ 299/mês":       30,
+  "Profissional — R$ 599/mês": 100,
+  "Enterprise — R$ 1.299/mês": Infinity,
+};
+const planQuota = (plan) => PLAN_QUOTA[plan] ?? 5;
+const planLabel = (plan) => (plan||"Trial").split(" — ")[0].replace(" (30 dias)","");
+const monthStart = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+
+const createInvite = async ({company_id, worker_id, unit_id, message, plan}) => {
+  const limit = planQuota(plan);
+  if(limit !== Infinity) {
+    const { count } = await supabase.from("invites").select("*", {count:"exact", head:true}).eq("company_id", company_id).gte("created_at", monthStart());
+    if((count||0) >= limit) {
+      throw new Error(`Você atingiu o limite de ${limit} convites do plano ${planLabel(plan)} este mês. Fale com a equipe Vorker para liberar mais convites ou fazer upgrade do plano.`);
+    }
+  }
   const { data, error } = await supabase.from("invites").insert({company_id, worker_id, unit_id, message: message?.trim() || null, status: "pending"}).select().single();
   if(error) {
     if(error.code === "23505") throw new Error("Você já tem um convite pendente para este colaborador.");
@@ -3037,7 +3052,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     if(!invModal) return;
     setInvSaving(true); setInvError("");
     try {
-      await createInvite({company_id: company.id, worker_id: invModal.worker.id, unit_id: invModal.unitId, message: invModal.message});
+      await createInvite({company_id: company.id, worker_id: invModal.worker.id, unit_id: invModal.unitId, message: invModal.message, plan: company.plan});
       await refreshInvites();
       setInvModal(null);
       setInvToast({type:"success", msg:`Convite enviado a ${invModal.worker.nome.split(" ")[0]}. Você verá o WhatsApp quando ${(/a$/i.test(invModal.worker.nome.split(" ")[0]))?"ela aceitar":"ele aceitar"}.`});
@@ -3046,6 +3061,13 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     finally { setInvSaving(false); }
   };
   const inviteFor = (workerId) => invites.find(i => i.worker_id === workerId);
+
+  const _startThisMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const monthlyInvites = invites.filter(i => new Date(i.created_at) >= _startThisMonth);
+  const quotaUsed = monthlyInvites.length;
+  const quotaLimit = planQuota(company.plan);
+  const quotaPct = quotaLimit === Infinity ? 0 : Math.min(100, Math.round((quotaUsed / quotaLimit) * 100));
+  const quotaColor = quotaPct >= 100 ? C.red : quotaPct >= 80 ? C.amber : quotaPct >= 50 ? "#65A30D" : C.green;
 
   useEffect(()=>{
     let list=workers;
@@ -3778,11 +3800,45 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                   <p style={{...B,fontSize:14,color:C.sub,margin:0}}>Gerencie as informações da sua empresa, unidades e encontre os melhores Vorkers</p>
                 </div>
 
+                <div style={{background:C.white,border:`1.5px solid ${quotaPct>=100?C.redBorder:quotaPct>=80?C.amberBorder:C.border}`,borderRadius:14,padding:18,marginBottom:14,display:"grid",gridTemplateColumns:"1fr auto",gap:18,alignItems:"center"}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+                      <span style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>Convites deste mês</span>
+                      <span style={{...B,fontSize:11,fontWeight:700,color:C.navy,background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,padding:"2px 8px"}}>Plano {planLabel(company.plan)}</span>
+                    </div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                      <span style={{...H,fontSize:30,fontWeight:900,color:quotaColor,lineHeight:1}}>{quotaUsed}</span>
+                      <span style={{...B,fontSize:14,color:C.muted}}>/ {quotaLimit === Infinity ? "∞" : quotaLimit}</span>
+                      <span style={{...B,fontSize:12,color:C.muted}}>{quotaUsed === 1 ? "convite enviado" : "convites enviados"}</span>
+                    </div>
+                    {quotaLimit !== Infinity && (
+                      <div style={{height:8,background:C.bg,borderRadius:4,overflow:"hidden",marginBottom:6}}>
+                        <div style={{height:"100%",width:`${quotaPct}%`,background:quotaColor,transition:"width .4s ease, background-color .3s"}} />
+                      </div>
+                    )}
+                    {quotaLimit === Infinity && <div style={{...B,fontSize:12,color:C.green,fontWeight:600}}>✓ Convites ilimitados no plano Enterprise.</div>}
+                    {quotaLimit !== Infinity && quotaUsed >= quotaLimit && (
+                      <div style={{...B,fontSize:12.5,color:C.red,fontWeight:600,marginTop:6}}>⚠ Você atingiu o limite mensal. Fale com a equipe para liberar mais convites.</div>
+                    )}
+                    {quotaLimit !== Infinity && quotaUsed >= quotaLimit*0.8 && quotaUsed < quotaLimit && (
+                      <div style={{...B,fontSize:12,color:C.amber,fontWeight:600,marginTop:6}}>Atenção: restam apenas {quotaLimit - quotaUsed} convites neste mês.</div>
+                    )}
+                    {quotaLimit !== Infinity && quotaUsed < quotaLimit*0.8 && (
+                      <div style={{...B,fontSize:11.5,color:C.muted}}>Renova automaticamente no dia 1º do próximo mês.</div>
+                    )}
+                  </div>
+                  {quotaLimit !== Infinity && (
+                    <a href="https://wa.me/5511999999999?text=Quero%20fazer%20upgrade%20do%20meu%20plano%20Vorker" target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>
+                      <button className="cta-green">{quotaUsed >= quotaLimit ? "Liberar mais" : "Fazer upgrade"}</button>
+                    </a>
+                  )}
+                </div>
+
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
                   {[
                     {v:units.length, l:"Unidades",          icon:"🏢", color:C.green,   bg:C.greenBg},
                     {v:invites.filter(i=>i.status==="accepted").length, l:"Convites aceitos", icon:"✓", color:"#7C3AED", bg:"#F3E8FF"},
-                    {v:invites.filter(i=>i.status==="pending").length,  l:"Convites enviados", icon:"📨", color:"#F59E0B", bg:"#FEF3C7"},
+                    {v:invites.filter(i=>i.status==="pending").length,  l:"Convites pendentes", icon:"⏳", color:"#F59E0B", bg:"#FEF3C7"},
                     {v:0,             l:"Vorkers próximos",   icon:"📍", color:"#06B6D4", bg:"#CFFAFE"},
                   ].map((s,i)=>(
                     <div key={i} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 18px"}}>
