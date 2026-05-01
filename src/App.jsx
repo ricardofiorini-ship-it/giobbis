@@ -4169,7 +4169,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         <div style={sectionStyle}>
           <div style={headStyle}>
             <div style={titleStyle}>👤 Foto e identidade</div>
-            {editing!=="identidade" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("identidade")} />}
+            {editing!=="identidade" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("identidade")} />}
           </div>
           {renderMissing("identidade")}
           {editing!=="identidade" ? (
@@ -4226,7 +4226,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         <div style={sectionStyle}>
           <div style={headStyle}>
             <div style={titleStyle}>📱 Contato e endereço</div>
-            {editing!=="contato" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("contato")} />}
+            {editing!=="contato" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("contato")} />}
           </div>
           {editing!=="contato" ? (
             <div>
@@ -4260,7 +4260,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         <div style={sectionStyle}>
           <div style={headStyle}>
             <div style={titleStyle}>📅 Disponibilidade e flexibilidade</div>
-            {editing!=="disponibilidade" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("disponibilidade")} />}
+            {editing!=="disponibilidade" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("disponibilidade")} />}
           </div>
           {renderMissing("disponibilidade")}
           {editing!=="disponibilidade" ? (
@@ -4325,7 +4325,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         <div style={sectionStyle}>
           <div style={headStyle}>
             <div style={titleStyle}>🛠️ Especialidades</div>
-            {editing!=="especialidades" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("especialidades")} />}
+            {editing!=="especialidades" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("especialidades")} />}
           </div>
           {renderMissing("especialidades")}
           {editing!=="especialidades" ? (
@@ -4391,7 +4391,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         <div style={sectionStyle}>
           <div style={headStyle}>
             <div style={titleStyle}>🏢 Empresas onde já trabalhou</div>
-            {editing!=="empresas" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("empresas")} />}
+            {editing!=="empresas" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("empresas")} />}
           </div>
           {renderMissing("empresas")}
           {editing!=="empresas" ? (
@@ -4440,7 +4440,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         <div style={sectionStyle}>
           <div style={headStyle}>
             <div style={titleStyle}>🧠 Perfil comportamental</div>
-            {editing!=="perfil" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("perfil")} />}
+            {editing!=="perfil" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("perfil")} />}
           </div>
           {renderMissing("perfil")}
           {editing!=="perfil" ? (
@@ -4483,7 +4483,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         <div style={sectionStyle}>
           <div style={headStyle}>
             <div style={titleStyle}>📋 Outras informações</div>
-            {editing!=="outros" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("outros")} />}
+            {editing!=="outros" && <Btn label="✏️ Editar" variant="outline" size="md" onClick={()=>startEdit("outros")} />}
           </div>
           {renderMissing("outros")}
           {editing!=="outros" ? (
