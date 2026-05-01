@@ -3886,13 +3886,23 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                   )}
                 </div>
 
-                <div style={{marginTop:24,padding:"22px 28px",borderRadius:14,background:"linear-gradient(135deg,#16A34A,#15803D)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+                <div style={{marginTop:24,padding:"24px 28px",borderRadius:14,background:"linear-gradient(135deg,#16A34A,#15803D)",display:"grid",gridTemplateColumns:"1fr auto",gap:24,alignItems:"center"}}>
                   <div style={{minWidth:0}}>
-                    <div style={{...B,fontSize:10.5,fontWeight:700,color:"rgba(255,255,255,.7)",textTransform:"uppercase",letterSpacing:1.5,marginBottom:6}}>Time Vorker — em breve</div>
-                    <div style={{...H,fontSize:18,fontWeight:900,color:"#fff",lineHeight:1.25,marginBottom:4}}>Monte seu time fixo com a Time Vorker</div>
-                    <div style={{...B,fontSize:13,color:"rgba(255,255,255,.85)",lineHeight:1.5}}>Tenha sua equipe dedicada de Vorkers só para sua marca, com estabilidade e performance.</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+                      <span style={{...B,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,.95)",background:"rgba(255,255,255,.18)",borderRadius:6,padding:"3px 8px",letterSpacing:1.2,textTransform:"uppercase"}}>Time Vorker</span>
+                      <span style={{...B,fontSize:9.5,fontWeight:700,color:"rgba(255,255,255,.95)",background:"rgba(255,255,255,.18)",borderRadius:6,padding:"3px 8px",letterSpacing:1.2,textTransform:"uppercase"}}>Serviço · em breve</span>
+                    </div>
+                    <div style={{...H,fontSize:19,fontWeight:900,color:"#fff",lineHeight:1.25,marginBottom:7}}>Em vez de convidar um a um, contrate a Vorker.</div>
+                    <div style={{...B,fontSize:13,color:"rgba(255,255,255,.92)",lineHeight:1.55,marginBottom:12}}>Você assina com a Vorker e a gente entrega uma equipe fixa dedicada à sua operação. Recrutamos, treinamos, escalamos e garantimos cobertura — sem precisar curar Vorker por Vorker.</div>
+                    <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+                      {["Equipe dedicada à sua marca","Cobertura em turnos críticos","Vorker como provedora — não você"].map(t=>(
+                        <div key={t} style={{display:"inline-flex",alignItems:"center",gap:6,...B,fontSize:12,color:"rgba(255,255,255,.95)",fontWeight:600}}>
+                          <span style={{color:"#fff",fontWeight:900}}>✓</span>{t}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <button style={{...B,fontSize:13,fontWeight:700,color:C.green,background:"#fff",border:"none",borderRadius:9,padding:"11px 20px",cursor:"pointer",whiteSpace:"nowrap"}}>Quero saber mais</button>
+                  <button style={{...B,fontSize:13,fontWeight:700,color:C.green,background:"#fff",border:"none",borderRadius:9,padding:"12px 22px",cursor:"pointer",whiteSpace:"nowrap"}}>Quero saber mais</button>
                 </div>
               </>}
 
