@@ -3940,62 +3940,101 @@ const WInfoLine = ({ icon, label, value }) => (
 
 function WorkerProfile({ worker, onLogout, onUpdate }) {
   const [w, setW] = useState(worker);
-  const [editingContact, setEditingContact] = useState(false);
-  const [contact, setContact] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [d, setD] = useState(null);
   const [cepLoad, setCepLoad] = useState(false);
-  const [addingEmpresa, setAddingEmpresa] = useState(false);
-  const [newEmpresa, setNewEmpresa] = useState("");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [empresaNew, setEmpresaNew] = useState("");
+  const fotoRef = useRef(null);
+  const selfieRef = useRef(null);
 
-  const flash = (type,msg,ms=4000) => { setToast({type,msg}); setTimeout(()=>setToast(null), ms); };
+  const flash = (type,msg,ms=5000) => { setToast({type,msg}); setTimeout(()=>setToast(null), ms); };
+  const readFile = (file,key) => { const r=new FileReader(); r.onload=e=>setD(prev=>({...prev,[key]:e.target.result})); r.readAsDataURL(file); };
 
-  const startEditContact = () => {
-    setContact({
-      telefone:w.telefone||"", email:w.email||"",
-      cep:w.cep||"", rua:w.rua||"", numero:w.numero||"", complemento:w.complemento||"",
-      bairro:w.bairro||"", cidade:w.cidade||"", estado:w.estado||"",
-      raio_km:w.raio_km||10, deslocamento:w.deslocamento||"",
-    });
-    setEditingContact(true);
+  const startEdit = (section) => {
+    let data = {};
+    if(section==="identidade") data = {nome:w.nome||"", foto_rosto:w.foto_rosto||null, selfie_doc:w.selfie_doc||null, doc_tipo:w.doc_tipo||"RG"};
+    if(section==="contato")    data = {telefone:w.telefone||"", cep:w.cep||"", rua:w.rua||"", numero:w.numero||"", complemento:w.complemento||"", bairro:w.bairro||"", cidade:w.cidade||"", estado:w.estado||"", raio_km:w.raio_km||10, deslocamento:w.deslocamento||""};
+    if(section==="disponibilidade") data = {disponibilidade: JSON.parse(JSON.stringify(w.disponibilidade||{})), flexibilidade:w.flexibilidade||""};
+    if(section==="especialidades")  data = {specs:[...(w.specs||[])], spec_levels:JSON.parse(JSON.stringify(w.spec_levels||{})), func_exp:JSON.parse(JSON.stringify(w.func_exp||{})), specCustom:w.spec_levels?.custom?.label||""};
+    if(section==="empresas")        data = {empresas_selected:[...(w.empresas_selected||[])], empresas_custom:[...(w.empresas_custom||[])]};
+    if(section==="perfil")          data = {perfil_trabalho: JSON.parse(JSON.stringify(w.perfil_trabalho||{}))};
+    if(section==="outros")          data = {pcd:!!w.pcd, pcd_tipo:w.pcd_tipo||"", trabalho_equipe:w.trabalho_equipe||"", atend_cliente:w.atend_cliente||"", tipo_trabalho:w.tipo_trabalho||""};
+    setD(data); setEditing(section); setEmpresaNew("");
   };
 
-  const saveContact = async () => {
-    setSaving(true);
-    try {
-      await updateWorkerDB(w.id, contact);
-      const newW = {...w, ...contact};
-      setW(newW); onUpdate(newW);
-      setEditingContact(false);
-      flash("success","Dados de contato atualizados.");
-    } catch(e){ flash("error","Erro ao salvar. Tente novamente."); }
-    finally { setSaving(false); }
-  };
+  const cancelEdit = () => { setEditing(null); setD(null); setEmpresaNew(""); };
 
-  const addEmpresa = async () => {
-    const nome = newEmpresa.trim();
-    if(!nome) return;
+  const saveSection = async () => {
     setSaving(true);
-    const empresas_custom = [...(w.empresas_custom||[]), nome];
-    const changes = { empresas_custom, status:"pending", reject_note:"" };
     try {
+      let changes = {...d, status:"pending", reject_note:""};
+      if(editing==="disponibilidade") {
+        changes.dias = Object.keys(d.disponibilidade).filter(day=>d.disponibilidade[day]?.length>0);
+        changes.turnos = [...new Set(Object.values(d.disponibilidade).flat())];
+      }
+      if(editing==="especialidades") {
+        if(d.specs.includes("custom") && d.specCustom) {
+          changes.spec_levels = {...d.spec_levels, custom: {...(d.spec_levels?.custom||{}), label: d.specCustom}};
+        }
+        delete changes.specCustom;
+      }
+      if(editing==="outros" && !d.pcd) changes.pcd_tipo = "";
       await updateWorkerDB(w.id, changes);
       const newW = {...w, ...changes};
       setW(newW); onUpdate(newW);
-      setNewEmpresa(""); setAddingEmpresa(false);
-      flash("warning","Experiência adicionada. Seu cadastro voltou para análise.",6000);
-    } catch(e){ flash("error","Erro ao salvar. Tente novamente."); }
+      setEditing(null); setD(null); setEmpresaNew("");
+      flash("warning","Dados atualizados. Seu cadastro voltou para análise da equipe Vorker.",6000);
+    } catch(e) { flash("error","Erro ao salvar. Tente novamente."); }
     finally { setSaving(false); }
+  };
+
+  const toggleSpec = (id) => {
+    setD(prev=>{
+      const has = prev.specs.includes(id);
+      const specs = has ? prev.specs.filter(s=>s!==id) : [...prev.specs, id];
+      const func_exp = {...prev.func_exp};
+      if(has) delete func_exp[id];
+      return {...prev, specs, func_exp};
+    });
+  };
+  const setSpecTempo = (id, tempo) => setD(prev=>({...prev, func_exp:{...prev.func_exp, [id]:{...(prev.func_exp[id]||{}), tempo}}}));
+  const toggleEmpresaPreset = (id) => setD(prev=>({...prev, empresas_selected: prev.empresas_selected.includes(id) ? prev.empresas_selected.filter(x=>x!==id) : [...prev.empresas_selected, id]}));
+  const addEmpresaCustom = () => { const n=empresaNew.trim(); if(!n) return; setD(prev=>({...prev, empresas_custom:[...prev.empresas_custom, n]})); setEmpresaNew(""); };
+  const removeEmpresaCustom = (i) => setD(prev=>({...prev, empresas_custom: prev.empresas_custom.filter((_,idx)=>idx!==i)}));
+  const toggleShift = (day, shiftId) => {
+    setD(prev=>{
+      const cur = prev.disponibilidade[day]||[];
+      const next = cur.includes(shiftId) ? cur.filter(s=>s!==shiftId) : [...cur, shiftId];
+      return {...prev, disponibilidade:{...prev.disponibilidade, [day]:next}};
+    });
   };
 
   const especialidades = [
     ...SPECS.filter(s=>w.specs?.includes(s.id)).map(s=>({id:s.id,label:s.label,icon:s.icon,tempo:w.func_exp?.[s.id]?.tempo})),
     ...(w.specs?.includes("custom")?[{id:"custom",label:w.spec_levels?.custom?.label||"Função própria",icon:"⭐",tempo:w.func_exp?.custom?.tempo}]:[]),
   ];
-  const empresas = [
+  const empresasView = [
     ...(w.empresas_selected||[]).map(id=>{ const e=EMPRESAS_PRESET.find(x=>x.id===id); return e?{label:e.label,custom:false}:null; }).filter(Boolean),
     ...(w.empresas_custom||[]).map(nome=>({label:nome,custom:true})),
   ];
+
+  const sectionStyle = {background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14};
+  const headStyle    = {display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"};
+  const titleStyle   = {...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5};
+
+  const SaveCancel = ({ canSave=true }) => (
+    <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${C.border}`}}>
+      <div style={{padding:"8px 12px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12,color:C.amber,lineHeight:1.5,marginBottom:12}}>
+        ⚠️ Salvar essa edição volta seu cadastro para análise da equipe Vorker.
+      </div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <Btn label="Salvar e enviar para análise" variant="primary" size="md" onClick={saveSection} loading={saving} disabled={!canSave} />
+        <Btn label="Cancelar" variant="ghost" size="md" onClick={cancelEdit} disabled={saving} />
+      </div>
+    </div>
+  );
 
   return (
     <div style={{padding:"40px 20px",background:C.bg,minHeight:"calc(100vh - 60px)"}}>
@@ -4029,25 +4068,79 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
           )}
           {w.status==="pending" && (
             <div style={{marginTop:16,padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.amber,lineHeight:1.55}}>
-              ⏳ Seu cadastro está em análise pela equipe Giobbi's. Em até 24h úteis você terá retorno por e-mail.
+              ⏳ Seu cadastro está em análise pela equipe Vorker. Em até 24h úteis você terá retorno por e-mail.
             </div>
           )}
         </div>
 
-        {/* CONTATO E ENDEREÇO (editável, sem reaprovação) */}
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>📱 Contato e endereço</div>
-            {!editingContact && <Btn label="Editar" variant="ghost" size="sm" onClick={startEditContact} />}
+        {/* IDENTIDADE / FOTOS */}
+        <div style={sectionStyle}>
+          <div style={headStyle}>
+            <div style={titleStyle}>👤 Foto e identidade</div>
+            {editing!=="identidade" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("identidade")} />}
           </div>
+          {editing!=="identidade" ? (
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:14}}>
+                <WInfoLine icon="🧑" label="Nome completo" value={w.nome} />
+                <WInfoLine icon="🪪" label="CPF" value={w.cpf} />
+                <WInfoLine icon="🎂" label="Nascimento" value={w.nascimento ? new Date(w.nascimento).toLocaleDateString("pt-BR") : "—"} />
+                <WInfoLine icon="✉️" label="E-mail" value={w.email} />
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                {[
+                  {label:"Foto de perfil", src:w.foto_rosto, fallback:"📷"},
+                  {label:`Selfie com ${w.doc_tipo||"documento"}`, src:w.selfie_doc, fallback:"🤳"},
+                ].map(item=>(
+                  <div key={item.label} style={{padding:14,background:C.bg,borderRadius:10,textAlign:"center"}}>
+                    {item.src
+                      ? <img src={item.src} alt={item.label} style={{width:"100%",maxWidth:160,height:160,objectFit:"cover",borderRadius:9,marginBottom:8}} />
+                      : <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",fontSize:42}}>{item.fallback}</div>}
+                    <div style={{...B,fontSize:12,color:C.sub,fontWeight:600}}>{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <Field label="Nome completo" value={d.nome} onChange={v=>setD({...d,nome:v})} required />
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginTop:6}}>
+                <Field label="CPF" value={w.cpf} disabled hint="Não pode ser alterado" />
+                <Field label="Nascimento" value={w.nascimento ? new Date(w.nascimento).toLocaleDateString("pt-BR") : ""} disabled hint="Não pode ser alterado" />
+                <Field label="E-mail" value={w.email} disabled hint="Não pode ser alterado" />
+              </div>
+              <SelectField label="Tipo de documento" value={d.doc_tipo} onChange={v=>setD({...d,doc_tipo:v})} options={["RG","CNH"]} />
+              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginTop:14,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Foto de perfil</div>
+              <div className={`upload-zone ${d.foto_rosto?"has":""}`} onClick={()=>fotoRef.current?.click()} style={{textAlign:"center"}}>
+                {d.foto_rosto
+                  ? <div><img src={d.foto_rosto} alt="" style={{width:130,height:130,borderRadius:65,objectFit:"cover",border:`3px solid ${C.green}`,marginBottom:8}} /><div style={{...B,fontSize:12,color:C.green,fontWeight:600}}>Clique para alterar</div></div>
+                  : <div><div style={{fontSize:36,marginBottom:8}}>📷</div><div style={{...B,fontSize:13,color:C.sub}}>Clique para enviar a foto</div></div>}
+              </div>
+              <input ref={fotoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0]; if(f) readFile(f,"foto_rosto");}} />
+              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginTop:14,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Selfie com {d.doc_tipo}</div>
+              <div className={`upload-zone ${d.selfie_doc?"has":""}`} onClick={()=>selfieRef.current?.click()} style={{textAlign:"center"}}>
+                {d.selfie_doc
+                  ? <div><img src={d.selfie_doc} alt="" style={{maxWidth:220,maxHeight:165,borderRadius:10,objectFit:"cover",border:`2px solid ${C.green}`,marginBottom:8}} /><div style={{...B,fontSize:12,color:C.green,fontWeight:600}}>Clique para alterar</div></div>
+                  : <div><div style={{fontSize:36,marginBottom:8}}>🤳</div><div style={{...B,fontSize:13,color:C.sub}}>Clique para enviar a selfie segurando seu {d.doc_tipo}</div></div>}
+              </div>
+              <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0]; if(f) readFile(f,"selfie_doc");}} />
+              <SaveCancel canSave={!!d.nome.trim()} />
+            </div>
+          )}
+        </div>
 
-          {!editingContact ? (
+        {/* CONTATO E ENDEREÇO */}
+        <div style={sectionStyle}>
+          <div style={headStyle}>
+            <div style={titleStyle}>📱 Contato e endereço</div>
+            {editing!=="contato" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("contato")} />}
+          </div>
+          {editing!=="contato" ? (
             <div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}}>
-                <WInfoLine icon="📱" label="WhatsApp"  value={w.telefone} />
-                <WInfoLine icon="✉️" label="E-mail"    value={w.email} />
-                <WInfoLine icon="🚗" label="Veículo"   value={w.deslocamento} />
-                <WInfoLine icon="📍" label="Raio"      value={w.raio_km?`${w.raio_km}km`:"—"} />
+                <WInfoLine icon="📱" label="WhatsApp" value={w.telefone} />
+                <WInfoLine icon="🚗" label="Veículo"  value={w.deslocamento} />
+                <WInfoLine icon="📍" label="Raio"     value={w.raio_km?`${w.raio_km}km`:"—"} />
               </div>
               {(w.rua||w.cep) && (
                 <div style={{padding:"10px 14px",background:C.bg,borderRadius:9,...B,fontSize:13,color:C.sub,lineHeight:1.65}}>
@@ -4059,112 +4152,263 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             </div>
           ) : (
             <div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14}}>
-                <Field label="WhatsApp" value={contact.telefone} onChange={v=>setContact({...contact,telefone:maskPhone(v)})} maxLength={15} />
-                <Field label="E-mail" value={contact.email} onChange={v=>setContact({...contact,email:v})} type="email" />
-              </div>
-              <AddressBlock data={contact} setData={setContact} loading={cepLoad} setLoading={setCepLoad} />
+              <Field label="WhatsApp" value={d.telefone} onChange={v=>setD({...d,telefone:maskPhone(v)})} maxLength={15} />
+              <AddressBlock data={d} setData={setD} loading={cepLoad} setLoading={setCepLoad} />
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:14}}>
-                <SelectField label="Como se desloca?" value={contact.deslocamento} onChange={v=>setContact({...contact,deslocamento:v})} options={DESLOCAMENTOS} />
-                <Field label="Raio (km)" value={String(contact.raio_km||"")} onChange={v=>setContact({...contact,raio_km:parseInt(v.replace(/\D/g,""))||0})} maxLength={3} />
+                <SelectField label="Como se desloca?" value={d.deslocamento} onChange={v=>setD({...d,deslocamento:v})} options={DESLOCAMENTOS} />
+                <Field label="Raio (km)" value={String(d.raio_km||"")} onChange={v=>setD({...d,raio_km:parseInt(v.replace(/\D/g,""))||0})} maxLength={3} />
               </div>
-              <div style={{display:"flex",gap:10,marginTop:10}}>
-                <Btn label="Salvar alterações" variant="primary" size="md" onClick={saveContact} loading={saving} />
-                <Btn label="Cancelar" variant="ghost" size="md" onClick={()=>setEditingContact(false)} />
-              </div>
-              <div style={{marginTop:10,...B,fontSize:11.5,color:C.muted,fontStyle:"italic"}}>Atualizar contato e endereço NÃO volta seu cadastro para análise.</div>
+              <SaveCancel canSave={!!(d.telefone && d.cep && d.rua && d.numero)} />
             </div>
           )}
         </div>
 
-        {/* DISPONIBILIDADE (read-only) */}
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
-          <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>📅 Disponibilidade</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
-            {DAYS.map(d=>{
-              const turnos = w.disponibilidade?.[d]||[];
-              return (
-                <div key={d} style={{textAlign:"center"}}>
-                  <div style={{...H,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:6}}>{d}</div>
-                  {turnos.length===0
-                    ? <div style={{height:24,background:C.bg,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",...B,fontSize:10,color:C.muted}}>—</div>
-                    : turnos.map(tid=>{ const sh=SHIFTS.find(x=>x.id===tid); return sh ? <div key={tid} style={{background:sh.color+"22",border:`1px solid ${sh.color}66`,color:sh.color,borderRadius:5,padding:"3px 0",marginBottom:3,...B,fontSize:10,fontWeight:700}}>{sh.label}</div> : null; })
-                  }
-                </div>
-              );
-            })}
+        {/* DISPONIBILIDADE */}
+        <div style={sectionStyle}>
+          <div style={headStyle}>
+            <div style={titleStyle}>📅 Disponibilidade e flexibilidade</div>
+            {editing!=="disponibilidade" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("disponibilidade")} />}
           </div>
-          {w.flexibilidade && FLEX_LABEL[w.flexibilidade] && (
-            <div style={{marginTop:14,padding:"10px 14px",background:C.bg,borderRadius:9,...B,fontSize:13,color:C.sub,display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:14}}>{FLEX_LABEL[w.flexibilidade].icon}</span>
-              <span><strong style={{color:C.navy,fontWeight:700}}>{FLEX_LABEL[w.flexibilidade].desc}</strong></span>
+          {editing!=="disponibilidade" ? (
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+                {DAYS.map(day=>{
+                  const turnos = w.disponibilidade?.[day]||[];
+                  return (
+                    <div key={day} style={{textAlign:"center"}}>
+                      <div style={{...H,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",marginBottom:6}}>{day}</div>
+                      {turnos.length===0
+                        ? <div style={{height:24,background:C.bg,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",...B,fontSize:10,color:C.muted}}>—</div>
+                        : turnos.map(tid=>{ const sh=SHIFTS.find(x=>x.id===tid); return sh ? <div key={tid} style={{background:sh.color+"22",border:`1px solid ${sh.color}66`,color:sh.color,borderRadius:5,padding:"3px 0",marginBottom:3,...B,fontSize:10,fontWeight:700}}>{sh.label}</div> : null; })}
+                    </div>
+                  );
+                })}
+              </div>
+              {w.flexibilidade && FLEX_LABEL[w.flexibilidade] && (
+                <div style={{marginTop:14,padding:"10px 14px",background:C.bg,borderRadius:9,...B,fontSize:13,color:C.sub,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:14}}>{FLEX_LABEL[w.flexibilidade].icon}</span>
+                  <span><strong style={{color:C.navy,fontWeight:700}}>{FLEX_LABEL[w.flexibilidade].desc}</strong></span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <div style={{...B,fontSize:12,color:C.sub,marginBottom:10}}>Marque os turnos disponíveis em cada dia da semana.</div>
+              <div>
+                {DAYS.map(day=>(
+                  <div key={day} style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:10,alignItems:"center",marginBottom:8}}>
+                    <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{DAY_FULL[day]}</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {SHIFTS.map(sh=>{
+                        const on = (d.disponibilidade[day]||[]).includes(sh.id);
+                        return (
+                          <button key={sh.id} onClick={()=>toggleShift(day,sh.id)}
+                            style={{padding:"7px 11px",borderRadius:8,border:`1.5px solid ${on?sh.color:C.border2}`,background:on?sh.color+"15":C.white,color:on?sh.color:C.sub,...B,fontSize:11.5,fontWeight:on?700:600,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:5}}>
+                            <span>{sh.icon}</span>{sh.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginTop:18,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Flexibilidade para aceitar turnos</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                {Object.entries(FLEX_LABEL).map(([key,val])=>(
+                  <button key={key} onClick={()=>setD({...d,flexibilidade:key})}
+                    style={{padding:"12px 14px",borderRadius:10,border:`1.5px solid ${d.flexibilidade===key?C.green:C.border2}`,background:d.flexibilidade===key?C.greenBg:C.white,cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
+                    <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:3}}>{val.icon} {val.label}</div>
+                    <div style={{...B,fontSize:11,color:C.sub}}>{val.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <SaveCancel />
             </div>
           )}
         </div>
 
-        {/* ESPECIALIDADES (read-only) */}
-        {especialidades.length>0 && (
-          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
-            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>🛠️ Especialidades</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {especialidades.map(s=>(
-                <div key={s.id} style={{padding:"10px 14px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:18}}>{s.icon}</span>
-                  <div>
-                    <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{s.label}</div>
-                    {s.tempo && <div style={{...B,fontSize:11,color:C.muted}}>{s.tempo}</div>}
+        {/* ESPECIALIDADES */}
+        <div style={sectionStyle}>
+          <div style={headStyle}>
+            <div style={titleStyle}>🛠️ Especialidades</div>
+            {editing!=="especialidades" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("especialidades")} />}
+          </div>
+          {editing!=="especialidades" ? (
+            especialidades.length>0 ? (
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {especialidades.map(s=>(
+                  <div key={s.id} style={{padding:"10px 14px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:18}}>{s.icon}</span>
+                    <div>
+                      <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{s.label}</div>
+                      {s.tempo && <div style={{...B,fontSize:11,color:C.muted}}>{s.tempo}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : <div style={{...B,fontSize:13,color:C.muted}}>Nenhuma especialidade cadastrada ainda.</div>
+          ) : (
+            <div>
+              <div style={{...B,fontSize:12,color:C.sub,marginBottom:10}}>Selecione as funções que você sabe executar e o tempo de experiência em cada.</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+                {SPECS.map(s=>{
+                  const on = d.specs.includes(s.id);
+                  return (
+                    <button key={s.id} onClick={()=>toggleSpec(s.id)}
+                      style={{padding:"9px 13px",borderRadius:9,border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:C.white,cursor:"pointer",...B,fontSize:12.5,fontWeight:on?700:600,color:on?C.green:C.sub,display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+                      <span style={{fontSize:14}}>{s.icon}</span>{s.label}
+                    </button>
+                  );
+                })}
+                <button onClick={()=>toggleSpec("custom")}
+                  style={{padding:"9px 13px",borderRadius:9,border:`1.5px dashed ${d.specs.includes("custom")?C.green:C.border2}`,background:d.specs.includes("custom")?C.greenBg:C.white,cursor:"pointer",...B,fontSize:12.5,fontWeight:600,color:d.specs.includes("custom")?C.green:C.sub}}>
+                  ⭐ Função própria
+                </button>
+              </div>
+              {d.specs.includes("custom") && (
+                <Field label="Nome da função própria" placeholder="Ex: Repositor de cosméticos" value={d.specCustom} onChange={v=>setD({...d,specCustom:v})} />
+              )}
+              {d.specs.length>0 && (
+                <>
+                  <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Tempo de experiência por função</div>
+                  {d.specs.map(sid=>{
+                    const spec = sid==="custom" ? {id:"custom",icon:"⭐",label:d.specCustom||"Função própria"} : SPECS.find(x=>x.id===sid);
+                    if(!spec) return null;
+                    return (
+                      <div key={sid} style={{display:"grid",gridTemplateColumns:"160px 1fr",gap:12,alignItems:"center",marginBottom:8}}>
+                        <div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}><span style={{fontSize:15,marginRight:6}}>{spec.icon}</span>{spec.label}</div>
+                        <select value={d.func_exp[sid]?.tempo||""} onChange={e=>setSpecTempo(sid, e.target.value)}
+                          style={{padding:"8px 12px",borderRadius:9,border:`1.5px solid ${C.border2}`,background:C.white,...B,fontSize:13,color:C.navy,cursor:"pointer"}}>
+                          <option value="">— selecione —</option>
+                          {EXP_TIMES.map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+              <SaveCancel canSave={d.specs.length>0 && (!d.specs.includes("custom") || d.specCustom.trim().length>0)} />
+            </div>
+          )}
+        </div>
+
+        {/* EMPRESAS */}
+        <div style={sectionStyle}>
+          <div style={headStyle}>
+            <div style={titleStyle}>🏢 Empresas onde já trabalhou</div>
+            {editing!=="empresas" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("empresas")} />}
+          </div>
+          {editing!=="empresas" ? (
+            empresasView.length>0 ? (
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {empresasView.map((e,i)=>(
+                  <div key={i} style={{padding:"7px 11px",background:e.custom?C.amberBg:C.bg,border:`1px solid ${e.custom?C.amberBorder:C.border}`,borderRadius:8,...B,fontSize:12,color:e.custom?C.amber:C.navy,fontWeight:600}}>{e.label}</div>
+                ))}
+              </div>
+            ) : <div style={{...B,fontSize:13,color:C.muted}}>Nenhuma empresa cadastrada ainda.</div>
+          ) : (
+            <div>
+              <div style={{...B,fontSize:12,color:C.sub,marginBottom:10}}>Marque as redes onde já trabalhou. Pode adicionar empresas que não estão na lista abaixo.</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+                {EMPRESAS_PRESET.map(e=>{
+                  const on = d.empresas_selected.includes(e.id);
+                  return (
+                    <button key={e.id} onClick={()=>toggleEmpresaPreset(e.id)}
+                      style={{padding:"7px 11px",borderRadius:8,border:`1.5px solid ${on?C.green:C.border2}`,background:on?C.greenBg:C.white,cursor:"pointer",...B,fontSize:12,fontWeight:on?700:600,color:on?C.green:C.sub,transition:"all .15s"}}>
+                      {e.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Outras empresas (não listadas acima)</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                {d.empresas_custom.map((nome,i)=>(
+                  <div key={i} style={{padding:"7px 11px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:8,...B,fontSize:12,color:C.amber,fontWeight:600,display:"inline-flex",alignItems:"center",gap:6}}>
+                    {nome}
+                    <span onClick={()=>removeEmpresaCustom(i)} style={{cursor:"pointer",color:C.red,fontWeight:800,marginLeft:2}}>×</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+                <div style={{flex:1}}>
+                  <Field label="Adicionar empresa" placeholder="Ex: Mercado Local LTDA" value={empresaNew} onChange={setEmpresaNew} />
+                </div>
+                <Btn label="+ Adicionar" variant="outline" size="md" onClick={addEmpresaCustom} disabled={!empresaNew.trim()} />
+              </div>
+              <SaveCancel />
+            </div>
+          )}
+        </div>
+
+        {/* PERFIL COMPORTAMENTAL */}
+        <div style={sectionStyle}>
+          <div style={headStyle}>
+            <div style={titleStyle}>🧠 Perfil comportamental</div>
+            {editing!=="perfil" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("perfil")} />}
+          </div>
+          {editing!=="perfil" ? (
+            <div>
+              {Object.entries(PERFIL_LABELS).map(([key,cfg])=>{
+                const ans = w.perfil_trabalho?.[key];
+                const ansLabel = ans ? cfg.opts[ans] : null;
+                return (
+                  <div key={key} style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{...B,fontSize:11.5,color:C.muted,marginBottom:3}}>{cfg.title}</div>
+                    <div style={{...B,fontSize:13,color:ansLabel?C.navy:C.muted,fontWeight:ansLabel?600:400}}>{ansLabel||"— não respondido —"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div>
+              {Object.entries(PERFIL_LABELS).map(([key,cfg])=>(
+                <div key={key} style={{marginBottom:14}}>
+                  <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:8}}>{cfg.title}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {Object.entries(cfg.opts).map(([optKey,optLabel])=>{
+                      const sel = d.perfil_trabalho[key]===optKey;
+                      return (
+                        <button key={optKey} onClick={()=>setD({...d,perfil_trabalho:{...d.perfil_trabalho,[key]:optKey}})}
+                          style={{padding:"10px 14px",borderRadius:9,border:`1.5px solid ${sel?C.green:C.border2}`,background:sel?C.greenBg:C.white,cursor:"pointer",textAlign:"left",...B,fontSize:13,color:sel?C.green:C.sub,fontWeight:sel?600:500,transition:"all .15s"}}>
+                          {optLabel}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* EMPRESAS (editável - adiciona, gera reaprovação) */}
-        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>🏢 Empresas onde já trabalhou</div>
-            {!addingEmpresa && <Btn label="+ Adicionar" variant="ghost" size="sm" onClick={()=>setAddingEmpresa(true)} />}
-          </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:addingEmpresa?14:0}}>
-            {empresas.length===0 && <div style={{...B,fontSize:13,color:C.muted}}>Nenhuma empresa cadastrada ainda.</div>}
-            {empresas.map((e,i)=>(
-              <div key={i} style={{padding:"7px 11px",background:e.custom?C.amberBg:C.bg,border:`1px solid ${e.custom?C.amberBorder:C.border}`,borderRadius:8,...B,fontSize:12,color:e.custom?C.amber:C.navy,fontWeight:600}}>{e.label}</div>
-            ))}
-          </div>
-          {addingEmpresa && (
-            <div style={{padding:14,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10}}>
-              <div style={{...B,fontSize:12,color:C.amber,marginBottom:10,lineHeight:1.55}}>
-                ⚠️ Adicionar nova experiência fará seu cadastro voltar para análise da equipe Giobbi's. Em até 24h úteis você terá retorno.
-              </div>
-              <Field label="Nome da empresa" placeholder="Ex: Mercado Local LTDA" value={newEmpresa} onChange={setNewEmpresa} />
-              <div style={{display:"flex",gap:10}}>
-                <Btn label="Adicionar e enviar para análise" variant="primary" size="md" onClick={addEmpresa} loading={saving} disabled={!newEmpresa.trim()} />
-                <Btn label="Cancelar" variant="ghost" size="md" onClick={()=>{setAddingEmpresa(false);setNewEmpresa("");}} />
-              </div>
+              <SaveCancel />
             </div>
           )}
         </div>
 
-        {/* DOCUMENTAÇÃO (read-only) */}
-        {(w.foto_rosto || w.selfie_doc) && (
-          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:14}}>
-            <div style={{...H,fontSize:13,fontWeight:800,color:C.navy,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>📷 Documentação</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-              {[
-                {label:"Foto de perfil", src:w.foto_rosto, fallback:"📷"},
-                {label:`Selfie com ${w.doc_tipo||"documento"}`, src:w.selfie_doc, fallback:"🤳"},
-              ].map(d=>(
-                <div key={d.label} style={{padding:14,background:C.bg,borderRadius:10,textAlign:"center"}}>
-                  {d.src
-                    ? <img src={d.src} alt={d.label} style={{width:"100%",maxWidth:160,height:160,objectFit:"cover",borderRadius:9,marginBottom:8}} />
-                    : <div style={{fontSize:42,marginBottom:8}}>{d.fallback}</div>}
-                  <div style={{...B,fontSize:12,color:C.sub,fontWeight:600}}>{d.label}</div>
-                </div>
-              ))}
-            </div>
+        {/* OUTROS */}
+        <div style={sectionStyle}>
+          <div style={headStyle}>
+            <div style={titleStyle}>📋 Outras informações</div>
+            {editing!=="outros" && <Btn label="Editar" variant="ghost" size="sm" onClick={()=>startEdit("outros")} />}
           </div>
-        )}
+          {editing!=="outros" ? (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+              <WInfoLine icon="♿" label="PCD" value={w.pcd ? (w.pcd_tipo||"Sim") : "Não"} />
+              <WInfoLine icon="🤝" label="Trabalho em equipe" value={w.trabalho_equipe} />
+              <WInfoLine icon="💬" label="Atendimento ao cliente" value={w.atend_cliente} />
+              <WInfoLine icon="🛒" label="Tipo de trabalho" value={w.tipo_trabalho} />
+            </div>
+          ) : (
+            <div>
+              <div style={{display:"flex",gap:8,marginBottom:14}}>
+                <button onClick={()=>setD({...d,pcd:true})} style={{flex:1,padding:"10px 14px",borderRadius:9,border:`1.5px solid ${d.pcd?C.green:C.border2}`,background:d.pcd?C.greenBg:C.white,cursor:"pointer",...B,fontSize:13,color:d.pcd?C.green:C.sub,fontWeight:d.pcd?700:600}}>Sou PCD</button>
+                <button onClick={()=>setD({...d,pcd:false,pcd_tipo:""})} style={{flex:1,padding:"10px 14px",borderRadius:9,border:`1.5px solid ${!d.pcd?C.green:C.border2}`,background:!d.pcd?C.greenBg:C.white,cursor:"pointer",...B,fontSize:13,color:!d.pcd?C.green:C.sub,fontWeight:!d.pcd?700:600}}>Não sou PCD</button>
+              </div>
+              {d.pcd && <Field label="Tipo de PCD" placeholder="Ex: Auditiva, motora, visual..." value={d.pcd_tipo} onChange={v=>setD({...d,pcd_tipo:v})} />}
+              <SelectField label="Trabalho em equipe" value={d.trabalho_equipe} onChange={v=>setD({...d,trabalho_equipe:v})} options={["Prefiro trabalhar em equipe","Prefiro trabalhar sozinho","Os dois"]} />
+              <SelectField label="Atendimento ao cliente" value={d.atend_cliente} onChange={v=>setD({...d,atend_cliente:v})} options={["Gosto e tenho experiência","Gosto, mas tenho pouca experiência","Prefiro funções de bastidor"]} />
+              <SelectField label="Tipo de trabalho preferido" value={d.tipo_trabalho} onChange={v=>setD({...d,tipo_trabalho:v})} options={["Loja / atendimento","Estoque / depósito","Centro de distribuição","Dark store / delivery","Tanto faz"]} />
+              <SaveCancel />
+            </div>
+          )}
+        </div>
 
         <div style={{textAlign:"center",marginTop:24}}>
           <Btn label="Sair" variant="ghost" size="md" onClick={onLogout} />
