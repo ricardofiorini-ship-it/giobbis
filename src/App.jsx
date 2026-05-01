@@ -3767,7 +3767,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                 {id:"unidades",      icon:"📍", label:"Unidades de trabalho"},
                 {id:"usuarios",      icon:"👥", label:"Usuários e acesso", soon:true},
                 {id:"preferencias",  icon:"⚙️", label:"Preferências", soon:true},
-                {id:"planos",        icon:"💳", label:"Planos e faturamento", soon:true},
+                {id:"planos",        icon:"💳", label:"Planos e faturamento"},
               ].map(it=>(
                 <button key={it.id} onClick={()=>!it.soon&&setSubTab(it.id)} disabled={it.soon}
                   style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 14px",background:subTab===it.id?C.greenBg:"transparent",border:"none",borderRadius:9,cursor:it.soon?"default":"pointer",...B,fontSize:13,fontWeight:subTab===it.id?700:600,color:it.soon?C.muted:subTab===it.id?C.green:C.sub,marginBottom:2,transition:"all .15s"}}>
@@ -4151,8 +4151,78 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                 </div>
               </>}
 
+              {/* ─── PLANOS E FATURAMENTO ─── */}
+              {subTab==="planos"&&(() => {
+                const PLAN_DEFS = [
+                  {key:"Trial (30 dias)",           name:"Trial",         price:"Grátis",       sub:"5 convites/mês",  features:["5 convites por mês","Acesso ao Buscar Talento","Cadastro de unidades","Perfis verificados"], cta:"Plano atual"},
+                  {key:"Básico — R$ 299/mês",       name:"Básico",        price:"R$ 299",       sub:"por mês",         features:["30 convites por mês","Acesso ao Buscar Talento","Cadastro de unidades","Suporte por e-mail"], cta:"Quero o Básico"},
+                  {key:"Profissional — R$ 599/mês", name:"Profissional",  price:"R$ 599",       sub:"por mês",         features:["100 convites por mês","Acesso ao Buscar Talento","Cadastro de unidades","Suporte prioritário","Filtros avançados"], cta:"Quero o Profissional", highlight:true},
+                  {key:"Enterprise — R$ 1.299/mês", name:"Enterprise",    price:"R$ 1.299",     sub:"por mês",         features:["Convites ilimitados","Acesso ao Buscar Talento","Cadastro de unidades","Suporte 24/7","Conta dedicada","Acesso ao Time Vorker"], cta:"Quero o Enterprise"},
+                ];
+                const wppMsg = (planName) => encodeURIComponent(`Olá! Quero contratar o plano ${planName} no Vorker.`);
+                return (
+                  <>
+                    <div style={{marginBottom:18}}>
+                      <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,letterSpacing:-.5,marginBottom:4}}>Planos e faturamento</h2>
+                      <p style={{...B,fontSize:13,color:C.sub,margin:0}}>Compare os planos e fale com a equipe Vorker para fazer upgrade.</p>
+                    </div>
+
+                    <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:18,marginBottom:18,display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                      <div>
+                        <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Plano atual</div>
+                        <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+                          <span style={{...H,fontSize:18,fontWeight:900,color:C.navy}}>{planLabel(company.plan)}</span>
+                          <span style={{...B,fontSize:13,color:C.muted}}>· {quotaUsed}/{quotaLimit===Infinity?"∞":quotaLimit} convites usados este mês</span>
+                        </div>
+                      </div>
+                      <Badge status={company.pay_status} />
+                    </div>
+
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))",gap:14}}>
+                      {PLAN_DEFS.map(p=>{
+                        const isCurrent = company.plan === p.key;
+                        return (
+                          <div key={p.key} style={{background:C.white,border:`${p.highlight||isCurrent?2:1}px solid ${isCurrent?C.green:p.highlight?"#7C3AED":C.border}`,borderRadius:14,padding:"22px 20px",position:"relative",display:"flex",flexDirection:"column",boxShadow:p.highlight?"0 8px 24px rgba(124,58,237,.12)":"none"}}>
+                            {p.highlight && !isCurrent && (
+                              <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",background:"#7C3AED",color:"#fff",...B,fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:6,letterSpacing:.5,textTransform:"uppercase"}}>Mais popular</div>
+                            )}
+                            {isCurrent && (
+                              <div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",background:C.green,color:"#fff",...B,fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:6,letterSpacing:.5,textTransform:"uppercase"}}>Plano atual</div>
+                            )}
+                            <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>{p.name}</div>
+                            <div style={{display:"flex",alignItems:"baseline",gap:5,marginBottom:14}}>
+                              <span style={{...H,fontSize:26,fontWeight:900,color:C.navy,letterSpacing:-.5,lineHeight:1}}>{p.price}</span>
+                              <span style={{...B,fontSize:11.5,color:C.muted}}>{p.sub}</span>
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:18,flex:1}}>
+                              {p.features.map((f,i)=>(
+                                <div key={i} style={{display:"flex",gap:7,alignItems:"flex-start"}}>
+                                  <span style={{color:C.green,fontWeight:900,fontSize:13,marginTop:1}}>✓</span>
+                                  <span style={{...B,fontSize:12,color:C.sub,lineHeight:1.4}}>{f}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {isCurrent ? (
+                              <div style={{padding:"10px 14px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:9,...B,fontSize:12.5,color:C.green,fontWeight:700,textAlign:"center"}}>✓ Plano atual</div>
+                            ) : (
+                              <a href={`https://wa.me/5511999999999?text=${wppMsg(p.name)}`} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>
+                                <button className="cta-green" style={{width:"100%",justifyContent:"center"}}>{p.cta}</button>
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{marginTop:18,padding:"14px 18px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:11,...B,fontSize:12.5,color:C.sub,lineHeight:1.55}}>
+                      💬 Para contratar ou fazer upgrade, fale com a equipe Vorker no WhatsApp. Renovação automática mensal. Cancelamento a qualquer momento.
+                    </div>
+                  </>
+                );
+              })()}
+
               {/* ─── PLACEHOLDERS ─── */}
-              {(subTab==="usuarios"||subTab==="preferencias"||subTab==="planos")&&(
+              {(subTab==="usuarios"||subTab==="preferencias")&&(
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:60,textAlign:"center"}}>
                   <div style={{fontSize:42,marginBottom:14}}>🚧</div>
                   <div style={{...H,fontSize:18,fontWeight:800,color:C.navy,marginBottom:6}}>Em breve</div>
