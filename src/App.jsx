@@ -1682,7 +1682,7 @@ function WorkerRegister({ onDone, onBack }) {
           {/* ── STEP 5: Foto do documento ── */}
           {step===5&&<>
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Foto do documento</h2>
-            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Selfie segurando o seu documento, para verificar sua identidade.</p>
+            <p style={{...B,fontSize:14,color:C.sub,marginBottom:18,lineHeight:1.65}}>Envie uma foto do seu documento de identificação (RG ou CNH) para verificar sua identidade.</p>
 
             <div style={{background:C.greenBg,border:`1.5px solid ${C.greenBorder}`,borderRadius:10,padding:"12px 16px",marginBottom:18,display:"flex",gap:10,alignItems:"flex-start"}}>
               <span style={{fontSize:18}}>ℹ️</span>
@@ -1701,28 +1701,21 @@ function WorkerRegister({ onDone, onBack }) {
             </div>
 
             {data.docTipo&&<>
-              {/* Mockup ilustrativo do enquadramento da selfie com documento */}
+              {/* Mockup ilustrativo do enquadramento do documento */}
               <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:18,alignItems:"center",background:C.bg,border:`1px dashed ${C.border2}`,borderRadius:12,padding:18,marginBottom:14}} className="vorker-mockup">
                 <div style={{position:"relative",width:140,height:120,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  {/* Cabeça */}
-                  <div style={{position:"absolute",left:8,top:14,width:54,height:54,borderRadius:27,background:"linear-gradient(160deg,#DCFCE7,#BBF7D0)",border:`2px solid ${C.green}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <svg viewBox="0 0 100 100" style={{width:36,height:36}}>
-                      <circle cx="50" cy="38" r="18" fill="#16A34A" opacity=".75" />
-                      <path d="M22,100 Q50,62 78,100 Z" fill="#16A34A" opacity=".75" />
-                    </svg>
-                  </div>
-                  {/* Documento */}
-                  <div style={{position:"absolute",right:0,top:34,width:84,height:54,borderRadius:7,background:"#fff",border:`2px solid ${C.green}`,padding:"6px 8px"}}>
-                    <div style={{width:18,height:22,background:"#CBD5E1",borderRadius:3,float:"left",marginRight:6}} />
-                    <div style={{height:5,background:"#CBD5E1",borderRadius:2,marginBottom:4,marginLeft:24}} />
-                    <div style={{height:4,background:"#E2E8F0",borderRadius:2,marginBottom:3,marginLeft:24,width:"60%"}} />
-                    <div style={{height:4,background:"#E2E8F0",borderRadius:2,marginBottom:3,width:"75%"}} />
-                    <div style={{height:4,background:"#E2E8F0",borderRadius:2,width:"45%"}} />
+                  {/* Documento centralizado */}
+                  <div style={{width:120,height:78,borderRadius:9,background:"#fff",border:`2px solid ${C.green}`,padding:"10px 12px",boxShadow:"0 4px 12px rgba(22,163,74,.15)"}}>
+                    <div style={{width:24,height:30,background:"#CBD5E1",borderRadius:4,float:"left",marginRight:9}} />
+                    <div style={{height:6,background:"#CBD5E1",borderRadius:2,marginBottom:5,marginLeft:33}} />
+                    <div style={{height:5,background:"#E2E8F0",borderRadius:2,marginBottom:4,marginLeft:33,width:"70%"}} />
+                    <div style={{height:5,background:"#E2E8F0",borderRadius:2,marginBottom:4,width:"80%"}} />
+                    <div style={{height:5,background:"#E2E8F0",borderRadius:2,width:"55%"}} />
                   </div>
                 </div>
                 <div>
                   <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,marginBottom:8}}>Como deve ficar</div>
-                  {["Rosto e documento na mesma foto","Documento aberto e legível","Sem reflexos sobre o documento","Fundo simples e boa iluminação"].map(t=>(
+                  {["Documento aberto e centralizado","Texto e foto bem legíveis","Sem reflexos sobre o documento","Fundo simples e boa iluminação"].map(t=>(
                     <div key={t} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                       <span style={{color:C.green,fontWeight:900,fontSize:12}}>✓</span>
                       <span style={{...B,fontSize:12,color:C.sub}}>{t}</span>
@@ -1735,10 +1728,10 @@ function WorkerRegister({ onDone, onBack }) {
                 {data.selfieDoc
                   ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
                     <img src={data.selfieDoc} alt="" style={{maxWidth:220,maxHeight:165,borderRadius:10,objectFit:"cover",border:`2px solid ${C.green}`}} />
-                    <span style={{...H,fontSize:15,fontWeight:700,color:C.green}}>✓ Selfie enviada</span>
+                    <span style={{...H,fontSize:15,fontWeight:700,color:C.green}}>✓ Documento enviado</span>
                     <span style={{...B,fontSize:12,color:C.muted}}>Clique para substituir</span>
                    </div>
-                  :<div><div style={{fontSize:48,marginBottom:12}}>🤳</div><div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Selfie segurando o {data.docTipo}</div><div style={{...B,fontSize:13,color:C.muted}}>Foto · máx. 10MB</div></div>}
+                  :<div><div style={{fontSize:48,marginBottom:12}}>🪪</div><div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Foto do seu {data.docTipo}</div><div style={{...B,fontSize:13,color:C.muted}}>Foto · máx. 10MB</div></div>}
               </div>
               <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)readFile(f,"selfieDoc");}} />
               <div style={{...B,fontSize:11,color:C.muted,textAlign:"center",marginBottom:6}}>🔒 Visível apenas à equipe VORKER.</div>
@@ -2731,7 +2724,7 @@ function AdminPanel({ onLogout }) {
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}} className="vorker-docs-grid">
                     {[
                       {label:"Foto de perfil", src:selWorker.foto_rosto, fallback:"📷"},
-                      {label:`Selfie com ${selWorker.doc_tipo||"documento"}`, src:selWorker.selfie_doc, fallback:"🤳"},
+                      {label:`Foto do ${selWorker.doc_tipo||"documento"}`, src:selWorker.selfie_doc, fallback:"🪪"},
                     ].map(({label,src,fallback})=>(
                       <div key={label} style={{display:"flex",alignItems:"center",gap:14}}>
                         <div style={{width:64,height:64,borderRadius:12,overflow:"hidden",background:"#0F172A",border:`1px solid ${C.border}`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -4090,7 +4083,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 {[
                   {label:"Foto de perfil", src:w.foto_rosto, fallback:"📷"},
-                  {label:`Selfie com ${w.doc_tipo||"documento"}`, src:w.selfie_doc, fallback:"🤳"},
+                  {label:`Foto do ${w.doc_tipo||"documento"}`, src:w.selfie_doc, fallback:"🪪"},
                 ].map(item=>(
                   <div key={item.label} style={{padding:14,background:C.bg,borderRadius:10,textAlign:"center"}}>
                     {item.src
@@ -4117,11 +4110,11 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                   : <div><div style={{fontSize:36,marginBottom:8}}>📷</div><div style={{...B,fontSize:13,color:C.sub}}>Clique para enviar a foto</div></div>}
               </div>
               <input ref={fotoRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0]; if(f) readFile(f,"foto_rosto");}} />
-              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginTop:14,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Selfie com {d.doc_tipo}</div>
+              <div style={{...H,fontSize:12,fontWeight:700,color:C.muted,marginTop:14,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Foto do {d.doc_tipo}</div>
               <div className={`upload-zone ${d.selfie_doc?"has":""}`} onClick={()=>selfieRef.current?.click()} style={{textAlign:"center"}}>
                 {d.selfie_doc
                   ? <div><img src={d.selfie_doc} alt="" style={{maxWidth:220,maxHeight:165,borderRadius:10,objectFit:"cover",border:`2px solid ${C.green}`,marginBottom:8}} /><div style={{...B,fontSize:12,color:C.green,fontWeight:600}}>Clique para alterar</div></div>
-                  : <div><div style={{fontSize:36,marginBottom:8}}>🤳</div><div style={{...B,fontSize:13,color:C.sub}}>Clique para enviar a selfie segurando seu {d.doc_tipo}</div></div>}
+                  : <div><div style={{fontSize:36,marginBottom:8}}>🪪</div><div style={{...B,fontSize:13,color:C.sub}}>Clique para enviar a foto do seu {d.doc_tipo}</div></div>}
               </div>
               <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0]; if(f) readFile(f,"selfie_doc");}} />
               <SaveCancel canSave={!!d.nome.trim()} />
