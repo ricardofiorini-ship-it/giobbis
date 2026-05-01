@@ -2008,7 +2008,7 @@ function CompanyRegister({ onDone, onBack }) {
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Como o VORKER funciona</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Entenda antes de finalizar.</p>
             {[
-              {icon:"👁",t:"Você escolhe quem trabalha",d:"No Talent Browser você vê perfis verificados, filtra por especialidade e nível, e convida diretamente."},
+              {icon:"👁",t:"Você escolhe quem trabalha",d:"No Buscar Talento você vê perfis verificados, filtra por especialidade e nível, e convida diretamente."},
               {icon:"📋",t:"Publique vagas por unidade",d:"Cada vaga é vinculada a uma de suas unidades. Colaboradores veem a distância exata."},
               {icon:"🔒",t:"Perfis verificados",d:"Documentos conferidos antes de aparecerem na plataforma."},
               {icon:"⭐",t:"Avaliação bidirecional",d:"Empresa e colaborador se avaliam ao final de cada turno."},
@@ -2990,7 +2990,7 @@ function CompanyLogin({ onLogin, onRegister, onBack }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TALENT BROWSER
+// BUSCAR TALENTO
 // ═══════════════════════════════════════════════════════════════
 function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const [tab,       setTab]       = useState("profile");
@@ -3149,7 +3149,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     </div>
   );
 
-  const TABS = [{id:"talent",icon:"🔍",label:"Talent Browser"},{id:"profile",icon:"🏢",label:"Meu Perfil"}];
+  const TABS = [{id:"talent",icon:"🔍",label:"Buscar Talento"},{id:"profile",icon:"🏢",label:"Meu Perfil"}];
 
   // Worker detail page (visão da empresa)
   if(selWorker) return (()=>{
@@ -3215,7 +3215,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
         {/* Top nav */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:12,flexWrap:"wrap"}}>
-          <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5}}>← Voltar ao Talent Browser</button>
+          <button onClick={()=>setSelWorker(null)} style={{...B,fontSize:13,color:C.sub,background:"none",border:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5}}>← Voltar ao Buscar Talento</button>
           <button style={{...B,fontSize:12.5,color:C.red,background:"none",border:"none",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,opacity:.85}}><span>⚠</span> Denunciar perfil</button>
         </div>
 
@@ -3535,7 +3535,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
       {/* Tab bar — sub-header branco com pílulas */}
       <div style={{background:"#fff",borderBottom:`1px solid ${C.border}`,padding:"8px 20px",display:"flex",gap:4,position:"sticky",top:60,zIndex:200,overflowX:"auto"}}>
         {[
-          {id:"talent",      icon:"🔍", label:"Talent Browser"},
+          {id:"talent",      icon:"🔍", label:"Buscar Talento"},
           {id:"profile",     icon:"🏢", label:"Meu Perfil"},
           {id:"vorker-team", icon:"⚡", label:"Time Vorker", soon:true},
         ].map(t=>(
@@ -3551,7 +3551,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
       <div style={{maxWidth:1280,margin:"0 auto",padding:"28px 32px"}}>
 
-        {/* ── TAB: TALENT BROWSER ── */}
+        {/* ── TAB: BUSCAR TALENTO ── */}
         {tab==="talent"&&<>
           {/* Unit selector */}
           <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,marginBottom:20}}>
@@ -3888,7 +3888,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                   {invites.length===0 ? (
                     <div style={{padding:"24px 0",textAlign:"center",...B,fontSize:13,color:C.muted}}>
                       Você ainda não enviou nenhum convite.<br/>
-                      <button onClick={()=>setTab("talent")} style={{...B,fontSize:13,fontWeight:600,color:C.green,background:"none",border:"none",cursor:"pointer",marginTop:8,textDecoration:"underline"}}>Ir para o Talent Browser →</button>
+                      <button onClick={()=>setTab("talent")} style={{...B,fontSize:13,fontWeight:600,color:C.green,background:"none",border:"none",cursor:"pointer",marginTop:8,textDecoration:"underline"}}>Ir para o Buscar Talento →</button>
                     </div>
                   ) : (() => {
                     const filteredInv = invFilter==="all" ? invites : invites.filter(i=>i.unit_id===invFilter);
@@ -3957,7 +3957,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:22,marginBottom:14}}>
                   <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Suas unidades</div>
-                  {units.length===0&&<Alert type="warning">Nenhuma unidade cadastrada. Adicione abaixo para poder usar o Talent Browser.</Alert>}
+                  {units.length===0&&<Alert type="warning">Nenhuma unidade cadastrada. Adicione abaixo para poder usar o Buscar Talento.</Alert>}
                   {units.map(u=>(
                     <div key={u.id} style={{background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,padding:"14px 16px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
@@ -4133,7 +4133,7 @@ function AuthChoice({ onNav }) {
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.boxShadow="none";}}>
             <div style={{fontSize:48,marginBottom:14}}>🏢</div>
             <div style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:8}}>Sou uma empresa</div>
-            <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse o Talent Browser e encontre colaboradores verificados na sua região.</div>
+            <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.65,marginBottom:20}}>Acesse o Buscar Talento e encontre colaboradores verificados na sua região.</div>
             <div style={{background:C.green,borderRadius:9,padding:"11px 20px",...H,fontSize:14,fontWeight:700,color:"#fff"}}>Entrar como empresa →</div>
           </div>
 
