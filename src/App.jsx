@@ -456,6 +456,32 @@ const fetchWorkers = async () => {
 const updateCompanyDB = async (id, changes) => { const {error}=await supabase.from("companies").update(changes).eq("id",id); if(error) throw error; };
 const updateWorkerDB  = async (id, changes) => { const {error}=await supabase.from("workers").update(changes).eq("id",id); if(error) throw error; };
 
+// ─── INVITES ───────────────────────────────────────────────────
+const createInvite = async ({company_id, worker_id, unit_id, message}) => {
+  const { count } = await supabase.from("invites").select("*", {count:"exact", head:true}).eq("company_id", company_id).eq("status", "pending");
+  if((count||0) >= 5) throw new Error("Você atingiu o limite de 5 convites pendentes. Aguarde respostas para convidar mais workers.");
+  const { data, error } = await supabase.from("invites").insert({company_id, worker_id, unit_id, message: message?.trim() || null, status: "pending"}).select().single();
+  if(error) {
+    if(error.code === "23505") throw new Error("Você já tem um convite pendente para este colaborador.");
+    throw error;
+  }
+  return data;
+};
+const fetchInvitesByCompany = async (companyId) => {
+  const { data, error } = await supabase.from("invites").select("*").eq("company_id", companyId).order("created_at", {ascending:false});
+  if(error) throw error;
+  return data || [];
+};
+const fetchInvitesByWorker = async (workerId) => {
+  const { data, error } = await supabase.from("invites").select("*, companies(nome_fant, razao, resp_nome, resp_tel, resp_email, cidade, estado), company_units(nome, bairro, cidade, estado)").eq("worker_id", workerId).order("created_at", {ascending:false});
+  if(error) throw error;
+  return data || [];
+};
+const respondInvite = async (id, status) => {
+  const { error } = await supabase.from("invites").update({status, responded_at: new Date().toISOString()}).eq("id", id);
+  if(error) throw error;
+};
+
 // ─── ADDRESS BLOCK ─────────────────────────────────────────────
 function AddressBlock({ data, setData, loading, setLoading }) {
   const set = (k,v) => setData(d=>({...d,[k]:v}));
@@ -2968,6 +2994,11 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const [uCepLoad,  setUCepLoad]  = useState(false);
   const [newUnit,   setNewUnit]   = useState({nome:"",cep:"",rua:"",numero:"",complemento:"",bairro:"",cidade:"",estado:""});
   const [deleteModal, setDeleteModal] = useState(null); // {type, id, name}
+  const [invites,   setInvites]   = useState([]);
+  const [invModal,  setInvModal]  = useState(null); // {worker, unitId, message}
+  const [invSaving, setInvSaving] = useState(false);
+  const [invError,  setInvError]  = useState("");
+  const [invToast,  setInvToast]  = useState(null);
 
   const fSpec  = useState("all");   const [fSpecV,  setFSpec]  = [fSpec[0],  fSpec[1]];
   const fLevel = useState(0);       const [fLevelV, setFLevel] = [fLevel[0], fLevel[1]];
@@ -2978,6 +3009,25 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const levelWidth  = [0,25,50,75,100];
 
   useEffect(()=>{ if(selUnit) loadWorkers(); },[selUnit]);
+
+  useEffect(()=>{ if(company?.id) fetchInvitesByCompany(company.id).then(setInvites).catch(()=>{}); }, [company?.id]);
+
+  const refreshInvites = async () => { if(company?.id) try { setInvites(await fetchInvitesByCompany(company.id)); } catch {} };
+
+  const openInviteModal = (worker) => { setInvModal({worker, unitId: selUnit?.id || units[0]?.id || "", message: ""}); setInvError(""); };
+  const sendInvite = async () => {
+    if(!invModal) return;
+    setInvSaving(true); setInvError("");
+    try {
+      await createInvite({company_id: company.id, worker_id: invModal.worker.id, unit_id: invModal.unitId, message: invModal.message});
+      await refreshInvites();
+      setInvModal(null);
+      setInvToast({type:"success", msg:`Convite enviado a ${invModal.worker.nome.split(" ")[0]}. Você verá o WhatsApp quando ${(/a$/i.test(invModal.worker.nome.split(" ")[0]))?"ela aceitar":"ele aceitar"}.`});
+      setTimeout(()=>setInvToast(null), 6000);
+    } catch(e) { setInvError(e.message || "Erro ao enviar convite."); }
+    finally { setInvSaving(false); }
+  };
+  const inviteFor = (workerId) => invites.find(i => i.worker_id === workerId);
 
   useEffect(()=>{
     let list=workers;
@@ -3322,20 +3372,61 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
           {/* RIGHT RAIL */}
           <div className="vorker-worker-rail" style={{display:"flex",flexDirection:"column",gap:14,position:"sticky",top:20}}>
 
-            <div style={{background:C.white,border:`2px solid ${C.greenBorder}`,borderRadius:14,padding:20,boxShadow:"0 4px 20px rgba(22,163,74,.08)"}}>
-              <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>Convide {firstName} agora</div>
-              <p style={{...B,fontSize:12,color:C.sub,marginBottom:14,lineHeight:1.5}}>Mensagem pré-formatada será enviada via WhatsApp para a unidade <strong style={{color:C.navy}}>{selUnit?.nome}</strong>. Você pode editar antes de enviar.</p>
-              <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",display:"block"}}>
-                <div style={{background:"#25D366",borderRadius:10,padding:"14px 16px",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 4px 12px rgba(37,211,102,.3)"}}>
-                  <span style={{fontSize:18}}>💬</span>
-                  <span style={{...H,fontSize:14,fontWeight:800,color:"#fff"}}>Convidar pelo WhatsApp</span>
+            {(() => {
+              const inv = inviteFor(selWorker.id);
+              if(inv?.status === "accepted") {
+                return (
+                  <div style={{background:C.white,border:`2px solid ${C.greenBorder}`,borderRadius:14,padding:20,boxShadow:"0 4px 20px rgba(22,163,74,.08)"}}>
+                    <div style={{display:"inline-flex",alignItems:"center",gap:6,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:6,padding:"3px 9px",marginBottom:10,...B,fontSize:11,fontWeight:700,color:C.green}}>✓ Convite aceito</div>
+                    <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:10}}>Fale agora com {firstName}</div>
+                    <a href={whatsappMsg(selWorker)} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",display:"block"}}>
+                      <div style={{background:"#25D366",borderRadius:10,padding:"14px 16px",textAlign:"center",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 4px 12px rgba(37,211,102,.3)"}}>
+                        <span style={{fontSize:18}}>💬</span>
+                        <span style={{...H,fontSize:14,fontWeight:800,color:"#fff"}}>Conversar pelo WhatsApp</span>
+                      </div>
+                    </a>
+                    <div style={{marginTop:10,padding:"8px 12px",background:C.bg,borderRadius:8,...B,fontSize:11.5,color:C.sub,lineHeight:1.5}}>
+                      📱 {selWorker.telefone}<br/>
+                      ✉️ {selWorker.email}
+                    </div>
+                    <div style={{marginTop:10,padding:"8px 12px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                      <span style={{...B,fontSize:11,color:C.sub,fontWeight:600}}>📍 Distância</span>
+                      <span style={{...H,fontSize:14,fontWeight:900,color:C.green}}>{selWorker.distLabel}</span>
+                    </div>
+                  </div>
+                );
+              }
+              if(inv?.status === "pending") {
+                return (
+                  <div style={{background:C.white,border:`2px solid ${C.amberBorder}`,borderRadius:14,padding:20,boxShadow:"0 4px 20px rgba(217,119,6,.08)"}}>
+                    <div style={{display:"inline-flex",alignItems:"center",gap:6,background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:6,padding:"3px 9px",marginBottom:10,...B,fontSize:11,fontWeight:700,color:C.amber}}>⏳ Convite enviado</div>
+                    <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>Aguardando resposta de {firstName}</div>
+                    <p style={{...B,fontSize:12,color:C.sub,marginBottom:10,lineHeight:1.5}}>Enviado em {new Date(inv.created_at).toLocaleDateString("pt-BR")}. Quando {firstName} aceitar, o WhatsApp será revelado aqui.</p>
+                    <div style={{marginTop:10,padding:"8px 12px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                      <span style={{...B,fontSize:11,color:C.sub,fontWeight:600}}>📍 Distância</span>
+                      <span style={{...H,fontSize:14,fontWeight:900,color:C.green}}>{selWorker.distLabel}</span>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div style={{background:C.white,border:`2px solid ${C.greenBorder}`,borderRadius:14,padding:20,boxShadow:"0 4px 20px rgba(22,163,74,.08)"}}>
+                  {inv?.status === "declined" && <div style={{display:"inline-flex",alignItems:"center",gap:6,background:C.redBg,border:`1px solid ${C.redBorder}`,borderRadius:6,padding:"3px 9px",marginBottom:10,...B,fontSize:11,fontWeight:700,color:C.red}}>✕ Recusou anteriormente</div>}
+                  <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:6}}>Convide {firstName} para conversar</div>
+                  <p style={{...B,fontSize:12,color:C.sub,marginBottom:14,lineHeight:1.5}}>Envie uma mensagem para {firstName}. {pron==="ela"?"Ela":"Ele"} vai receber no app e poderá aceitar ou recusar. Quando aceitar, vocês conversam pelo WhatsApp.</p>
+                  <button onClick={()=>openInviteModal(selWorker)} style={{background:C.green,color:"#fff",border:"none",borderRadius:10,padding:"13px 16px",cursor:"pointer",width:"100%",...H,fontSize:14,fontWeight:800,boxShadow:"0 4px 12px rgba(22,163,74,.25)",transition:"all .15s",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#15803D";e.currentTarget.style.transform="translateY(-1px)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background=C.green;e.currentTarget.style.transform="translateY(0)";}}>
+                    <span style={{fontSize:16}}>📨</span>
+                    <span>Convidar para conversar</span>
+                  </button>
+                  <div style={{marginTop:10,padding:"8px 12px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                    <span style={{...B,fontSize:11,color:C.sub,fontWeight:600}}>📍 Distância da unidade</span>
+                    <span style={{...H,fontSize:14,fontWeight:900,color:C.green}}>{selWorker.distLabel}</span>
+                  </div>
                 </div>
-              </a>
-              <div style={{marginTop:10,padding:"8px 12px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                <span style={{...B,fontSize:11,color:C.sub,fontWeight:600}}>📍 Distância da unidade</span>
-                <span style={{...H,fontSize:14,fontWeight:900,color:C.green}}>{selWorker.distLabel}</span>
-              </div>
-            </div>
+              );
+            })()}
 
             {atencoes.length>0 && (
               <div style={{background:"#FEFCE8",border:"1px solid #FDE68A",borderRadius:14,padding:18}}>
@@ -3376,6 +3467,41 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   return (
     <div style={{minHeight:"90vh",background:C.bg}}>
       {deleteModal&&<DeleteModal />}
+      {invModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.white,borderRadius:14,maxWidth:480,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
+            <div style={{padding:"20px 24px",borderBottom:`1px solid ${C.border}`}}>
+              <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:4}}>Convidar {invModal.worker.nome.split(" ")[0]}</h3>
+              <p style={{...B,fontSize:13,color:C.sub,lineHeight:1.5,margin:0}}>O colaborador vai receber seu convite no app dele e poderá aceitar ou recusar. Quando aceitar, o WhatsApp será revelado pra você.</p>
+            </div>
+            <div style={{padding:"20px 24px"}}>
+              {units.length>1 && (
+                <div style={{marginBottom:16}}>
+                  <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>Para qual unidade?</label>
+                  <select value={invModal.unitId} onChange={e=>setInvModal({...invModal,unitId:e.target.value})}
+                    style={{padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border2}`,background:C.white,...B,fontSize:13,color:C.navy,width:"100%",cursor:"pointer"}}>
+                    {units.map(u=><option key={u.id} value={u.id}>{u.nome} — {u.bairro}, {u.cidade}/{u.estado}</option>)}
+                  </select>
+                </div>
+              )}
+              <Field label="Mensagem (opcional)" placeholder="Olá! Tenho um turno de 6h às 14h. Topa conversar?" value={invModal.message} onChange={v=>setInvModal({...invModal,message:v})} />
+              <div style={{padding:"10px 12px",background:C.bg,borderRadius:9,...B,fontSize:11.5,color:C.sub,lineHeight:1.5,marginBottom:14}}>
+                ℹ️ Você pode ter no máximo <strong>5 convites pendentes</strong> ao mesmo tempo. A relação de trabalho é diretamente entre vocês — Giobbi's apenas conecta.
+              </div>
+              {invError && <Alert type="error">{invError}</Alert>}
+              <div style={{display:"flex",gap:10}}>
+                <Btn label="Enviar convite" variant="primary" size="md" onClick={sendInvite} loading={invSaving} disabled={!invModal.unitId} />
+                <Btn label="Cancelar" variant="ghost" size="md" onClick={()=>setInvModal(null)} disabled={invSaving} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {invToast && (
+        <div style={{position:"fixed",top:80,left:"50%",transform:"translateX(-50%)",background:invToast.type==="success"?C.greenBg:C.redBg,border:`1px solid ${invToast.type==="success"?C.greenBorder:C.redBorder}`,borderRadius:10,padding:"12px 18px",...B,fontSize:13,color:invToast.type==="success"?C.green:C.red,fontWeight:600,zIndex:998,boxShadow:"0 6px 20px rgba(0,0,0,.1)",maxWidth:480}}>
+          {invToast.msg}
+        </div>
+      )}
 
       {/* Header — mesmo estilo do colaborador/landing/admin */}
       <header className="hdr">
@@ -3557,11 +3683,29 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                       ))}
                       {DAYS.every(d=>!(w.disponibilidade?.[d]?.length>0)) && <span style={{...B,fontSize:10,color:C.muted,fontStyle:"italic"}}>Sem disponibilidade marcada</span>}
                     </div>
-                    <div onClick={e=>{e.stopPropagation();window.open(whatsappMsg(w),"_blank");}}
-                      style={{background:"#25D366",borderRadius:8,padding:"9px 14px",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
-                      <span style={{fontSize:15}}>💬</span>
-                      <span style={{...H,fontSize:13,fontWeight:700,color:"#fff"}}>Convidar pelo WhatsApp</span>
-                    </div>
+                    {(() => {
+                      const inv = inviteFor(w.id);
+                      if(inv?.status === "accepted") return (
+                        <div onClick={e=>{e.stopPropagation();window.open(whatsappMsg(w),"_blank");}}
+                          style={{background:"#25D366",borderRadius:8,padding:"9px 14px",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7,cursor:"pointer"}}>
+                          <span style={{fontSize:15}}>💬</span>
+                          <span style={{...H,fontSize:13,fontWeight:700,color:"#fff"}}>Conversar pelo WhatsApp</span>
+                        </div>
+                      );
+                      if(inv?.status === "pending") return (
+                        <div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:8,padding:"9px 14px",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
+                          <span style={{fontSize:14}}>⏳</span>
+                          <span style={{...H,fontSize:13,fontWeight:700,color:C.amber}}>Convite enviado</span>
+                        </div>
+                      );
+                      return (
+                        <div onClick={e=>{e.stopPropagation();openInviteModal(w);}}
+                          style={{background:C.green,borderRadius:8,padding:"9px 14px",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:7,cursor:"pointer",boxShadow:"0 2px 8px rgba(22,163,74,.25)"}}>
+                          <span style={{fontSize:15}}>📨</span>
+                          <span style={{...H,fontSize:13,fontWeight:700,color:"#fff"}}>Convidar para conversar</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                   );
                 })}
@@ -3940,10 +4084,23 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
   const [toast, setToast] = useState(null);
   const [empresaNew, setEmpresaNew] = useState("");
   const [welcomeShown, setWelcomeShown] = useState(()=>{ try { return !localStorage.getItem("vorker:welcome_dismissed"); } catch { return true; } });
+  const [invites, setInvites] = useState([]);
+  const [invSaving, setInvSaving] = useState(false);
   const fotoRef = useRef(null);
   const selfieRef = useRef(null);
 
   const dismissWelcome = () => { try { localStorage.setItem("vorker:welcome_dismissed","1"); } catch {} setWelcomeShown(false); };
+
+  useEffect(() => { if(w.id) fetchInvitesByWorker(w.id).then(setInvites).catch(()=>{}); }, [w.id]);
+
+  const respond = async (id, status) => {
+    setInvSaving(true);
+    try {
+      await respondInvite(id, status);
+      setInvites(invs => invs.map(i => i.id===id ? {...i, status, responded_at:new Date().toISOString()} : i));
+    } catch(e) { setToast({type:"error", msg:"Erro ao responder convite. Tente novamente."}); setTimeout(()=>setToast(null), 4000); }
+    finally { setInvSaving(false); }
+  };
 
   const flash = (type,msg,ms=5000) => { setToast({type,msg}); setTimeout(()=>setToast(null), ms); };
   const readFile = (file,key) => { const r=new FileReader(); r.onload=e=>setD(prev=>({...prev,[key]:e.target.result})); r.readAsDataURL(file); };
@@ -4154,6 +4311,66 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.6}}>As caixas com <strong style={{color:C.blue}}>💡</strong> mostram o que ainda falta. Quanto mais completo, mais empresas vão te chamar pra trabalhar.</div>
             </div>
             <button onClick={dismissWelcome} aria-label="Fechar" style={{background:"transparent",border:"none",cursor:"pointer",color:C.green,fontSize:24,padding:"0 4px",flexShrink:0,lineHeight:1,fontWeight:700}}>×</button>
+          </div>
+        )}
+
+        {/* CONVITES RECEBIDOS */}
+        {invites.filter(i=>i.status==="pending").length>0 && (
+          <div style={{background:C.white,border:`2px solid ${C.amberBorder}`,borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 4px 20px rgba(217,119,6,.1)"}}>
+            <div style={{...H,fontSize:14,fontWeight:800,color:C.amber,textTransform:"uppercase",letterSpacing:.5,marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>📨</span>
+              Convites recebidos · aguardando você
+            </div>
+            {invites.filter(i=>i.status==="pending").map(inv=>(
+              <div key={inv.id} style={{padding:14,background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:10,marginBottom:10}}>
+                <div style={{marginBottom:8}}>
+                  <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{inv.companies?.nome_fant || inv.companies?.razao || "Empresa"}</div>
+                  <div style={{...B,fontSize:12,color:C.muted}}>
+                    {inv.company_units?.nome ? `${inv.company_units.nome} · ` : ""}
+                    {inv.company_units?.cidade || inv.companies?.cidade}/{inv.company_units?.estado || inv.companies?.estado}
+                    {" · "}{new Date(inv.created_at).toLocaleDateString("pt-BR")}
+                  </div>
+                </div>
+                {inv.message && (
+                  <div style={{padding:"10px 12px",background:C.white,borderRadius:7,...B,fontSize:13,color:C.sub,marginBottom:10,lineHeight:1.5,border:`1px solid ${C.border}`,fontStyle:"italic"}}>
+                    "{inv.message}"
+                  </div>
+                )}
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <Btn label="✓ Aceitar e revelar contato" variant="primary" size="md" onClick={()=>respond(inv.id,"accepted")} loading={invSaving} />
+                  <Btn label="Recusar" variant="ghost" size="md" onClick={()=>respond(inv.id,"declined")} disabled={invSaving} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {invites.filter(i=>i.status==="accepted").length>0 && (
+          <div style={{background:C.white,border:`2px solid ${C.greenBorder}`,borderRadius:14,padding:20,marginBottom:14,boxShadow:"0 4px 20px rgba(22,163,74,.1)"}}>
+            <div style={{...H,fontSize:14,fontWeight:800,color:C.green,textTransform:"uppercase",letterSpacing:.5,marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>✓</span>
+              Convites aceitos · entre em contato
+            </div>
+            {invites.filter(i=>i.status==="accepted").map(inv=>(
+              <div key={inv.id} style={{padding:14,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,marginBottom:10}}>
+                <div style={{marginBottom:10}}>
+                  <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{inv.companies?.nome_fant || inv.companies?.razao || "Empresa"}</div>
+                  <div style={{...B,fontSize:12,color:C.muted}}>
+                    {inv.company_units?.nome ? `${inv.company_units.nome} · ` : ""}
+                    {inv.company_units?.cidade || inv.companies?.cidade}/{inv.company_units?.estado || inv.companies?.estado}
+                  </div>
+                </div>
+                <div style={{padding:"12px 14px",background:C.white,borderRadius:8,border:`1px solid ${C.greenBorder}`}}>
+                  <div style={{...H,fontSize:11,fontWeight:700,color:C.green,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Contato da empresa</div>
+                  {inv.companies?.resp_nome && <div style={{...B,fontSize:13,color:C.navy,marginBottom:4}}>👤 {inv.companies.resp_nome}</div>}
+                  {inv.companies?.resp_tel && (
+                    <div style={{...B,fontSize:13,color:C.navy,marginBottom:4}}>
+                      📱 <a href={`https://wa.me/55${inv.companies.resp_tel.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" style={{color:C.green,fontWeight:700,textDecoration:"underline"}}>{inv.companies.resp_tel}</a>
+                    </div>
+                  )}
+                  {inv.companies?.resp_email && <div style={{...B,fontSize:13,color:C.navy}}>✉️ {inv.companies.resp_email}</div>}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
