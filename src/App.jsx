@@ -4110,7 +4110,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
     violet: {bg:"#F3E8FF",  border:"#E9D5FF"},
   };
 
-  const SectionHeader = ({ id, icon, color="green", title, subtitle }) => {
+  const renderSectionHeader = ({ id, icon, color="green", title, subtitle }) => {
     const c = colorMap[color] || colorMap.green;
     return (
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:14,flexWrap:"wrap"}}>
@@ -4126,7 +4126,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
     );
   };
 
-  const SaveCancel = ({ canSave=true }) => (
+  const renderSaveCancel = (canSave=true) => (
     <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${C.border}`}}>
       <div style={{padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:9,...B,fontSize:13,color:C.amber,lineHeight:1.5,marginBottom:12}}>
         ⚠️ Quando você salvar, seu cadastro vai voltar pra análise. Em até 1 dia útil a equipe Vorker te dá retorno.
@@ -4202,7 +4202,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
 
         {/* IDENTIDADE / FOTOS */}
         <div style={sectionStyle}>
-          <SectionHeader id="identidade" icon="👤" color="green" title="Sua foto e documento" subtitle="Foto sua e a foto do seu RG ou CNH" />
+          {renderSectionHeader({id:"identidade", icon:"👤", color:"green", title:"Sua foto e documento", subtitle:"Foto sua e a foto do seu RG ou CNH"})}
           {renderMissing("identidade")}
           {editing!=="identidade" ? (
             <div>
@@ -4249,14 +4249,14 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                   : <div><div style={{fontSize:36,marginBottom:8}}>🪪</div><div style={{...B,fontSize:13,color:C.sub}}>Clique para enviar a foto do seu {d.doc_tipo}</div></div>}
               </div>
               <input ref={selfieRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0]; if(f) readFile(f,"selfie_doc");}} />
-              <SaveCancel canSave={!!d.nome.trim()} />
+              {renderSaveCancel(!!d.nome.trim())}
             </div>
           )}
         </div>
 
         {/* CONTATO E ENDEREÇO */}
         <div style={sectionStyle}>
-          <SectionHeader id="contato" icon="📱" color="blue" title="Como falar com você" subtitle="WhatsApp e onde você mora" />
+          {renderSectionHeader({id:"contato", icon:"📱", color:"blue", title:"Como falar com você", subtitle:"WhatsApp e onde você mora"})}
           {editing!=="contato" ? (
             <div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}}>
@@ -4280,14 +4280,14 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                 <SelectField label="Como você vai pro trabalho?" value={d.deslocamento} onChange={v=>setD({...d,deslocamento:v})} options={DESLOCAMENTOS} />
                 <Field label="Distância máxima (km)" value={String(d.raio_km||"")} onChange={v=>setD({...d,raio_km:parseInt(v.replace(/\D/g,""))||0})} maxLength={3} />
               </div>
-              <SaveCancel canSave={!!(d.telefone && d.cep && d.rua && d.numero)} />
+              {renderSaveCancel(!!(d.telefone && d.cep && d.rua && d.numero))}
             </div>
           )}
         </div>
 
         {/* DISPONIBILIDADE */}
         <div style={sectionStyle}>
-          <SectionHeader id="disponibilidade" icon="📅" color="amber" title="Quando você pode trabalhar" subtitle="Dias da semana e turnos disponíveis" />
+          {renderSectionHeader({id:"disponibilidade", icon:"📅", color:"amber", title:"Quando você pode trabalhar", subtitle:"Dias da semana e turnos disponíveis"})}
           {renderMissing("disponibilidade")}
           {editing!=="disponibilidade" ? (
             <div>
@@ -4342,14 +4342,14 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                   </button>
                 ))}
               </div>
-              <SaveCancel />
+              {renderSaveCancel()}
             </div>
           )}
         </div>
 
         {/* ESPECIALIDADES */}
         <div style={sectionStyle}>
-          <SectionHeader id="especialidades" icon="🛠️" color="green" title="O que você sabe fazer" subtitle="Funções e há quanto tempo você faz cada uma" />
+          {renderSectionHeader({id:"especialidades", icon:"🛠️", color:"green", title:"O que você sabe fazer", subtitle:"Funções e há quanto tempo você faz cada uma"})}
           {renderMissing("especialidades")}
           {editing!=="especialidades" ? (
             especialidades.length>0 ? (
@@ -4405,14 +4405,14 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                   })}
                 </>
               )}
-              <SaveCancel canSave={d.specs.length>0 && (!d.specs.includes("custom") || d.specCustom.trim().length>0)} />
+              {renderSaveCancel(d.specs.length>0 && (!d.specs.includes("custom") || d.specCustom.trim().length>0))}
             </div>
           )}
         </div>
 
         {/* EMPRESAS */}
         <div style={sectionStyle}>
-          <SectionHeader id="empresas" icon="🏢" color="blue" title="Onde você já trabalhou" subtitle="Mercados, lojas ou outras empresas" />
+          {renderSectionHeader({id:"empresas", icon:"🏢", color:"blue", title:"Onde você já trabalhou", subtitle:"Mercados, lojas ou outras empresas"})}
           {renderMissing("empresas")}
           {editing!=="empresas" ? (
             empresasView.length>0 ? (
@@ -4451,14 +4451,14 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                 </div>
                 <Btn label="+ Adicionar" variant="outline" size="md" onClick={addEmpresaCustom} disabled={!empresaNew.trim()} />
               </div>
-              <SaveCancel />
+              {renderSaveCancel()}
             </div>
           )}
         </div>
 
         {/* PERFIL COMPORTAMENTAL */}
         <div style={sectionStyle}>
-          <SectionHeader id="perfil" icon="🧠" color="violet" title="Como você trabalha" subtitle="5 perguntas rápidas sobre o seu jeito" />
+          {renderSectionHeader({id:"perfil", icon:"🧠", color:"violet", title:"Como você trabalha", subtitle:"5 perguntas rápidas sobre o seu jeito"})}
           {renderMissing("perfil")}
           {editing!=="perfil" ? (
             <div>
@@ -4491,14 +4491,14 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
                   </div>
                 </div>
               ))}
-              <SaveCancel />
+              {renderSaveCancel()}
             </div>
           )}
         </div>
 
         {/* OUTROS */}
         <div style={sectionStyle}>
-          <SectionHeader id="outros" icon="📋" color="amber" title="Suas preferências" subtitle="Tipo de trabalho que você gosta e PCD" />
+          {renderSectionHeader({id:"outros", icon:"📋", color:"amber", title:"Suas preferências", subtitle:"Tipo de trabalho que você gosta e PCD"})}
           {renderMissing("outros")}
           {editing!=="outros" ? (
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
@@ -4517,7 +4517,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               <SelectField label="Você prefere trabalhar:" value={d.trabalho_equipe} onChange={v=>setD({...d,trabalho_equipe:v})} options={["Prefiro trabalhar em equipe","Prefiro trabalhar sozinho","Os dois"]} />
               <SelectField label="Você gosta de atender clientes?" value={d.atend_cliente} onChange={v=>setD({...d,atend_cliente:v})} options={["Gosto e tenho experiência","Gosto, mas tenho pouca experiência","Prefiro funções de bastidor"]} />
               <SelectField label="Onde você prefere trabalhar?" value={d.tipo_trabalho} onChange={v=>setD({...d,tipo_trabalho:v})} options={["Loja / atendimento","Estoque / depósito","Centro de distribuição","Dark store / delivery","Tanto faz"]} />
-              <SaveCancel />
+              {renderSaveCancel()}
             </div>
           )}
         </div>
