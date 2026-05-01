@@ -461,17 +461,17 @@ const sha256Hex = async (txt) => {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
 };
-const upsertWorkerDraft = async ({email, password_hash, data, step}) => {
-  const { error } = await supabase.from("worker_drafts").upsert({email, password_hash, data, step, updated_at: new Date().toISOString()}, {onConflict:"email"});
+const upsertWorkerDraft = async ({cpf, email, password_hash, data, step}) => {
+  const { error } = await supabase.from("worker_drafts").upsert({cpf, email, password_hash, data, step, updated_at: new Date().toISOString()}, {onConflict:"cpf"});
   if(error) throw error;
 };
-const fetchWorkerDraftByEmail = async (email) => {
-  const { data, error } = await supabase.from("worker_drafts").select("*").eq("email", email).maybeSingle();
+const fetchWorkerDraftByCpf = async (cpf) => {
+  const { data, error } = await supabase.from("worker_drafts").select("*").eq("cpf", cpf).maybeSingle();
   if(error) throw error;
   return data;
 };
-const deleteWorkerDraft = async (email) => {
-  const { error } = await supabase.from("worker_drafts").delete().eq("email", email);
+const deleteWorkerDraft = async (cpf) => {
+  const { error } = await supabase.from("worker_drafts").delete().eq("cpf", cpf);
   if(error) throw error;
 };
 
@@ -1204,7 +1204,7 @@ function WorkerRegister({ onDone, onBack }) {
     try {
       const saved=await saveWorker(data);
       try { localStorage.removeItem("vorker:worker_register_draft"); } catch {}
-      if(data.email) { try { await deleteWorkerDraft(data.email); } catch {} }
+      if(data.cpf) { try { await deleteWorkerDraft(data.cpf); } catch {} }
       onDone({...data,id:saved.id});
     }
     catch(e){ setSubmitError(e.message||"Erro ao salvar. Tente novamente."); }
@@ -1217,11 +1217,11 @@ function WorkerRegister({ onDone, onBack }) {
   const [draftPrompt, setDraftPrompt] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState(null);
   const [savedToast, setSavedToast] = useState(false);
-  const [cloudDraft, setCloudDraft] = useState(null); // {email, password_hash, data, step} encontrado no Supabase
+  const [cloudDraft, setCloudDraft] = useState(null); // {cpf, email, password_hash, data, step} encontrado no Supabase
   const [cloudPwdInput, setCloudPwdInput] = useState("");
   const [cloudPwdError, setCloudPwdError] = useState("");
   const [cloudPwdLoading, setCloudPwdLoading] = useState(false);
-  const [lastCheckedEmail, setLastCheckedEmail] = useState("");
+  const [lastCheckedCpf, setLastCheckedCpf] = useState("");
   const [cloudDraftCreated, setCloudDraftCreated] = useState(false);
 
   useEffect(() => {
@@ -1247,11 +1247,11 @@ function WorkerRegister({ onDone, onBack }) {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
         setDraftSavedAt(Date.now());
       } catch {}
-      // Cloud save quando email válido + senha >= 8 chars
-      if(data.email && emailValid(data.email) && data.senha && data.senha.length>=8 && step>=2) {
+      // Cloud save quando CPF válido + senha >= 8 chars (chave principal: CPF)
+      if(data.cpf && data.cpf.replace(/\D/g,"").length===11 && validateCPF(data.cpf) && data.senha && data.senha.length>=8 && step>=2) {
         try {
           const hash = await sha256Hex(data.senha);
-          await upsertWorkerDraft({email: data.email, password_hash: hash, data, step});
+          await upsertWorkerDraft({cpf: data.cpf, email: data.email, password_hash: hash, data, step});
           setCloudDraftCreated(true);
         } catch {}
       }
@@ -1259,22 +1259,23 @@ function WorkerRegister({ onDone, onBack }) {
     return () => clearTimeout(t);
   }, [data, step, draftPrompt, cloudDraft]);
 
-  // Detecta cloud draft quando usuário entra com e-mail no step 2
+  // Detecta cloud draft pelo CPF — assim que tiver 11 dígitos e for válido (já no step 1)
   useEffect(() => {
-    if(step !== 2) return;
-    if(!data.email || !emailValid(data.email)) return;
-    if(lastCheckedEmail === data.email) return;
+    if(!data.cpf) return;
+    if(data.cpf.replace(/\D/g,"").length !== 11) return;
+    if(!validateCPF(data.cpf)) return;
+    if(lastCheckedCpf === data.cpf) return;
     if(cloudDraftCreated) return;
     if(draftPrompt || cloudDraft) return;
     const t = setTimeout(async () => {
-      setLastCheckedEmail(data.email);
+      setLastCheckedCpf(data.cpf);
       try {
-        const found = await fetchWorkerDraftByEmail(data.email);
+        const found = await fetchWorkerDraftByCpf(data.cpf);
         if(found && found.data) setCloudDraft(found);
       } catch {}
     }, 900);
     return () => clearTimeout(t);
-  }, [data.email, step, lastCheckedEmail, cloudDraftCreated, draftPrompt, cloudDraft]);
+  }, [data.cpf, lastCheckedCpf, cloudDraftCreated, draftPrompt, cloudDraft]);
 
   const resumeCloudDraft = async () => {
     setCloudPwdError("");
@@ -1293,7 +1294,7 @@ function WorkerRegister({ onDone, onBack }) {
       setCloudDraft(null);
       setCloudPwdInput("");
       setCloudDraftCreated(true);
-      setLastCheckedEmail(cloudDraft.data.email||"");
+      setLastCheckedCpf(cloudDraft.data.cpf||cloudDraft.cpf||"");
     } catch(e) { setCloudPwdError("Erro ao verificar senha. Tente novamente."); }
     finally { setCloudPwdLoading(false); }
   };
@@ -1306,7 +1307,7 @@ function WorkerRegister({ onDone, onBack }) {
         const parsed = JSON.parse(raw);
         if (parsed?.data) {
           setData(parsed.data);
-          if(parsed.data.email) setLastCheckedEmail(parsed.data.email); // pula cloud check pra esse e-mail
+          if(parsed.data.cpf) setLastCheckedCpf(parsed.data.cpf); // pula cloud check pra esse cpf
         }
         if (parsed?.step) setStep(parsed.step);
       }
@@ -1370,7 +1371,7 @@ function WorkerRegister({ onDone, onBack }) {
             <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,maxWidth:460,width:"100%",padding:"28px 28px 22px",boxShadow:"0 24px 60px rgba(0,0,0,.3)",position:"relative"}}>
               <div style={{fontSize:36,marginBottom:10}}>📱→💻</div>
               <div style={{...H,fontSize:18,fontWeight:800,color:C.navy,marginBottom:6}}>Cadastro em andamento detectado</div>
-              <p style={{...B,fontSize:13,color:C.sub,marginBottom:6,lineHeight:1.55}}>Encontramos um cadastro em andamento com o e-mail <strong style={{color:C.navy}}>{cloudDraft.data?.email}</strong> iniciado em outro dispositivo ou navegador.</p>
+              <p style={{...B,fontSize:13,color:C.sub,marginBottom:6,lineHeight:1.55}}>Encontramos um cadastro em andamento com o CPF <strong style={{color:C.navy}}>{cloudDraft.cpf||cloudDraft.data?.cpf}</strong> iniciado em outro dispositivo ou navegador.</p>
               <p style={{...B,fontSize:13,color:C.sub,marginBottom:14,lineHeight:1.55}}>Para continuar de onde você parou, confirme com a senha original que cadastrou.</p>
               <Field label="Senha original" placeholder="••••••••" type="password" value={cloudPwdInput} onChange={setCloudPwdInput} />
               {cloudPwdError && <Alert type="error">{cloudPwdError}</Alert>}
