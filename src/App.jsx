@@ -4013,6 +4013,35 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
     ...(w.empresas_custom||[]).map(nome=>({label:nome,custom:true})),
   ];
 
+  const completeness = (() => {
+    let s = 0, max = 0;
+    max += 2;
+    if(w.foto_rosto) s++;
+    if(w.selfie_doc) s++;
+    max += 2;
+    const cells = Object.values(w.disponibilidade||{}).reduce((a,b)=>a+(b?.length||0),0);
+    s += Math.min(cells,12)/12;
+    if(w.flexibilidade) s++;
+    max += 1.5;
+    if(w.specs?.length>0){
+      s += 1;
+      const semTempo = w.specs.filter(x=>!w.func_exp?.[x]?.tempo).length;
+      s += ((w.specs.length - semTempo) / w.specs.length) * 0.5;
+    }
+    max += 1;
+    const totalEmp = (w.empresas_selected?.length||0)+(w.empresas_custom?.length||0);
+    if(totalEmp>0) s++;
+    max += 1.5;
+    const ans = Object.keys(PERFIL_LABELS).filter(k=>w.perfil_trabalho?.[k]).length;
+    s += (ans/5) * 1.5;
+    max += 3;
+    if(w.trabalho_equipe) s++;
+    if(w.atend_cliente) s++;
+    if(w.tipo_trabalho) s++;
+    return Math.round((s/max)*100);
+  })();
+  const completeColor = completeness>=90?C.green : completeness>=70?"#65A30D" : completeness>=40?C.amber : C.red;
+
   const getMissing = (section) => {
     if(section==="identidade"){
       const list=[];
@@ -4121,6 +4150,19 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               ⏳ Seu cadastro está em análise pela equipe Vorker. Em até 24h úteis você terá retorno por e-mail.
             </div>
           )}
+          <div style={{marginTop:18,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{...B,fontSize:12,color:C.sub,fontWeight:600}}>Completude do perfil</span>
+              <span style={{...H,fontSize:14,fontWeight:900,color:completeColor}}>{completeness}%</span>
+            </div>
+            <div style={{height:8,background:C.bg,borderRadius:4,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${completeness}%`,background:completeColor,transition:"width .4s ease, background-color .3s"}} />
+            </div>
+            {completeness<100
+              ? <div style={{...B,fontSize:11.5,color:C.muted,marginTop:8,lineHeight:1.5}}>💡 Quanto mais completo seu perfil, mais empresas conseguem te encontrar e te chamar pra turnos.</div>
+              : <div style={{...B,fontSize:11.5,color:C.green,marginTop:8,fontWeight:600}}>✓ Perfil completo. Você está visível para todas as buscas.</div>
+            }
+          </div>
         </div>
 
         {/* IDENTIDADE / FOTOS */}
