@@ -473,9 +473,26 @@ const fetchInvitesByCompany = async (companyId) => {
   return data || [];
 };
 const fetchInvitesByWorker = async (workerId) => {
-  const { data, error } = await supabase.from("invites").select("*, companies(nome_fant, razao, resp_nome, resp_tel, resp_email, cidade, estado), company_units(nome, bairro, cidade, estado)").eq("worker_id", workerId).order("created_at", {ascending:false});
+  const { data, error } = await supabase.from("invites").select("*, companies(nome_fant, razao, resp_nome, resp_tel, resp_email, cidade, estado), company_units(nome, rua, numero, complemento, bairro, cidade, estado, cep)").eq("worker_id", workerId).order("created_at", {ascending:false});
   if(error) throw error;
   return data || [];
+};
+
+const UNIT_PALETTE = [
+  {bg:"#DBEAFE", color:"#1E40AF", border:"#93C5FD"},
+  {bg:"#FEF3C7", color:"#92400E", border:"#FDE68A"},
+  {bg:"#F3E8FF", color:"#6D28D9", border:"#DDD6FE"},
+  {bg:"#DCFCE7", color:"#166534", border:"#BBF7D0"},
+  {bg:"#FFE4E6", color:"#9F1239", border:"#FDA4AF"},
+  {bg:"#E0F2FE", color:"#075985", border:"#7DD3FC"},
+  {bg:"#FFEDD5", color:"#9A3412", border:"#FED7AA"},
+  {bg:"#E0E7FF", color:"#3730A3", border:"#C7D2FE"},
+];
+const unitColor = (id) => {
+  if(!id) return {bg:"#F1F5F9", color:"#64748B", border:"#CBD5E1"};
+  let hash = 0; const s = String(id);
+  for(let i=0;i<s.length;i++) hash = ((hash<<5)-hash+s.charCodeAt(i))|0;
+  return UNIT_PALETTE[Math.abs(hash) % UNIT_PALETTE.length];
 };
 const respondInvite = async (id, status) => {
   const { error } = await supabase.from("invites").update({status, responded_at: new Date().toISOString()}).eq("id", id);
@@ -2999,6 +3016,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const [invSaving, setInvSaving] = useState(false);
   const [invError,  setInvError]  = useState("");
   const [invToast,  setInvToast]  = useState(null);
+  const [invFilter, setInvFilter] = useState("all"); // "all" | unit.id
 
   const fSpec  = useState("all");   const [fSpecV,  setFSpec]  = [fSpec[0],  fSpec[1]];
   const fLevel = useState(0);       const [fLevelV, setFLevel] = [fLevel[0], fLevel[1]];
@@ -3845,45 +3863,69 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                 <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:18,marginTop:14}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:10,flexWrap:"wrap"}}>
                     <div style={{...H,fontSize:14,fontWeight:800,color:C.navy}}>📨 Convites enviados</div>
-                    <div style={{...B,fontSize:12,color:C.muted}}>{invites.length} no total · {invites.filter(i=>i.status==="pending").length} pendentes</div>
+                    <div style={{...B,fontSize:12,color:C.muted}}>{invites.length} no total · {invites.filter(i=>i.status==="pending").length} pendentes · {invites.filter(i=>i.status==="accepted").length} aceitos</div>
                   </div>
+                  {invites.length>0 && units.length>1 && (
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                      <button onClick={()=>setInvFilter("all")}
+                        style={{padding:"5px 11px",borderRadius:7,border:`1.5px solid ${invFilter==="all"?C.green:C.border2}`,background:invFilter==="all"?C.greenBg:"#fff",cursor:"pointer",...B,fontSize:11.5,fontWeight:invFilter==="all"?700:600,color:invFilter==="all"?C.green:C.sub}}>
+                        Todas as unidades ({invites.length})
+                      </button>
+                      {units.map(u=>{
+                        const uc = unitColor(u.id);
+                        const count = invites.filter(i=>i.unit_id===u.id).length;
+                        if(count===0) return null;
+                        const active = invFilter===u.id;
+                        return (
+                          <button key={u.id} onClick={()=>setInvFilter(u.id)}
+                            style={{padding:"5px 11px",borderRadius:7,border:`1.5px solid ${active?uc.color:uc.border}`,background:active?uc.bg:"#fff",cursor:"pointer",...B,fontSize:11.5,fontWeight:active?700:600,color:uc.color,display:"inline-flex",alignItems:"center",gap:5}}>
+                            📍 {u.nome} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {invites.length===0 ? (
                     <div style={{padding:"24px 0",textAlign:"center",...B,fontSize:13,color:C.muted}}>
                       Você ainda não enviou nenhum convite.<br/>
                       <button onClick={()=>setTab("talent")} style={{...B,fontSize:13,fontWeight:600,color:C.green,background:"none",border:"none",cursor:"pointer",marginTop:8,textDecoration:"underline"}}>Ir para o Talent Browser →</button>
                     </div>
-                  ) : (
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      {invites.slice(0,8).map(inv=>{
-                        const statusCfg = {
-                          pending:  {label:"⏳ Aguardando resposta", bg:C.amberBg, color:C.amber, border:C.amberBorder},
-                          accepted: {label:"✓ Aceito",                bg:C.greenBg, color:C.green, border:C.greenBorder},
-                          declined: {label:"✕ Recusado",              bg:C.redBg,   color:C.red,   border:C.redBorder},
-                        }[inv.status] || {label:inv.status, bg:C.bg, color:C.muted, border:C.border};
-                        return (
-                          <div key={inv.id} style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:10,display:"flex",gap:10,alignItems:"center"}}>
-                            {inv.workers?.foto_rosto
-                              ? <img src={inv.workers.foto_rosto} alt="" style={{width:36,height:36,borderRadius:18,objectFit:"cover",flexShrink:0}} />
-                              : <div style={{width:36,height:36,borderRadius:18,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,...H,fontSize:14,fontWeight:800,color:"#fff"}}>{inv.workers?.nome?.[0]||"?"}</div>}
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{inv.workers?.nome||"Worker"}</div>
-                              <div style={{...B,fontSize:11.5,color:C.muted,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                                {inv.company_units?.nome ? `${inv.company_units.nome} · ` : ""}{new Date(inv.created_at).toLocaleDateString("pt-BR")}
+                  ) : (() => {
+                    const filteredInv = invFilter==="all" ? invites : invites.filter(i=>i.unit_id===invFilter);
+                    if(filteredInv.length===0) return <div style={{padding:"24px 0",textAlign:"center",...B,fontSize:13,color:C.muted}}>Nenhum convite para essa unidade.</div>;
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {filteredInv.slice(0,12).map(inv=>{
+                          const statusCfg = {
+                            pending:  {label:"⏳ Aguardando", bg:C.amberBg, color:C.amber, border:C.amberBorder},
+                            accepted: {label:"✓ Aceito",      bg:C.greenBg, color:C.green, border:C.greenBorder},
+                            declined: {label:"✕ Recusado",    bg:C.redBg,   color:C.red,   border:C.redBorder},
+                          }[inv.status] || {label:inv.status, bg:C.bg, color:C.muted, border:C.border};
+                          const uc = unitColor(inv.unit_id);
+                          return (
+                            <div key={inv.id} style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:10,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                              {inv.workers?.foto_rosto
+                                ? <img src={inv.workers.foto_rosto} alt="" style={{width:36,height:36,borderRadius:18,objectFit:"cover",flexShrink:0}} />
+                                : <div style={{width:36,height:36,borderRadius:18,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,...H,fontSize:14,fontWeight:800,color:"#fff"}}>{inv.workers?.nome?.[0]||"?"}</div>}
+                              <div style={{flex:1,minWidth:140}}>
+                                <div style={{...H,fontSize:13,fontWeight:700,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{inv.workers?.nome||"Worker"}</div>
+                                <div style={{...B,fontSize:11.5,color:C.muted}}>{new Date(inv.created_at).toLocaleDateString("pt-BR")}</div>
                               </div>
+                              <span style={{...B,fontSize:10.5,fontWeight:700,color:uc.color,background:uc.bg,border:`1px solid ${uc.border}`,borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4}}>📍 {inv.company_units?.nome||"—"}</span>
+                              <span style={{...B,fontSize:10.5,fontWeight:700,color:statusCfg.color,background:statusCfg.bg,border:`1px solid ${statusCfg.border}`,borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0}}>{statusCfg.label}</span>
+                              {inv.status==="accepted" && inv.workers?.telefone && (
+                                <a href={`https://wa.me/55${inv.workers.telefone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer"
+                                  style={{textDecoration:"none",background:"#25D366",borderRadius:8,padding:"6px 10px",...H,fontSize:11.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:5}}>
+                                  💬 Conversar pelo WhatsApp
+                                </a>
+                              )}
                             </div>
-                            <span style={{...B,fontSize:10.5,fontWeight:700,color:statusCfg.color,background:statusCfg.bg,border:`1px solid ${statusCfg.border}`,borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0}}>{statusCfg.label}</span>
-                            {inv.status==="accepted" && inv.workers?.telefone && (
-                              <a href={`https://wa.me/55${inv.workers.telefone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer"
-                                style={{textDecoration:"none",background:"#25D366",borderRadius:8,padding:"6px 10px",...H,fontSize:11.5,fontWeight:700,color:"#fff",whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:5}}>
-                                💬 Conversar pelo WhatsApp
-                              </a>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {invites.length>8 && <div style={{...B,fontSize:11.5,color:C.muted,textAlign:"center",paddingTop:6}}>e mais {invites.length-8}…</div>}
-                    </div>
-                  )}
+                          );
+                        })}
+                        {filteredInv.length>12 && <div style={{...B,fontSize:11.5,color:C.muted,textAlign:"center",paddingTop:6}}>e mais {filteredInv.length-12}…</div>}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div style={{marginTop:24,padding:"24px 28px",borderRadius:14,background:"linear-gradient(135deg,#16A34A,#15803D)",display:"grid",gridTemplateColumns:"1fr auto",gap:24,alignItems:"center"}}>
@@ -4375,27 +4417,49 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               <span style={{fontSize:18}}>📨</span>
               Convites recebidos · aguardando você
             </div>
-            {invites.filter(i=>i.status==="pending").map(inv=>(
-              <div key={inv.id} style={{padding:14,background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:10,marginBottom:10}}>
-                <div style={{marginBottom:8}}>
-                  <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{inv.companies?.nome_fant || inv.companies?.razao || "Empresa"}</div>
-                  <div style={{...B,fontSize:12,color:C.muted}}>
-                    {inv.company_units?.nome ? `${inv.company_units.nome} · ` : ""}
-                    {inv.company_units?.cidade || inv.companies?.cidade}/{inv.company_units?.estado || inv.companies?.estado}
-                    {" · "}{new Date(inv.created_at).toLocaleDateString("pt-BR")}
+            {invites.filter(i=>i.status==="pending").map(inv=>{
+              const uc = unitColor(inv.unit_id);
+              return (
+                <div key={inv.id} style={{padding:14,background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:10,marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:12}}>
+                    <div style={{minWidth:0,flex:1}}>
+                      <div style={{...B,fontSize:10.5,fontWeight:700,color:C.amber,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Empresa</div>
+                      <div style={{...H,fontSize:17,fontWeight:900,color:C.navy,lineHeight:1.2}}>{inv.companies?.nome_fant || inv.companies?.razao || "Empresa"}</div>
+                    </div>
+                    <span style={{...B,fontSize:10.5,fontWeight:700,color:C.amber,background:C.white,border:`1px solid ${C.amberBorder}`,borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0}}>⏳ Aguardando você</span>
+                  </div>
+
+                  <div style={{padding:"12px 14px",background:C.white,borderRadius:9,border:`1px solid ${C.border}`,marginBottom:12}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{fontSize:14}}>📍</span>
+                      <span style={{...B,fontSize:10.5,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>Local de trabalho</span>
+                      <span style={{...B,fontSize:10.5,fontWeight:700,color:uc.color,background:uc.bg,border:`1px solid ${uc.border}`,borderRadius:6,padding:"2px 8px",whiteSpace:"nowrap"}}>{inv.company_units?.nome||"Unidade"}</span>
+                    </div>
+                    <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,lineHeight:1.5}}>
+                      {inv.company_units?.rua}{inv.company_units?.numero?`, ${inv.company_units.numero}`:""}{inv.company_units?.complemento?` — ${inv.company_units.complemento}`:""}
+                    </div>
+                    <div style={{...B,fontSize:12,color:C.sub,lineHeight:1.5}}>
+                      {inv.company_units?.bairro && <>{inv.company_units.bairro} · </>}
+                      {inv.company_units?.cidade}/{inv.company_units?.estado}
+                      {inv.company_units?.cep && <> · CEP {inv.company_units.cep}</>}
+                    </div>
+                  </div>
+
+                  {inv.message && (
+                    <div style={{padding:"10px 12px",background:C.white,borderRadius:7,...B,fontSize:13,color:C.sub,marginBottom:12,lineHeight:1.5,border:`1px solid ${C.border}`,fontStyle:"italic"}}>
+                      "{inv.message}"
+                    </div>
+                  )}
+
+                  <div style={{...B,fontSize:11,color:C.muted,marginBottom:10}}>Convite enviado em {new Date(inv.created_at).toLocaleDateString("pt-BR")}</div>
+
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <Btn label="✓ Aceitar e revelar contato" variant="primary" size="md" onClick={()=>respond(inv.id,"accepted")} loading={invSaving} />
+                    <Btn label="Recusar" variant="ghost" size="md" onClick={()=>respond(inv.id,"declined")} disabled={invSaving} />
                   </div>
                 </div>
-                {inv.message && (
-                  <div style={{padding:"10px 12px",background:C.white,borderRadius:7,...B,fontSize:13,color:C.sub,marginBottom:10,lineHeight:1.5,border:`1px solid ${C.border}`,fontStyle:"italic"}}>
-                    "{inv.message}"
-                  </div>
-                )}
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  <Btn label="✓ Aceitar e revelar contato" variant="primary" size="md" onClick={()=>respond(inv.id,"accepted")} loading={invSaving} />
-                  <Btn label="Recusar" variant="ghost" size="md" onClick={()=>respond(inv.id,"declined")} disabled={invSaving} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         {invites.filter(i=>i.status==="accepted").length>0 && (
@@ -4404,27 +4468,46 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               <span style={{fontSize:18}}>✓</span>
               Convites aceitos · entre em contato
             </div>
-            {invites.filter(i=>i.status==="accepted").map(inv=>(
-              <div key={inv.id} style={{padding:14,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,marginBottom:10}}>
-                <div style={{marginBottom:10}}>
-                  <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{inv.companies?.nome_fant || inv.companies?.razao || "Empresa"}</div>
-                  <div style={{...B,fontSize:12,color:C.muted}}>
-                    {inv.company_units?.nome ? `${inv.company_units.nome} · ` : ""}
-                    {inv.company_units?.cidade || inv.companies?.cidade}/{inv.company_units?.estado || inv.companies?.estado}
+            {invites.filter(i=>i.status==="accepted").map(inv=>{
+              const uc = unitColor(inv.unit_id);
+              return (
+                <div key={inv.id} style={{padding:14,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:10,marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",marginBottom:10}}>
+                    <div style={{minWidth:0,flex:1}}>
+                      <div style={{...B,fontSize:10.5,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Empresa</div>
+                      <div style={{...H,fontSize:17,fontWeight:900,color:C.navy,lineHeight:1.2}}>{inv.companies?.nome_fant || inv.companies?.razao || "Empresa"}</div>
+                    </div>
+                    <span style={{...B,fontSize:10.5,fontWeight:700,color:C.green,background:C.white,border:`1px solid ${C.greenBorder}`,borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0}}>✓ Aceito</span>
+                  </div>
+
+                  <div style={{padding:"12px 14px",background:C.white,borderRadius:9,border:`1px solid ${C.border}`,marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                      <span style={{fontSize:14}}>📍</span>
+                      <span style={{...B,fontSize:10.5,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>Local de trabalho</span>
+                      <span style={{...B,fontSize:10.5,fontWeight:700,color:uc.color,background:uc.bg,border:`1px solid ${uc.border}`,borderRadius:6,padding:"2px 8px"}}>{inv.company_units?.nome||"Unidade"}</span>
+                    </div>
+                    <div style={{...B,fontSize:13,color:C.navy,fontWeight:600,lineHeight:1.5}}>
+                      {inv.company_units?.rua}{inv.company_units?.numero?`, ${inv.company_units.numero}`:""}{inv.company_units?.complemento?` — ${inv.company_units.complemento}`:""}
+                    </div>
+                    <div style={{...B,fontSize:12,color:C.sub,lineHeight:1.5}}>
+                      {inv.company_units?.bairro && <>{inv.company_units.bairro} · </>}
+                      {inv.company_units?.cidade}/{inv.company_units?.estado}
+                    </div>
+                  </div>
+
+                  <div style={{padding:"12px 14px",background:C.white,borderRadius:8,border:`1px solid ${C.greenBorder}`}}>
+                    <div style={{...H,fontSize:11,fontWeight:700,color:C.green,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Contato da empresa</div>
+                    {inv.companies?.resp_nome && <div style={{...B,fontSize:13,color:C.navy,marginBottom:4}}>👤 {inv.companies.resp_nome}</div>}
+                    {inv.companies?.resp_tel && (
+                      <div style={{...B,fontSize:13,color:C.navy,marginBottom:4}}>
+                        📱 <a href={`https://wa.me/55${inv.companies.resp_tel.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" style={{color:C.green,fontWeight:700,textDecoration:"underline"}}>{inv.companies.resp_tel}</a>
+                      </div>
+                    )}
+                    {inv.companies?.resp_email && <div style={{...B,fontSize:13,color:C.navy}}>✉️ {inv.companies.resp_email}</div>}
                   </div>
                 </div>
-                <div style={{padding:"12px 14px",background:C.white,borderRadius:8,border:`1px solid ${C.greenBorder}`}}>
-                  <div style={{...H,fontSize:11,fontWeight:700,color:C.green,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Contato da empresa</div>
-                  {inv.companies?.resp_nome && <div style={{...B,fontSize:13,color:C.navy,marginBottom:4}}>👤 {inv.companies.resp_nome}</div>}
-                  {inv.companies?.resp_tel && (
-                    <div style={{...B,fontSize:13,color:C.navy,marginBottom:4}}>
-                      📱 <a href={`https://wa.me/55${inv.companies.resp_tel.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" style={{color:C.green,fontWeight:700,textDecoration:"underline"}}>{inv.companies.resp_tel}</a>
-                    </div>
-                  )}
-                  {inv.companies?.resp_email && <div style={{...B,fontSize:13,color:C.navy}}>✉️ {inv.companies.resp_email}</div>}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
