@@ -3963,7 +3963,6 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
   const cancelEdit = () => { setEditing(null); setD(null); setEmpresaNew(""); };
 
   const saveSection = async () => {
-    console.log("[Giobbi's] saveSection chamado para seção:", editing);
     setSaving(true);
     try {
       let changes = {...d, status:"pending", reject_note:""};
@@ -3978,15 +3977,12 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
         delete changes.specCustom;
       }
       if(editing==="outros" && !d.pcd) changes.pcd_tipo = "";
-      console.log("[Giobbi's] enviando para Supabase:", changes);
       await updateWorkerDB(w.id, changes);
-      console.log("[Giobbi's] Salvo com sucesso");
       const newW = {...w, ...changes};
       setW(newW); onUpdate(newW);
       setEditing(null); setD(null); setEmpresaNew("");
       flash("warning","Dados atualizados. Seu cadastro voltou para análise da equipe Vorker.",6000);
     } catch(e) {
-      console.error("[Giobbi's] Erro ao salvar:", e);
       flash("error", `Erro ao salvar: ${e?.message || "tente novamente"}`);
     }
     finally { setSaving(false); }
