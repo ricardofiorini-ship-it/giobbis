@@ -1246,7 +1246,14 @@ function WorkerRegister({ onDone, onBack }) {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
         setDraftSavedAt(Date.now());
-      } catch {}
+      } catch {
+        // Quota cheia? Salva sem fotos pra ao menos persistir os campos texto
+        try {
+          const light = {...data, fotoRosto:null, selfieDoc:null, foto_rosto:null, selfie_doc:null};
+          localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: light, step, savedAt: Date.now() }));
+          setDraftSavedAt(Date.now());
+        } catch {}
+      }
       // Cloud save quando CPF válido + senha >= 8 chars (chave principal: CPF)
       if(data.cpf && data.cpf.replace(/\D/g,"").length===11 && validateCPF(data.cpf) && data.senha && data.senha.length>=8 && step>=2) {
         try {
@@ -1259,11 +1266,10 @@ function WorkerRegister({ onDone, onBack }) {
     return () => clearTimeout(t);
   }, [data, step, draftPrompt, cloudDraft]);
 
-  // Detecta cloud draft pelo CPF — assim que tiver 11 dígitos e for válido (já no step 1)
+  // Detecta cloud draft pelo CPF — assim que tiver 11 dígitos (já no step 1)
   useEffect(() => {
     if(!data.cpf) return;
     if(data.cpf.replace(/\D/g,"").length !== 11) return;
-    if(!validateCPF(data.cpf)) return;
     if(lastCheckedCpf === data.cpf) return;
     if(cloudDraftCreated) return;
     if(draftPrompt || cloudDraft) return;
@@ -1273,7 +1279,7 @@ function WorkerRegister({ onDone, onBack }) {
         const found = await fetchWorkerDraftByCpf(data.cpf);
         if(found && found.data) setCloudDraft(found);
       } catch {}
-    }, 900);
+    }, 700);
     return () => clearTimeout(t);
   }, [data.cpf, lastCheckedCpf, cloudDraftCreated, draftPrompt, cloudDraft]);
 
@@ -5144,16 +5150,47 @@ function AuthScreen({ type, onLogin, onRegister, onBack }) {
     if(!email||!pass){ setError("Preencha e-mail e senha."); return; }
     setLoading(true); setError("");
     try {
-      const { data: worker, error: err } = await supabase
+      // 1. Tenta achar worker já cadastrado completo
+      const { data: worker } = await supabase
         .from("workers")
         .select("*")
         .eq("email", email)
         .maybeSingle();
-      if(err||!worker){ setError("E-mail não encontrado. Confira ou crie sua conta."); setLoading(false); return; }
-      if(worker.status==="pending"){ setError("Seu cadastro ainda está em análise pela equipe Giobbi's. Em até 24h úteis você receberá retorno."); setLoading(false); return; }
-      if(worker.status==="paused"){ setError("Seu perfil está temporariamente pausado e não aparece nas buscas. Entre em contato com a equipe Giobbi's para reativar."); setLoading(false); return; }
-      if(worker.status==="rejected"){ setError(worker.reject_note ? `Seu cadastro foi reprovado. Motivo: ${worker.reject_note}` : "Seu cadastro foi reprovado. Entre em contato com a equipe Giobbi's."); setLoading(false); return; }
-      onLogin(worker);
+      if(worker){
+        if(worker.status==="pending"){ setError("Seu cadastro ainda está em análise pela equipe Giobbi's. Em até 24h úteis você receberá retorno."); setLoading(false); return; }
+        if(worker.status==="paused"){ setError("Seu perfil está temporariamente pausado e não aparece nas buscas. Entre em contato com a equipe Giobbi's para reativar."); setLoading(false); return; }
+        if(worker.status==="rejected"){ setError(worker.reject_note ? `Seu cadastro foi reprovado. Motivo: ${worker.reject_note}` : "Seu cadastro foi reprovado. Entre em contato com a equipe Giobbi's."); setLoading(false); return; }
+        onLogin(worker);
+        return;
+      }
+      // 2. Não tem worker? Tenta achar draft (cadastro inacabado) pelo e-mail
+      const { data: drafts } = await supabase
+        .from("worker_drafts")
+        .select("*")
+        .eq("email", email)
+        .order("updated_at", {ascending:false})
+        .limit(1);
+      if(drafts && drafts.length>0){
+        const draft = drafts[0];
+        const hash = await sha256Hex(pass);
+        if(hash === draft.password_hash){
+          // Senha bate — carrega draft no localStorage e manda pro WorkerRegister
+          try {
+            localStorage.setItem("vorker:worker_register_draft", JSON.stringify({
+              data: draft.data,
+              step: draft.step,
+              savedAt: Date.now()
+            }));
+          } catch {}
+          onRegister();
+          return;
+        }
+        setError("Senha incorreta. Confira a senha que você cadastrou.");
+        setLoading(false);
+        return;
+      }
+      setError("E-mail não encontrado. Confira ou crie sua conta.");
+      setLoading(false);
     } catch(e) {
       setError("Erro ao conectar. Tente novamente.");
     } finally {
