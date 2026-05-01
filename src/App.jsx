@@ -1211,6 +1211,19 @@ function WorkerRegister({ onDone, onBack }) {
     } catch {}
   }, []);
 
+  // Auto-save: salva o draft no localStorage a cada mudança (debounced 600ms)
+  useEffect(() => {
+    if(draftPrompt) return; // não salva enquanto o prompt de continuar/descartar tá aberto
+    if(!data.nome && !data.cpf && !data.email && !data.telefone) return; // skip drafts vazios
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ data, step, savedAt: Date.now() }));
+        setDraftSavedAt(Date.now());
+      } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  }, [data, step, draftPrompt]);
+
   const restoreDraft = () => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
@@ -1854,10 +1867,18 @@ function WorkerRegister({ onDone, onBack }) {
         <div className="vorker-nav-row" style={{marginTop:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             <span style={{...B,fontSize:13,color:C.sub}}>Já tem conta? <span onClick={onBack} style={{color:C.green,cursor:"pointer",fontWeight:600}}>Fazer login</span></span>
-            <span onClick={saveAndExit} style={{...B,fontSize:12,color:C.muted,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,userSelect:"none"}}>
-              <span>💾</span>
-              <span style={{borderBottom:`1px dashed ${C.muted}`}}>Salvar e continuar depois</span>
-            </span>
+            <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+              <span onClick={saveAndExit} style={{...B,fontSize:12,color:C.muted,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,userSelect:"none"}}>
+                <span>💾</span>
+                <span style={{borderBottom:`1px dashed ${C.muted}`}}>Salvar e sair</span>
+              </span>
+              {draftSavedAt && (
+                <span style={{...B,fontSize:11,color:C.green,display:"inline-flex",alignItems:"center",gap:5}}>
+                  <span style={{width:6,height:6,borderRadius:3,background:C.green,display:"inline-block"}}></span>
+                  Salvo automaticamente
+                </span>
+              )}
+            </div>
           </div>
           <Btn label={step===10?"Criar minha conta →":"Continuar →"} variant="primary" size="lg" onClick={handleNext} loading={submitting} />
         </div>
@@ -1883,7 +1904,7 @@ function WorkerRegister({ onDone, onBack }) {
               </div>
               <div style={{...B,fontSize:12,fontWeight:600,color:C.navy,textAlign:"center",marginBottom:14,padding:"8px 12px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`,fontFamily:"monospace"}}>giobbis.vercel.app</div>
               <div style={{...B,fontSize:11,color:C.muted,lineHeight:1.5,padding:"10px 12px",background:C.amberBg||"#FEF3C7",border:`1px solid ${C.amberBorder||"#FDE68A"}`,borderRadius:8}}>
-                <strong style={{color:C.amber||"#92400E"}}>Em breve:</strong> continuação automática (você abre no celular e o cadastro continua de onde parou). Por enquanto, ao abrir no celular, use o "Salvar e continuar depois" no mesmo navegador, ou refaça o cadastro.
+                <strong style={{color:C.amber||"#92400E"}}>Em breve:</strong> continuação automática (você abre no celular e o cadastro continua de onde parou). Por enquanto, seu progresso está salvo automaticamente neste navegador — volte aqui para continuar.
               </div>
             </div>
           </div>
