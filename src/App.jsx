@@ -83,6 +83,10 @@ function GlobalStyles() {
       input:focus,select:focus,textarea:focus{outline:none;border-color:#16A34A!important}
 
       /* ─── RESPONSIVE: classes globais (antes ficavam scoped no Landing) ─── */
+      @media(max-width:600px){
+        .vorker-auth-grid{grid-template-columns:1fr!important}
+        .vorker-auth-grid>div{padding:24px!important}
+      }
       @media(max-width:768px){
         .vorker-hero{min-height:0!important}
         .vorker-hero-grid{padding:24px 20px 0!important}
@@ -4455,7 +4459,7 @@ function AuthChoice({ onNav }) {
           <h2 style={{...H,fontSize:34,fontWeight:900,color:C.navy,letterSpacing:-1.2,marginBottom:10}}>Bem-vindo ao VORKER</h2>
           <p style={{...B,fontSize:15,color:C.muted}}>Como deseja acessar?</p>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+        <div className="vorker-auth-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
           {/* Empresa */}
           <div onClick={()=>onNav("company-auth")}
             style={{background:C.white,border:`1.5px solid ${C.border}`,borderRadius:16,padding:32,cursor:"pointer",textAlign:"center",transition:"all .18s"}}
