@@ -21,8 +21,10 @@ function GlobalStyles() {
     const s = document.createElement("style");
     s.textContent = `
       *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      html,body{overflow-x:hidden;max-width:100%;width:100%}
       html{scroll-behavior:smooth}
       body{background:#F8FAFC;color:#0A1628;font-family:'General Sans',sans-serif;-webkit-font-smoothing:antialiased}
+      img,video,canvas,svg{max-width:100%;height:auto}
       input,textarea,select,button{font-family:inherit}
       input::placeholder,textarea::placeholder{color:#9CA3AF}
       ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#F1F5F9}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
