@@ -86,6 +86,7 @@ function GlobalStyles() {
       @media(max-width:600px){
         .vorker-auth-grid{grid-template-columns:1fr!important}
         .vorker-auth-grid>div{padding:24px!important}
+        .vorker-stack-mobile{grid-template-columns:1fr!important}
       }
       @media(max-width:768px){
         .vorker-hero{min-height:0!important}
@@ -2253,7 +2254,7 @@ function CompanyRegister({ onDone, onBack }) {
             </div>
             <Div />
             <div style={{...B,fontSize:11,color:C.muted,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:12}}>Resumo</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 24px"}}>
+            <div className="vorker-stack-mobile" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 24px"}}>
               {[["Empresa",data.nomeFant||data.razao],["CNPJ",data.cnpj],["Segmento",data.seg],["Sede",`${data.cidade}/${data.estado}`],["Responsável",data.respNome],["Unidades",`${data.unidades.length} cadastrada${data.unidades.length!==1?"s":""}`]].map(([k,v])=>(
                 <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{...B,fontSize:12,color:C.muted}}>{k}</span>
@@ -2495,7 +2496,7 @@ function AdminPanel({ onLogout }) {
                 </div>
               ))}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+            <div className="vorker-stack-mobile" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
               <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
                 <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{...H,fontSize:14,fontWeight:700,color:C.navy}}>Empresas pendentes</div>
@@ -2555,14 +2556,14 @@ function AdminPanel({ onLogout }) {
                   <div><h3 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>{selCompany.nome_fant||selCompany.razao}</h3><div style={{...B,fontSize:13,color:C.muted}}>{selCompany.razao}</div></div>
                   <div style={{display:"flex",gap:8}}><Badge status={selCompany.status} /><Badge status={selCompany.pay_status} /></div>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px",marginBottom:20}}>
+                <div className="vorker-stack-mobile" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px",marginBottom:20}}>
                   {[["CNPJ",selCompany.cnpj],["Segmento",selCompany.seg],["Site",selCompany.site||"—"],["Cadastro",fmtDate(selCompany.created_at)],["Cidade",`${selCompany.cidade}/${selCompany.estado}`]].map(([k,v])=>(
                     <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}><div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div><div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v}</div></div>
                   ))}
                 </div>
                 <Div />
                 <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:14}}>Responsável</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px",marginBottom:20}}>
+                <div className="vorker-stack-mobile" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 32px",marginBottom:20}}>
                   {[["Nome",selCompany.resp_nome],["Cargo",selCompany.resp_cargo],["WhatsApp",selCompany.resp_tel],["E-mail",selCompany.resp_email]].map(([k,v])=>(
                     <div key={k} style={{padding:"7px 0",borderBottom:`1px solid ${C.border}`}}><div style={{...B,fontSize:11,color:C.muted,marginBottom:2}}>{k}</div><div style={{...B,fontSize:13,color:C.navy,fontWeight:600}}>{v||"—"}</div></div>
                   ))}
