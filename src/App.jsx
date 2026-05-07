@@ -538,6 +538,29 @@ const fetchWorkers = async () => {
 const updateCompanyDB = async (id, changes) => { const {error}=await supabase.from("companies").update(changes).eq("id",id); if(error) throw error; };
 const updateWorkerDB  = async (id, changes) => { const {error}=await supabase.from("workers").update(changes).eq("id",id); if(error) throw error; };
 
+// ─── OPPORTUNITIES (Sprint 2 — turnos publicados) ───────────────
+const createOpportunity = async (data) => {
+  const { data: opp, error } = await supabase.from("opportunities").insert(data).select().single();
+  if(error) throw error;
+  return opp;
+};
+const listOpportunitiesByCompany = async (companyId) => {
+  const { data, error } = await supabase
+    .from("opportunities")
+    .select("*, unit:company_units(id,nome,cep,bairro,cidade,estado)")
+    .eq("company_id", companyId)
+    .order("data",{ascending:false})
+    .order("hora_inicio",{ascending:false});
+  if(error) throw error;
+  return data || [];
+};
+const cancelOpportunity = async (id, hours_before=null) => {
+  const { error } = await supabase.from("opportunities")
+    .update({ status:"cancelled", cancelled_at: new Date().toISOString(), cancelled_by: "company" })
+    .eq("id", id);
+  if(error) throw error;
+};
+
 // ─── WORKER DRAFTS ─────────────────────────────────────────────
 const sha256Hex = async (txt) => {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
@@ -3246,6 +3269,72 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const fLevel = useState(0);       const [fLevelV, setFLevel] = [fLevel[0], fLevel[1]];
   const fDia   = useState("all");   const [fDiaV,   setFDia]   = [fDia[0],   fDia[1]];
   const fTurno = useState("all");   const [fTurnoV, setFTurno] = [fTurno[0], fTurno[1]];
+  const fFlex  = useState("all");   const [fFlexV,  setFFlex]  = [fFlex[0],  fFlex[1]];
+  const fDist  = useState(0);       const [fDistV,  setFDist]  = [fDist[0],  fDist[1]];
+
+  // Sprint 2.1 — Turnos (opportunities) lado empresa
+  const [shifts, setShifts] = useState([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const [newShiftOpen, setNewShiftOpen] = useState(false);
+  const [savingShift, setSavingShift] = useState(false);
+  const emptyShiftForm = { unit_id:"", spec_id:"", data:"", hora_inicio:"", hora_fim:"", valor:"", vagas:1, exp_minima:0, observacoes:"" };
+  const [shiftForm, setShiftForm] = useState(emptyShiftForm);
+  const setSF = (k,v) => setShiftForm(s=>({...s,[k]:v}));
+
+  const loadShifts = async () => {
+    setShiftsLoading(true);
+    try { const list = await listOpportunitiesByCompany(company.id); setShifts(list); }
+    catch(e) { console.error("loadShifts",e); }
+    finally { setShiftsLoading(false); }
+  };
+  useEffect(()=>{ if(tab==="shifts") loadShifts(); /* eslint-disable-line */ },[tab]);
+
+  const submitNewShift = async () => {
+    const f = shiftForm;
+    if(!f.unit_id||!f.spec_id||!f.data||!f.hora_inicio||!f.hora_fim||!f.valor||!f.vagas) {
+      alert("Preencha todos os campos obrigatórios."); return;
+    }
+    if(f.hora_fim <= f.hora_inicio) { alert("A hora final precisa ser maior que a inicial."); return; }
+    const today = new Date().toISOString().slice(0,10);
+    if(f.data < today) { alert("Data não pode ser no passado."); return; }
+    setSavingShift(true);
+    try {
+      const [hi,mi] = f.hora_inicio.split(":").map(Number);
+      const [hf,mf] = f.hora_fim.split(":").map(Number);
+      const dur = ((hf*60+mf)-(hi*60+mi))/60;
+      await createOpportunity({
+        company_id: company.id,
+        unit_id: f.unit_id,
+        spec_id: f.spec_id,
+        data: f.data,
+        hora_inicio: f.hora_inicio,
+        hora_fim: f.hora_fim,
+        duracao_horas: dur,
+        valor_bruto: parseFloat(f.valor),
+        vagas_total: parseInt(f.vagas),
+        vagas_disponiveis: parseInt(f.vagas),
+        exp_minima: parseInt(f.exp_minima)||0,
+        observacoes: f.observacoes||null,
+        status:"open",
+      });
+      setShiftForm(emptyShiftForm);
+      setNewShiftOpen(false);
+      await loadShifts();
+    } catch(e) { alert("Erro ao publicar turno: "+(e.message||e)); }
+    finally { setSavingShift(false); }
+  };
+
+  const cancelShift = async (id, dataStr, horaIni) => {
+    const start = new Date(`${dataStr}T${horaIni}:00`);
+    const hoursDiff = (start - new Date()) / (1000*60*60);
+    let confirmMsg = "Cancelar este turno?";
+    if(hoursDiff > 0 && hoursDiff < 6) {
+      confirmMsg = `⚠ Faltam ${hoursDiff.toFixed(1)}h para o início. Cancelamentos com menos de 6h pagam multa de 30% do valor ao worker. Deseja continuar?`;
+    }
+    if(!confirm(confirmMsg)) return;
+    try { await cancelOpportunity(id); await loadShifts(); }
+    catch(e) { alert("Erro ao cancelar: "+(e.message||e)); }
+  };
 
   const levelColors = ["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
   const levelWidth  = [0,25,50,75,100];
@@ -3380,7 +3469,11 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     </div>
   );
 
-  const TABS = [{id:"talent",icon:"🔍",label:"Buscar Talento"},{id:"profile",icon:"🏢",label:"Meu Perfil"}];
+  const TABS = [
+    {id:"talent",  icon:"🔍", label:"Buscar Talento"},
+    {id:"shifts",  icon:"📅", label:"Turnos"},
+    {id:"profile", icon:"🏢", label:"Meu Perfil"},
+  ];
 
   // Worker detail page (visão da empresa)
   if(selWorker) return (()=>{
@@ -3961,6 +4054,142 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
               </div>
             )}
           </>}
+        </>}
+
+        {/* ── TAB: TURNOS (publicar e gerenciar) ── */}
+        {tab==="shifts"&&<>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:12,flexWrap:"wrap"}}>
+            <div>
+              <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>Turnos publicados</h2>
+              <div style={{...B,fontSize:13,color:C.muted}}>Gerencie os turnos abertos e veja quem aceitou.</div>
+            </div>
+            <button onClick={()=>setNewShiftOpen(true)} style={{...H,fontSize:13,fontWeight:800,background:C.green,color:"#fff",border:"none",borderRadius:9,padding:"11px 18px",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7}}>
+              <span style={{fontSize:14}}>+</span> Publicar novo turno
+            </button>
+          </div>
+
+          {units.length===0 && (
+            <div style={{background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:10,padding:"14px 18px",marginBottom:14,...B,fontSize:13,color:C.amber}}>
+              ⚠ Cadastre uma unidade na aba "Meu Perfil" antes de publicar turnos.
+            </div>
+          )}
+
+          {shiftsLoading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Carregando turnos…</div>}
+
+          {!shiftsLoading && shifts.length===0 && (
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:48,textAlign:"center"}}>
+              <div style={{fontSize:42,marginBottom:12}}>📅</div>
+              <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Nenhum turno publicado ainda</div>
+              <div style={{...B,fontSize:13,color:C.muted,marginBottom:16}}>Publique seu primeiro turno e os Vorkers próximos verão na hora.</div>
+              {units.length>0 && <button onClick={()=>setNewShiftOpen(true)} style={{...H,fontSize:13,fontWeight:800,background:C.green,color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",cursor:"pointer"}}>+ Publicar turno</button>}
+            </div>
+          )}
+
+          {!shiftsLoading && shifts.length>0 && (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+              {shifts.map(s=>{
+                const spec = SPECS.find(x=>x.id===s.spec_id) || {icon:"⭐",label:s.custom_spec_label||"Função"};
+                const statusInfo = {
+                  open:      {label:"Aberto",     bg:C.greenBg, color:C.green,   border:C.greenBorder},
+                  partial:   {label:"Parcial",    bg:"#FEF3C7", color:"#92400E", border:"#FDE68A"},
+                  filled:    {label:"Completo",   bg:C.bg,      color:C.sub,     border:C.border},
+                  cancelled: {label:"Cancelado",  bg:C.redBg,   color:C.red,     border:C.redBorder},
+                  completed: {label:"Concluído",  bg:C.bg,      color:C.muted,   border:C.border},
+                }[s.status] || {label:s.status, bg:C.bg, color:C.muted, border:C.border};
+                const dataLabel = s.data ? new Date(s.data+"T00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "—";
+                const horaLabel = `${(s.hora_inicio||"").slice(0,5)}–${(s.hora_fim||"").slice(0,5)}`;
+                const valorLabel = s.valor_bruto ? `R$ ${parseFloat(s.valor_bruto).toFixed(2).replace(".",",")}` : "—";
+                const isCancellable = s.status==="open"||s.status==="partial";
+                return (
+                  <div key={s.id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:18}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:12}}>
+                      <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0,flex:1}}>
+                        <span style={{fontSize:22}}>{spec.icon}</span>
+                        <div style={{minWidth:0}}>
+                          <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{spec.label}</div>
+                          <div style={{...B,fontSize:11,color:C.muted}}>{s.unit?.nome||"Unidade não informada"}</div>
+                        </div>
+                      </div>
+                      <span style={{...B,fontSize:10.5,fontWeight:700,color:statusInfo.color,background:statusInfo.bg,border:`1px solid ${statusInfo.border}`,padding:"3px 9px",borderRadius:7,whiteSpace:"nowrap"}}>{statusInfo.label}</span>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,padding:"10px 12px",background:C.bg,borderRadius:8,marginBottom:10}}>
+                      <div>
+                        <div style={{...B,fontSize:10,color:C.muted,marginBottom:2}}>📅 Data</div>
+                        <div style={{...H,fontSize:12.5,fontWeight:700,color:C.navy}}>{dataLabel}</div>
+                      </div>
+                      <div>
+                        <div style={{...B,fontSize:10,color:C.muted,marginBottom:2}}>🕐 Horário</div>
+                        <div style={{...H,fontSize:12.5,fontWeight:700,color:C.navy}}>{horaLabel}</div>
+                      </div>
+                      <div>
+                        <div style={{...B,fontSize:10,color:C.muted,marginBottom:2}}>💰 Valor</div>
+                        <div style={{...H,fontSize:12.5,fontWeight:700,color:C.green}}>{valorLabel}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <span style={{...B,fontSize:11.5,color:C.sub}}>👥 <strong style={{color:C.navy,fontWeight:700}}>{s.vagas_disponiveis}</strong> de {s.vagas_total} vaga{s.vagas_total>1?"s":""}</span>
+                      {s.exp_minima>0 && <span style={{...B,fontSize:10.5,color:C.muted}}>Exp. min.: {s.exp_minima===2?"6m":s.exp_minima===3?"1a":s.exp_minima===4?"3a":"5a"}+</span>}
+                    </div>
+                    {s.observacoes && <div style={{...B,fontSize:11.5,color:C.sub,padding:"6px 10px",background:C.bg,borderRadius:6,marginBottom:10,fontStyle:"italic"}}>"{s.observacoes}"</div>}
+                    {isCancellable && (
+                      <button onClick={()=>cancelShift(s.id, s.data, s.hora_inicio)} style={{...H,fontSize:12,fontWeight:700,color:C.red,background:"transparent",border:`1px solid ${C.redBorder}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",width:"100%"}}>Cancelar turno</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Modal: novo turno */}
+          {newShiftOpen && (
+            <div onClick={()=>!savingShift && setNewShiftOpen(false)} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+              <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:26,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                  <div>
+                    <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:3}}>Publicar novo turno</h3>
+                    <div style={{...B,fontSize:12,color:C.muted}}>Vorkers compatíveis verão a vaga em segundos.</div>
+                  </div>
+                  <button onClick={()=>!savingShift && setNewShiftOpen(false)} style={{background:"none",border:"none",fontSize:22,color:C.muted,cursor:"pointer",lineHeight:1}}>×</button>
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+                  <SelectField label="Unidade" required value={shiftForm.unit_id} onChange={v=>setSF("unit_id",v)} options={[{value:"",label:"Selecione"},...units.map(u=>({value:u.id,label:u.nome}))]} />
+                  <SelectField label="Função" required value={shiftForm.spec_id} onChange={v=>setSF("spec_id",v)} options={[{value:"",label:"Selecione"},...SPECS.map(s=>({value:s.id,label:`${s.icon} ${s.label}`}))]} />
+                </div>
+
+                <Field label="Data" type="date" required value={shiftForm.data} onChange={v=>setSF("data",v)} />
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <Field label="Hora início" type="time" required value={shiftForm.hora_inicio} onChange={v=>setSF("hora_inicio",v)} />
+                  <Field label="Hora fim"    type="time" required value={shiftForm.hora_fim}    onChange={v=>setSF("hora_fim",v)} />
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <Field label="Valor bruto (R$)" placeholder="120.00" type="number" required value={shiftForm.valor} onChange={v=>setSF("valor",v)} helper={shiftForm.valor?`Worker recebe R$ ${(parseFloat(shiftForm.valor)*0.75).toFixed(2).replace(".",",")} líquidos`:""} />
+                  <Field label="Vagas" placeholder="1" type="number" required value={shiftForm.vagas} onChange={v=>setSF("vagas",v)} />
+                </div>
+
+                <SelectField label="Experiência mínima" value={shiftForm.exp_minima} onChange={v=>setSF("exp_minima",parseInt(v)||0)} options={[
+                  {value:0,label:"Qualquer experiência"},
+                  {value:2,label:"6 meses ou mais"},
+                  {value:3,label:"1 ano ou mais"},
+                  {value:4,label:"3 anos ou mais"},
+                  {value:5,label:"5 anos ou mais"},
+                ]} />
+
+                <div style={{marginBottom:14}}>
+                  <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>Observações (opcional)</label>
+                  <textarea value={shiftForm.observacoes} onChange={e=>setSF("observacoes",e.target.value)} placeholder="Ex: trazer EPI, intervalo de 1h incluído, etc."
+                    style={{width:"100%",minHeight:70,padding:"10px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,background:"#fff",...B,fontSize:13,color:C.text,outline:"none",resize:"vertical",fontFamily:"inherit"}} />
+                </div>
+
+                <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                  <button disabled={savingShift} onClick={()=>setNewShiftOpen(false)} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:savingShift?"default":"pointer",opacity:savingShift?.6:1}}>Cancelar</button>
+                  <button disabled={savingShift} onClick={submitNewShift} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:8,padding:"10px 18px",cursor:savingShift?"default":"pointer",opacity:savingShift?.6:1}}>{savingShift?"Publicando…":"Publicar turno"}</button>
+                </div>
+              </div>
+            </div>
+          )}
         </>}
 
         {/* ── TAB: MEU PERFIL ── */}
