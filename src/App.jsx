@@ -520,6 +520,8 @@ const saveWorker = async (data) => {
     doc_tipo:data.docTipo, email:data.email, status:"pending",
     foto_rosto: data.fotoRosto || null,               // novo: data URL base64
     selfie_doc: data.selfieDoc || null,               // novo: data URL base64
+    pix_key:      data.pixKey || null,                // Sprint 4 — necessário pra pagamento
+    pix_key_type: data.pixKeyType || null,
   }).select().single();
   if(error) throw error;
   return worker;
@@ -554,11 +556,41 @@ const listOpportunitiesByCompany = async (companyId) => {
   if(error) throw error;
   return data || [];
 };
-const cancelOpportunity = async (id, hours_before=null) => {
-  const { error } = await supabase.from("opportunities")
-    .update({ status:"cancelled", cancelled_at: new Date().toISOString(), cancelled_by: "company" })
-    .eq("id", id);
+const cancelOpportunity = async (oppId) => {
+  // Busca a opp pra calcular multa baseada na janela
+  const { data: opp, error: e0 } = await supabase.from("opportunities").select("*").eq("id", oppId).single();
+  if(e0) throw e0;
+  if(!opp) throw new Error("Turno não encontrado.");
+  if(opp.status === "cancelled") return { cascaded: 0, multa: 0 };
+
+  // Calcula multa: <6h antes do início = empresa paga 30% do bruto pro worker
+  const start = new Date(`${opp.data}T${opp.hora_inicio}`);
+  const hoursDiff = (start - new Date()) / (1000*60*60);
+  const inPenalty = hoursDiff > 0 && hoursDiff < 6;
+  const multaPorWorker = inPenalty ? Math.round(parseFloat(opp.valor_bruto) * 0.30 * 100)/100 : 0;
+
+  // Cancela assignments ativos com a multa (se aplicável)
+  const { data: activeAssigns } = await supabase
+    .from("assignments").select("id")
+    .eq("opportunity_id", oppId)
+    .in("status", ["confirmed","in_progress"]);
+  const ids = (activeAssigns||[]).map(a=>a.id);
+  if(ids.length > 0) {
+    await supabase.from("assignments").update({
+      status: "cancelled_company",
+      cancelled_at: new Date().toISOString(),
+      cancel_reason: inPenalty ? "company_late_cancel" : "company_early_cancel",
+      multa_paga: multaPorWorker,
+    }).in("id", ids);
+  }
+
+  // Cancela a opportunity
+  const { error } = await supabase.from("opportunities").update({
+    status:"cancelled", cancelled_at: new Date().toISOString(), cancelled_by:"company",
+  }).eq("id", oppId);
   if(error) throw error;
+
+  return { cascaded: ids.length, multa: multaPorWorker };
 };
 
 // Lado worker
@@ -742,11 +774,12 @@ const listPendingPayouts = async () => {
   const { data, error } = await supabase
     .from("assignments")
     .select("*, worker:workers(id,nome,foto_rosto,pix_key,pix_key_type,telefone), opportunity:opportunities(data,hora_inicio,hora_fim,spec_id,custom_spec_label,unit:company_units(nome,bairro,cidade,estado),company:companies(razao,nome_fant))")
-    .eq("status","completed")
+    .in("status",["completed","cancelled_company"])
     .is("paid_at", null)
     .order("created_at",{ascending:true});
   if(error) throw error;
-  return data || [];
+  // cancelled_company só entra se tem multa
+  return (data||[]).filter(a => a.status==="completed" || (a.status==="cancelled_company" && parseFloat(a.multa_paga||0) > 0));
 };
 const listPaidPayouts = async (limit=50) => {
   const { data, error } = await supabase
@@ -1435,7 +1468,8 @@ function WorkerRegister({ onDone, onBack }) {
     perfilTrabalho:{ corrido:"", diaADia:"", tarefa:"", diferente:"", imprevisto:"" },
     // (legado) campos antigos do step 6 — mantidos pra compatibilidade
     trabalhoEquipe:false, atendCliente:false, tipoTrabalho:"",
-    // 7 — Documentação
+    // 7 — Documentação + PIX
+    pixKey:"", pixKeyType:"cpf",   // "cpf" | "email" | "phone" | "random"
     temPix:false, chavePix:"", pcd:false, pcdTipo:"",
     // 8 — Foto
     fotoRosto:null,
@@ -1535,6 +1569,12 @@ function WorkerRegister({ onDone, onBack }) {
       if(!p.imprevisto) m.push("Pergunta 5 — Se surge um imprevisto");
       return m;
     }
+    if(step===10){
+      const m=[];
+      if(!data.pixKeyType) m.push("Tipo de chave PIX");
+      if(!data.pixKey || data.pixKey.trim().length<4) m.push("Chave PIX (necessária pra receber pagamentos)");
+      return m;
+    }
     return [];
   };
 
@@ -1548,7 +1588,7 @@ function WorkerRegister({ onDone, onBack }) {
     7:  allFuncExpFilled,
     8:  Object.values(data.disponibilidade).some(turnos=>turnos.length>0),
     9:  !!(data.perfilTrabalho?.corrido && data.perfilTrabalho?.diaADia && data.perfilTrabalho?.tarefa && data.perfilTrabalho?.diferente && data.perfilTrabalho?.imprevisto),
-    10: true,
+    10: !!(data.pixKey && data.pixKey.trim().length>=4 && data.pixKeyType),
   }[step];
 
   const handleNext = () => {
@@ -2131,6 +2171,28 @@ function WorkerRegister({ onDone, onBack }) {
             <h2 style={{...H,fontSize:26,fontWeight:900,color:C.navy,marginBottom:6}}>Informações adicionais</h2>
             <p style={{...B,fontSize:14,color:C.sub,marginBottom:22,lineHeight:1.65}}>Última etapa antes de finalizar seu cadastro.</p>
 
+            {/* Chave PIX — necessária pra receber pagamentos */}
+            <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:6}}>💰 Chave PIX para receber pagamentos</div>
+            <p style={{...B,fontSize:12.5,color:C.sub,marginBottom:14,lineHeight:1.5}}>É a chave usada pelo Vorker pra te pagar todo o ciclo. Pode ser CPF, e-mail, celular ou aleatória.</p>
+            <div className="g2" style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:12,marginBottom:8}}>
+              <SelectField label="Tipo" required value={data.pixKeyType} onChange={v=>{
+                set("pixKeyType",v);
+                // Pré-preenchimento esperto
+                if(v==="cpf" && data.cpf && !data.pixKey) set("pixKey", data.cpf);
+                if(v==="email" && data.email && !data.pixKey) set("pixKey", data.email);
+                if(v==="phone" && data.telefone && !data.pixKey) set("pixKey", data.telefone);
+              }} options={[
+                {value:"cpf",   label:"CPF"},
+                {value:"email", label:"E-mail"},
+                {value:"phone", label:"Celular"},
+                {value:"random",label:"Aleatória"},
+              ]} />
+              <Field label="Chave" placeholder={data.pixKeyType==="cpf"?"000.000.000-00":data.pixKeyType==="email"?"seu@email.com":data.pixKeyType==="phone"?"(11) 99999-9999":"chave aleatória do banco"} required value={data.pixKey} onChange={v=>set("pixKey",v)} />
+            </div>
+            <Alert type="info">Pagamentos toda sexta da semana seguinte ao trabalho realizado, garantidos pelo Vorker.</Alert>
+
+            <Div />
+
             <div style={{...H,fontSize:15,fontWeight:700,color:C.navy,marginBottom:12}}>Pessoa com deficiência (PCD)?</div>
             <div style={{display:"flex",gap:10,marginBottom:14}}>
               {[{v:true,l:"Sim, sou PCD"},{v:false,l:"Não"}].map(({v,l})=>(
@@ -2682,6 +2744,7 @@ function AdminPanel({ onLogout }) {
   };
   useEffect(()=>{ if(tab==="payouts") loadPayouts(); /* eslint-disable-line */ },[tab]);
 
+  const valorAReceber = (a) => a.status==="cancelled_company" ? parseFloat(a.multa_paga||0) : parseFloat(a.valor_calculado||0);
   const pendingByWorker = (() => {
     const map = new Map();
     for(const a of pendingPayouts) {
@@ -2689,7 +2752,7 @@ function AdminPanel({ onLogout }) {
       if(!wid) continue;
       if(!map.has(wid)) map.set(wid, {worker:a.worker, total:0, items:[]});
       const g = map.get(wid);
-      g.total += parseFloat(a.valor_calculado||0);
+      g.total += valorAReceber(a);
       g.items.push(a);
     }
     return [...map.values()].sort((a,b)=>b.total-a.total);
@@ -2698,7 +2761,8 @@ function AdminPanel({ onLogout }) {
   const totalPending = pendingByWorker.reduce((s,g)=>s+g.total,0);
 
   const payAllForWorker = async (workerId, items) => {
-    if(!confirm(`Confirma pagamento de R$ ${items.reduce((s,a)=>s+parseFloat(a.valor_calculado||0),0).toFixed(2).replace(".",",")} para ${items[0]?.worker?.nome||"este worker"} via PIX?`)) return;
+    const sum = items.reduce((s,a)=>s+valorAReceber(a),0);
+    if(!confirm(`Confirma pagamento de R$ ${sum.toFixed(2).replace(".",",")} para ${items[0]?.worker?.nome||"este worker"} via PIX?`)) return;
     setPayingWorkerId(workerId);
     try {
       await markAssignmentsPaid(items.map(a=>a.id));
@@ -3492,6 +3556,7 @@ function AdminPanel({ onLogout }) {
                           const opp = a.opportunity;
                           const spec = SPECS.find(x=>x.id===opp?.spec_id) || {label:opp?.custom_spec_label||"Função",icon:"⭐"};
                           const dataLabel = opp?.data ? new Date(opp.data+"T00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "—";
+                          const isMulta = a.status === "cancelled_company";
                           return (
                             <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,...B,fontSize:12,color:C.sub,flexWrap:"wrap"}}>
                               <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -3501,9 +3566,10 @@ function AdminPanel({ onLogout }) {
                                 <span>{opp?.company?.nome_fant || opp?.company?.razao || "—"}</span>
                                 <span>·</span>
                                 <span>{dataLabel}</span>
-                                {a.horas_trabalhadas && <><span>·</span><span>{a.horas_trabalhadas}h</span></>}
+                                {!isMulta && a.horas_trabalhadas && <><span>·</span><span>{a.horas_trabalhadas}h</span></>}
+                                {isMulta && <span style={{...B,fontSize:10.5,fontWeight:700,color:"#92400E",background:"#FEF3C7",border:"1px solid #FDE68A",padding:"1px 7px",borderRadius:5}}>Multa de cancelamento</span>}
                               </div>
-                              <span style={{...H,fontSize:12,fontWeight:700,color:C.green,whiteSpace:"nowrap"}}>R$ {parseFloat(a.valor_calculado||0).toFixed(2).replace(".",",")}</span>
+                              <span style={{...H,fontSize:12,fontWeight:700,color:isMulta?"#92400E":C.green,whiteSpace:"nowrap"}}>R$ {valorAReceber(a).toFixed(2).replace(".",",")}</span>
                             </div>
                           );
                         })}
@@ -3531,7 +3597,7 @@ function AdminPanel({ onLogout }) {
                         <div style={{...B,fontSize:12.5,fontWeight:600,color:C.navy}}>{a.worker?.nome||"Worker"}</div>
                         <div style={{...B,fontSize:10.5,color:C.muted}}>{a.opportunity?.company?.nome_fant || a.opportunity?.company?.razao || "—"} · pago em {new Date(a.paid_at).toLocaleDateString("pt-BR")}</div>
                       </div>
-                      <span style={{...H,fontSize:13,fontWeight:700,color:C.green,whiteSpace:"nowrap"}}>R$ {parseFloat(a.valor_calculado||0).toFixed(2).replace(".",",")}</span>
+                      <span style={{...H,fontSize:13,fontWeight:700,color:C.green,whiteSpace:"nowrap"}}>R$ {(a.status==="cancelled_company"?parseFloat(a.multa_paga||0):parseFloat(a.valor_calculado||0)).toFixed(2).replace(".",",")}</span>
                     </div>
                   ))}
                 </div>
@@ -3785,11 +3851,17 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     const hoursDiff = (start - new Date()) / (1000*60*60);
     let confirmMsg = "Cancelar este turno?";
     if(hoursDiff > 0 && hoursDiff < 6) {
-      confirmMsg = `⚠ Faltam ${hoursDiff.toFixed(1)}h para o início. Cancelamentos com menos de 6h pagam multa de 30% do valor ao worker. Deseja continuar?`;
+      confirmMsg = `⚠ Faltam ${hoursDiff.toFixed(1)}h para o início. Cancelamentos com menos de 6h pagam multa de 30% do valor a cada worker que aceitou. Deseja continuar?`;
     }
     if(!confirm(confirmMsg)) return;
-    try { await cancelOpportunity(id); await loadShifts(); }
-    catch(e) { alert("Erro ao cancelar: "+(e.message||e)); }
+    try {
+      const res = await cancelOpportunity(id);
+      if(res.cascaded > 0) {
+        if(res.multa > 0) alert(`Turno cancelado. ${res.cascaded} worker(s) afetado(s) e cada um vai receber R$ ${res.multa.toFixed(2).replace(".",",")} de multa de cancelamento (entra no próximo pagamento).`);
+        else alert(`Turno cancelado. ${res.cascaded} worker(s) que tinham aceitado foram avisados.`);
+      }
+      await loadShifts();
+    } catch(e) { alert("Erro ao cancelar: "+(e.message||e)); }
   };
 
   const levelColors = ["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
@@ -5523,11 +5595,20 @@ function WorkerShiftsTab({ worker, flash }) {
     no_show:           {label:"Faltou",       bg:C.redBg,   color:C.red,     border:C.redBorder},
   };
 
-  // Sprint 4 — cálculo de "a receber"
-  const aReceber  = list.filter(a => a.status==="completed" && !a.paid_at)
-                        .reduce((s,a)=>s + parseFloat(a.valor_calculado||0), 0);
-  const recebido  = list.filter(a => a.paid_at)
-                        .reduce((s,a)=>s + parseFloat(a.valor_calculado||0), 0);
+  // Sprint 4 — cálculo de "a receber" (inclui completed e multas de cancelamento da empresa)
+  const valorPendente = (a) => {
+    if(a.paid_at) return 0;
+    if(a.status === "completed") return parseFloat(a.valor_calculado||0);
+    if(a.status === "cancelled_company" && parseFloat(a.multa_paga||0) > 0) return parseFloat(a.multa_paga);
+    return 0;
+  };
+  const valorRecebido = (a) => {
+    if(!a.paid_at) return 0;
+    if(a.status === "cancelled_company") return parseFloat(a.multa_paga||0);
+    return parseFloat(a.valor_calculado||0);
+  };
+  const aReceber  = list.reduce((s,a)=>s + valorPendente(a), 0);
+  const recebido  = list.reduce((s,a)=>s + valorRecebido(a), 0);
   const proxSexta = getNextFriday();
 
   return (
@@ -5603,7 +5684,11 @@ function WorkerShiftsTab({ worker, flash }) {
                   <div style={{display:"flex",gap:14,flexWrap:"wrap",...B,fontSize:12,color:C.sub,marginBottom:a.check_in_at?6:0}}>
                     <span style={{textTransform:"capitalize"}}>📅 {dataLabel}</span>
                     <span>🕐 {horaLabel}</span>
-                    <span style={{color:C.green,fontWeight:700}}>💰 R$ {(parseFloat(a.valor_calculado||0)).toFixed(2).replace(".",",")}</span>
+                    {a.status==="cancelled_company" && parseFloat(a.multa_paga||0) > 0
+                      ? <span style={{color:"#92400E",fontWeight:700}}>💰 Multa de cancel.: R$ {parseFloat(a.multa_paga).toFixed(2).replace(".",",")}</span>
+                      : a.status!=="cancelled_company" && a.status!=="cancelled_worker"
+                        ? <span style={{color:C.green,fontWeight:700}}>💰 R$ {(parseFloat(a.valor_calculado||0)).toFixed(2).replace(".",",")}</span>
+                        : null}
                     {opp.unit && <span>📍 {opp.unit.bairro}, {opp.unit.cidade}/{opp.unit.estado}</span>}
                   </div>
                   {a.check_in_at && (
