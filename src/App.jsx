@@ -561,6 +561,110 @@ const cancelOpportunity = async (id, hours_before=null) => {
   if(error) throw error;
 };
 
+// Lado worker
+const listAvailableOpportunitiesForWorker = async (worker) => {
+  if(!worker) return [];
+  const today = new Date().toISOString().slice(0,10);
+  const { data, error } = await supabase
+    .from("opportunities")
+    .select("*, company:companies(id,razao,nome_fant), unit:company_units(id,nome,bairro,cidade,estado,cep)")
+    .in("status",["open","partial"])
+    .gt("vagas_disponiveis",0)
+    .gte("data",today)
+    .order("data",{ascending:true})
+    .order("hora_inicio",{ascending:true});
+  if(error) throw error;
+  // Filtragem cliente: specs + experiência mínima + assignments existentes
+  const specs = worker.specs || [];
+  const { data: myAssignments } = await supabase.from("assignments")
+    .select("opportunity_id").eq("worker_id", worker.id)
+    .in("status",["confirmed","in_progress","awaiting_review","completed"]);
+  const acceptedIds = new Set((myAssignments||[]).map(a=>a.opportunity_id));
+  return (data||[]).filter(o=>{
+    if(acceptedIds.has(o.id)) return false; // já aceitou
+    if(!specs.includes(o.spec_id)) return false;
+    const tempo = worker.func_exp?.[o.spec_id]?.tempo;
+    const wPts  = (tempo==="Menos de 6 meses"?1:tempo==="6 meses a 1 ano"?2:tempo==="1 a 3 anos"?3:tempo==="3 a 5 anos"?4:tempo==="Mais de 5 anos"?5:0);
+    if((o.exp_minima||0) > wPts) return false;
+    return true;
+  });
+};
+
+const acceptOpportunityByWorker = async (oppId, worker) => {
+  // Re-fetch p/ checar concorrência
+  const { data: opp, error: e0 } = await supabase.from("opportunities").select("*").eq("id",oppId).single();
+  if(e0) throw e0;
+  if(!opp || opp.status==="cancelled" || opp.status==="filled") throw new Error("Esta vaga não está mais disponível.");
+  if(opp.vagas_disponiveis<=0) throw new Error("Sem vagas restantes neste turno.");
+
+  const valor_calculado = parseFloat(opp.valor_bruto) * 0.75;
+  const taxa_vorker     = parseFloat(opp.valor_bruto) * 0.25;
+
+  const { data: assign, error: e1 } = await supabase.from("assignments").insert({
+    opportunity_id: oppId,
+    worker_id: worker.id,
+    status: "confirmed",
+    valor_calculado,
+    taxa_vorker,
+    pix_key_snapshot: worker.pix_key || null,
+  }).select().single();
+  if(e1) {
+    if(e1.code==="23505") throw new Error("Você já aceitou este turno.");
+    throw e1;
+  }
+
+  const newVagas = (opp.vagas_disponiveis||1) - 1;
+  const newStatus = newVagas<=0 ? "filled" : "partial";
+  await supabase.from("opportunities").update({ vagas_disponiveis: newVagas, status: newStatus }).eq("id", oppId);
+  return assign;
+};
+
+const listAssignmentsByWorker = async (workerId) => {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*, opportunity:opportunities(*, company:companies(razao,nome_fant), unit:company_units(nome,bairro,cidade,estado,cep))")
+    .eq("worker_id", workerId)
+    .order("created_at",{ascending:false});
+  if(error) throw error;
+  return data || [];
+};
+
+const cancelAssignmentByWorker = async (assignmentId, worker) => {
+  const { data: a, error: e0 } = await supabase
+    .from("assignments")
+    .select("*, opportunity:opportunities(*)")
+    .eq("id", assignmentId)
+    .single();
+  if(e0) throw e0;
+  if(!a) throw new Error("Turno não encontrado.");
+  const opp = a.opportunity;
+  const start = new Date(`${opp.data}T${opp.hora_inicio}`);
+  const hoursDiff = (start - new Date()) / (1000*60*60);
+  const inPenalty = hoursDiff < 2;
+
+  await supabase.from("assignments").update({
+    status: "cancelled_worker",
+    cancelled_at: new Date().toISOString(),
+    cancel_reason: inPenalty ? "worker_late_cancel" : "worker_early_cancel",
+  }).eq("id", assignmentId);
+
+  const newVagas = Math.min((opp.vagas_disponiveis||0)+1, opp.vagas_total||1);
+  const newStatus = opp.status==="cancelled" ? "cancelled" : (newVagas>=opp.vagas_total ? "open" : "partial");
+  await supabase.from("opportunities").update({
+    vagas_disponiveis: newVagas,
+    status: newStatus,
+  }).eq("id", opp.id);
+
+  let suspended = false;
+  if(inPenalty) {
+    const newCount = (worker.cancels_30d||0) + 1;
+    const upd = { cancels_30d: newCount };
+    if(newCount >= 3) { upd.suspended_until = new Date(Date.now() + 7*24*60*60*1000).toISOString(); suspended = true; }
+    await supabase.from("workers").update(upd).eq("id", worker.id);
+  }
+  return { inPenalty, suspended };
+};
+
 // ─── WORKER DRAFTS ─────────────────────────────────────────────
 const sha256Hex = async (txt) => {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt));
@@ -1113,6 +1217,8 @@ function Landing({ onNav }) {
           .vorker-admin-body{grid-template-columns:1fr!important;gap:12px!important}
           .vorker-day-row{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
           .vorker-exp-grid{grid-template-columns:1fr!important;gap:10px!important}
+          .vorker-app-tabs-lbl{display:none!important}
+          .vorker-myshift-row{grid-template-columns:1fr!important}
           .vorker-worker-detail{grid-template-columns:1fr!important;gap:12px!important}
           .vorker-worker-rail{position:static!important}
           .vorker-worker-head{grid-template-columns:1fr!important;gap:14px!important}
@@ -4735,6 +4841,246 @@ const WInfoLine = ({ icon, label, value }) => (
   </div>
 );
 
+// ─── WORKER · TAB VAGAS PRÓXIMAS (Sprint 2.2.b/c) ───────────────
+function WorkerVagasTab({ worker, setW, flash }) {
+  const [list, setList]     = useState([]);
+  const [loading, setLoad]  = useState(true);
+  const [accepting, setAcc] = useState(null);
+
+  const reload = async () => {
+    setLoad(true);
+    try { const l = await listAvailableOpportunitiesForWorker(worker); setList(l); }
+    catch(e) { console.error(e); flash?.("error","Erro ao carregar vagas."); }
+    finally { setLoad(false); }
+  };
+  useEffect(()=>{ reload(); /* eslint-disable-line */ },[]);
+
+  const isSuspended = worker.suspended_until && new Date(worker.suspended_until) > new Date();
+  const isPending   = worker.status === "pending";
+  const isRejected  = worker.status === "rejected";
+
+  const handleAccept = async (opp) => {
+    if(!confirm(`Aceitar este turno na unidade "${opp.unit?.nome||"—"}" em ${new Date(opp.data+"T00:00").toLocaleDateString("pt-BR")} das ${(opp.hora_inicio||"").slice(0,5)} às ${(opp.hora_fim||"").slice(0,5)}?\n\nValor líquido: R$ ${(parseFloat(opp.valor_bruto)*0.75).toFixed(2).replace(".",",")}`)) return;
+    setAcc(opp.id);
+    try {
+      await acceptOpportunityByWorker(opp.id, worker);
+      flash?.("success","✓ Turno aceito! Confira em Meus turnos.",4500);
+      reload();
+    } catch(e) { flash?.("error", e.message || "Erro ao aceitar turno."); }
+    finally { setAcc(null); }
+  };
+
+  if(isSuspended) return (
+    <div style={{background:C.redBg,border:`1.5px solid ${C.redBorder}`,borderRadius:14,padding:32,textAlign:"center"}}>
+      <div style={{fontSize:36,marginBottom:10}}>⏸</div>
+      <div style={{...H,fontSize:16,fontWeight:800,color:C.red,marginBottom:6}}>Conta suspensa temporariamente</div>
+      <div style={{...B,fontSize:13,color:C.red}}>Você atingiu o limite de cancelamentos com pouca antecedência. Sua conta volta em <strong>{new Date(worker.suspended_until).toLocaleDateString("pt-BR")}</strong>.</div>
+    </div>
+  );
+  if(isPending) return (
+    <div style={{background:"#FEF3C7",border:"1.5px solid #FDE68A",borderRadius:14,padding:32,textAlign:"center"}}>
+      <div style={{fontSize:36,marginBottom:10}}>⏱</div>
+      <div style={{...H,fontSize:16,fontWeight:800,color:"#92400E",marginBottom:6}}>Cadastro em análise</div>
+      <div style={{...B,fontSize:13,color:"#92400E"}}>Assim que sua conta for aprovada pela curadoria Vorker, as vagas próximas vão aparecer aqui.</div>
+    </div>
+  );
+  if(isRejected) return (
+    <div style={{background:C.redBg,border:`1.5px solid ${C.redBorder}`,borderRadius:14,padding:32,textAlign:"center"}}>
+      <div style={{fontSize:36,marginBottom:10}}>✕</div>
+      <div style={{...H,fontSize:16,fontWeight:800,color:C.red,marginBottom:6}}>Cadastro reprovado</div>
+      <div style={{...B,fontSize:13,color:C.red}}>{worker.reject_note||"Entre em contato com o suporte."}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+        <div>
+          <h2 style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:2}}>Vagas próximas</h2>
+          <div style={{...B,fontSize:12,color:C.muted}}>Turnos compatíveis com suas funções e experiência. Quem aceita primeiro leva.</div>
+        </div>
+        <button onClick={reload} disabled={loading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"7px 14px",cursor:loading?"default":"pointer",opacity:loading?.6:1}}>↻ Atualizar</button>
+      </div>
+
+      {loading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Buscando vagas…</div>}
+
+      {!loading && list.length===0 && (
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:48,textAlign:"center"}}>
+          <div style={{fontSize:42,marginBottom:12}}>🌱</div>
+          <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Nenhuma vaga compatível agora</div>
+          <div style={{...B,fontSize:13,color:C.muted,marginBottom:16,lineHeight:1.55}}>Volte mais tarde. Mantenha seu perfil completo (foto, funções com tempo declarado, disponibilidade ampla) pra subir nas recomendações.</div>
+        </div>
+      )}
+
+      {!loading && list.length>0 && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(310px,1fr))",gap:12}}>
+          {list.map(o=>{
+            const spec = SPECS.find(x=>x.id===o.spec_id) || {icon:"⭐",label:o.custom_spec_label||"Função"};
+            const dataLabel = o.data ? new Date(o.data+"T00:00").toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"}) : "—";
+            const horaLabel = `${(o.hora_inicio||"").slice(0,5)}–${(o.hora_fim||"").slice(0,5)}`;
+            const liquido = parseFloat(o.valor_bruto)*0.75;
+            const empresaNome = o.company?.nome_fant || o.company?.razao || "Empresa";
+            const isAcc = accepting === o.id;
+            return (
+              <div key={o.id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:18,display:"flex",flexDirection:"column"}}>
+                <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+                  <span style={{fontSize:22}}>{spec.icon}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{spec.label}</div>
+                    <div style={{...B,fontSize:11,color:C.muted}}>{empresaNome} · {o.unit?.nome||"—"}</div>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,padding:"10px 12px",background:C.bg,borderRadius:8,marginBottom:10}}>
+                  <div>
+                    <div style={{...B,fontSize:10,color:C.muted,marginBottom:2}}>📅 Data</div>
+                    <div style={{...H,fontSize:12.5,fontWeight:700,color:C.navy,textTransform:"capitalize"}}>{dataLabel}</div>
+                  </div>
+                  <div>
+                    <div style={{...B,fontSize:10,color:C.muted,marginBottom:2}}>🕐 Horário</div>
+                    <div style={{...H,fontSize:12.5,fontWeight:700,color:C.navy}}>{horaLabel}</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+                  <span style={{...B,fontSize:11,color:C.muted}}>Você recebe</span>
+                  <div style={{textAlign:"right"}}>
+                    <span style={{...H,fontSize:18,fontWeight:900,color:C.green}}>R$ {liquido.toFixed(2).replace(".",",")}</span>
+                    <div style={{...B,fontSize:10,color:C.muted}}>líquido (já com taxa Vorker)</div>
+                  </div>
+                </div>
+                {o.unit && <div style={{...B,fontSize:11,color:C.sub,marginBottom:10,display:"flex",alignItems:"center",gap:5}}><span>📍</span>{o.unit.bairro}, {o.unit.cidade}/{o.unit.estado}</div>}
+                {o.observacoes && <div style={{...B,fontSize:11,color:C.sub,padding:"6px 9px",background:C.bg,borderRadius:6,marginBottom:10,fontStyle:"italic"}}>"{o.observacoes}"</div>}
+                <button disabled={isAcc} onClick={()=>handleAccept(o)}
+                  style={{...H,fontSize:14,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:9,padding:"12px 14px",cursor:isAcc?"default":"pointer",opacity:isAcc?.6:1,marginTop:"auto"}}>
+                  {isAcc?"Aceitando…":"Aceitar turno"}
+                </button>
+                <div style={{...B,fontSize:10,color:C.muted,textAlign:"center",marginTop:6}}>{o.vagas_disponiveis} de {o.vagas_total} vaga{o.vagas_total>1?"s":""} restante{o.vagas_disponiveis!==1?"s":""}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── WORKER · TAB MEUS TURNOS (Sprint 2.2.d) ────────────────────
+function WorkerShiftsTab({ worker, flash }) {
+  const [list, setList]    = useState([]);
+  const [loading, setLoad] = useState(true);
+  const [cancelling, setCancelling] = useState(null);
+
+  const reload = async () => {
+    setLoad(true);
+    try { setList(await listAssignmentsByWorker(worker.id)); }
+    catch(e) { console.error(e); flash?.("error","Erro ao carregar turnos."); }
+    finally { setLoad(false); }
+  };
+  useEffect(()=>{ reload(); /* eslint-disable-line */ },[]);
+
+  const handleCancel = async (a) => {
+    const opp = a.opportunity;
+    const start = new Date(`${opp.data}T${opp.hora_inicio}`);
+    const hoursDiff = (start - new Date()) / (1000*60*60);
+    let msg = "Cancelar este turno?";
+    if(hoursDiff < 2 && hoursDiff > 0) {
+      msg = `⚠ Faltam apenas ${hoursDiff.toFixed(1)}h pro turno começar. Cancelar agora conta no seu contador (3 cancels com penalidade no mês = suspensão de 7 dias). Continuar?`;
+    } else if(hoursDiff <= 0) {
+      msg = "⚠ O turno já começou. Cancelar agora conta como falta. Continuar?";
+    }
+    if(!confirm(msg)) return;
+    setCancelling(a.id);
+    try {
+      const { inPenalty, suspended } = await cancelAssignmentByWorker(a.id, worker);
+      if(suspended) flash?.("error","⏸ Você foi suspenso por 7 dias por excesso de cancelamentos com pouca antecedência.",7000);
+      else if(inPenalty) flash?.("warning","Cancelado com penalidade. Próximas penalidades podem suspender sua conta.",5000);
+      else flash?.("success","✓ Turno cancelado.",3000);
+      reload();
+    } catch(e) { flash?.("error", e.message || "Erro ao cancelar."); }
+    finally { setCancelling(null); }
+  };
+
+  const STATUS_INFO = {
+    confirmed:         {label:"Confirmado",   bg:C.greenBg, color:C.green,   border:C.greenBorder},
+    in_progress:       {label:"Em andamento", bg:"#DBEAFE", color:"#1D4ED8", border:"#BFDBFE"},
+    awaiting_review:   {label:"Aguardando avaliação", bg:"#FEF3C7", color:"#92400E", border:"#FDE68A"},
+    completed:         {label:"Concluído",    bg:C.bg,      color:C.muted,   border:C.border},
+    cancelled_worker:  {label:"Cancelado por você", bg:C.redBg, color:C.red, border:C.redBorder},
+    cancelled_company: {label:"Cancelado pela empresa", bg:C.redBg, color:C.red, border:C.redBorder},
+    no_show:           {label:"Faltou",       bg:C.redBg,   color:C.red,     border:C.redBorder},
+  };
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+        <div>
+          <h2 style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:2}}>Meus turnos</h2>
+          <div style={{...B,fontSize:12,color:C.muted}}>Turnos aceitos, em andamento e histórico.</div>
+        </div>
+        <button onClick={reload} disabled={loading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"7px 14px",cursor:loading?"default":"pointer",opacity:loading?.6:1}}>↻ Atualizar</button>
+      </div>
+
+      {loading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Carregando…</div>}
+
+      {!loading && list.length===0 && (
+        <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:48,textAlign:"center"}}>
+          <div style={{fontSize:42,marginBottom:12}}>📭</div>
+          <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Você ainda não aceitou turnos</div>
+          <div style={{...B,fontSize:13,color:C.muted}}>Vai em "Vagas próximas" e aceite um turno pra começar.</div>
+        </div>
+      )}
+
+      {!loading && list.length>0 && (
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {list.map(a=>{
+            const opp = a.opportunity;
+            if(!opp) return null;
+            const spec = SPECS.find(x=>x.id===opp.spec_id) || {icon:"⭐",label:opp.custom_spec_label||"Função"};
+            const sti = STATUS_INFO[a.status] || {label:a.status, bg:C.bg, color:C.muted, border:C.border};
+            const dataLabel = opp.data ? new Date(opp.data+"T00:00").toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"2-digit"}) : "—";
+            const horaLabel = `${(opp.hora_inicio||"").slice(0,5)}–${(opp.hora_fim||"").slice(0,5)}`;
+            const empresaNome = opp.company?.nome_fant || opp.company?.razao || "Empresa";
+            const start = new Date(`${opp.data}T${opp.hora_inicio||"00:00"}`);
+            const isFuture = start > new Date();
+            const canCancel = a.status==="confirmed" && isFuture;
+            const isCanc = cancelling === a.id;
+            return (
+              <div key={a.id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:16,display:"grid",gridTemplateColumns:"1fr auto",gap:14,alignItems:"flex-start"}} className="vorker-myshift-row">
+                <div style={{minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+                    <span style={{fontSize:22}}>{spec.icon}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{spec.label}</div>
+                      <div style={{...B,fontSize:11.5,color:C.muted}}>{empresaNome} · {opp.unit?.nome||"—"}</div>
+                    </div>
+                    <span style={{...B,fontSize:10.5,fontWeight:700,color:sti.color,background:sti.bg,border:`1px solid ${sti.border}`,padding:"3px 9px",borderRadius:7,whiteSpace:"nowrap"}}>{sti.label}</span>
+                  </div>
+                  <div style={{display:"flex",gap:14,flexWrap:"wrap",...B,fontSize:12,color:C.sub}}>
+                    <span style={{textTransform:"capitalize"}}>📅 {dataLabel}</span>
+                    <span>🕐 {horaLabel}</span>
+                    <span style={{color:C.green,fontWeight:700}}>💰 R$ {(parseFloat(a.valor_calculado||0)).toFixed(2).replace(".",",")}</span>
+                    {opp.unit && <span>📍 {opp.unit.bairro}, {opp.unit.cidade}/{opp.unit.estado}</span>}
+                  </div>
+                </div>
+                {canCancel && (
+                  <button disabled={isCanc} onClick={()=>handleCancel(a)} style={{...H,fontSize:11.5,fontWeight:700,color:C.red,background:"transparent",border:`1px solid ${C.redBorder}`,borderRadius:7,padding:"7px 12px",cursor:isCanc?"default":"pointer",opacity:isCanc?.6:1,whiteSpace:"nowrap",alignSelf:"flex-start"}}>
+                    {isCanc?"Cancelando…":"Cancelar"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {(worker.cancels_30d||0) > 0 && (
+        <div style={{marginTop:14,padding:"10px 14px",background:"#FEF3C7",border:"1px solid #FDE68A",borderRadius:9,...B,fontSize:11.5,color:"#92400E"}}>
+          ⚠ Você tem <strong>{worker.cancels_30d}</strong> cancelamento{worker.cancels_30d>1?"s":""} com penalidade nos últimos 30 dias. 3 = suspensão de 7 dias.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WorkerProfile({ worker, onLogout, onUpdate }) {
   const [w, setW] = useState(worker);
   const [editing, setEditing] = useState(null);
@@ -4746,6 +5092,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
   const [welcomeShown, setWelcomeShown] = useState(()=>{ try { return !localStorage.getItem("vorker:welcome_dismissed"); } catch { return true; } });
   const [invites, setInvites] = useState([]);
   const [invSaving, setInvSaving] = useState(false);
+  const [workerTab, setWorkerTab] = useState("vagas");
   const fotoRef = useRef(null);
   const selfieRef = useRef(null);
 
@@ -4962,6 +5309,27 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
       <div style={{maxWidth:920,margin:"0 auto"}}>
         {toast && <Alert type={toast.type}>{toast.msg}</Alert>}
 
+        {/* Tabs do app worker */}
+        <div className="vorker-app-tabs" style={{display:"flex",gap:6,background:"#fff",border:`1px solid ${C.border}`,borderRadius:12,padding:5,marginBottom:14}}>
+          {[
+            {id:"vagas",   icon:"📋", label:"Vagas próximas"},
+            {id:"shifts",  icon:"💼", label:"Meus turnos"},
+            {id:"profile", icon:"👤", label:"Meu perfil"},
+          ].map(t=>{
+            const on = workerTab === t.id;
+            return (
+              <button key={t.id} onClick={()=>setWorkerTab(t.id)}
+                style={{flex:1,...H,fontSize:13,fontWeight:on?800:600,color:on?"#fff":C.sub,background:on?C.green:"transparent",border:"none",borderRadius:8,padding:"10px 12px",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s",whiteSpace:"nowrap"}}>
+                <span>{t.icon}</span><span className="vorker-app-tabs-lbl">{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {workerTab==="vagas"   && <WorkerVagasTab worker={w} setW={setW} flash={flash} />}
+        {workerTab==="shifts"  && <WorkerShiftsTab worker={w} flash={flash} />}
+
+        {workerTab==="profile" && (<>
         {welcomeShown && (
           <div style={{background:C.greenBg,border:`1.5px solid ${C.greenBorder}`,borderRadius:12,padding:"16px 18px",marginBottom:14,display:"flex",alignItems:"flex-start",gap:14}}>
             <div style={{fontSize:32,flexShrink:0,lineHeight:1}}>👋</div>
@@ -5441,6 +5809,8 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
             </div>
           )}
         </div>
+
+        </>)}
 
         <div style={{textAlign:"center",marginTop:24}}>
           <Btn label="Sair" variant="ghost" size="md" onClick={onLogout} />
