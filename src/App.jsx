@@ -599,6 +599,7 @@ const acceptOpportunityByWorker = async (oppId, worker) => {
 
   const valor_calculado = parseFloat(opp.valor_bruto) * 0.75;
   const taxa_vorker     = parseFloat(opp.valor_bruto) * 0.25;
+  const check_in_code   = String(Math.floor(1000 + Math.random()*9000));
 
   const { data: assign, error: e1 } = await supabase.from("assignments").insert({
     opportunity_id: oppId,
@@ -606,6 +607,7 @@ const acceptOpportunityByWorker = async (oppId, worker) => {
     status: "confirmed",
     valor_calculado,
     taxa_vorker,
+    check_in_code,
     pix_key_snapshot: worker.pix_key || null,
   }).select().single();
   if(e1) {
@@ -625,6 +627,96 @@ const listAssignmentsByWorker = async (workerId) => {
     .select("*, opportunity:opportunities(*, company:companies(razao,nome_fant), unit:company_units(nome,bairro,cidade,estado,cep))")
     .eq("worker_id", workerId)
     .order("created_at",{ascending:false});
+  if(error) throw error;
+  return data || [];
+};
+
+// Sprint 3 — Check-in / Check-out
+const workerCheckIn = async ({ assignmentId, code, lat, lng }) => {
+  const { data: a, error: e0 } = await supabase
+    .from("assignments")
+    .select("*, opportunity:opportunities(*, unit:company_units(cep))")
+    .eq("id", assignmentId).single();
+  if(e0) throw e0;
+  if(!a) throw new Error("Turno não encontrado.");
+  if(a.status !== "confirmed") throw new Error("Este turno não está disponível pra check-in.");
+  if(String(code).trim() !== String(a.check_in_code)) throw new Error("Código incorreto. Peça o código pra empresa.");
+  // Validação GPS (opcional — não bloqueia se cep falhar)
+  let distKm = null;
+  const cep = a.opportunity?.unit?.cep;
+  if(cep && lat && lng) {
+    try {
+      const uc = await cepToCoords(cep);
+      if(uc) {
+        distKm = haversine(uc.lat, uc.lng, lat, lng);
+        if(distKm > 1) throw new Error(`Você está a ${distKm.toFixed(1)}km da unidade. Aproxime-se pra fazer check-in.`);
+      }
+    } catch(e) {
+      if(e.message?.includes("Você está")) throw e; // re-throw distance error
+      // outros erros (rede, geocoding falhou) — log e segue (não bloqueia MVP)
+      console.warn("GPS validation skipped:", e);
+    }
+  }
+  const { error: e1 } = await supabase.from("assignments").update({
+    status: "in_progress",
+    check_in_at: new Date().toISOString(),
+    check_in_lat: lat || null,
+    check_in_lng: lng || null,
+  }).eq("id", assignmentId);
+  if(e1) throw e1;
+  return { distKm };
+};
+
+const workerCheckOut = async ({ assignmentId, code }) => {
+  const { data: a, error: e0 } = await supabase.from("assignments").select("*").eq("id", assignmentId).single();
+  if(e0) throw e0;
+  if(!a) throw new Error("Turno não encontrado.");
+  if(a.status !== "in_progress") throw new Error("Você precisa estar em check-in pra finalizar.");
+  if(String(code).trim() !== String(a.check_in_code)) throw new Error("Código incorreto.");
+  const checkOutAt = new Date();
+  const checkInAt  = a.check_in_at ? new Date(a.check_in_at) : null;
+  const horasReais = checkInAt ? Math.round(((checkOutAt - checkInAt)/(1000*60*60))*100)/100 : null;
+  const { error: e1 } = await supabase.from("assignments").update({
+    status: "awaiting_review",
+    check_out_at: checkOutAt.toISOString(),
+    horas_trabalhadas: horasReais,
+  }).eq("id", assignmentId);
+  if(e1) throw e1;
+};
+
+// Sprint 3 — Avaliação
+const submitRating = async ({ assignmentId, rater, stars, comment, visibility="private" }) => {
+  const { error: e1 } = await supabase.from("ratings").insert({
+    assignment_id: assignmentId, rater, stars, comment: comment||null, visibility,
+  });
+  if(e1) {
+    if(e1.code==="23505") throw new Error("Você já avaliou este turno.");
+    throw e1;
+  }
+  // Quando empresa avalia: marca assignment como completed + atualiza rating_avg do worker
+  if(rater === "company") {
+    const { data: a } = await supabase.from("assignments").select("worker_id").eq("id", assignmentId).single();
+    const workerId = a?.worker_id;
+    await supabase.from("assignments").update({ status:"completed" }).eq("id", assignmentId);
+    if(workerId) {
+      const { data: ids } = await supabase.from("assignments").select("id").eq("worker_id", workerId);
+      const assignIds = (ids||[]).map(x=>x.id);
+      if(assignIds.length>0) {
+        const { data: rs } = await supabase.from("ratings").select("stars").in("assignment_id", assignIds).eq("rater","company");
+        const arr = (rs||[]);
+        const avg = arr.length>0 ? Math.round((arr.reduce((s,r)=>s+r.stars,0)/arr.length)*100)/100 : null;
+        await supabase.from("workers").update({ rating_avg: avg, total_atendimentos: arr.length }).eq("id", workerId);
+      }
+    }
+  }
+};
+
+const listAssignmentsByOpportunity = async (oppId) => {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*, worker:workers(id,nome,foto_rosto,telefone,rating_avg)")
+    .eq("opportunity_id", oppId)
+    .order("created_at",{ascending:true});
   if(error) throw error;
   return data || [];
 };
@@ -3430,6 +3522,47 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     finally { setSavingShift(false); }
   };
 
+  // Sprint 3 — modal de acompanhamento de turno (vê workers, código, status, avaliar)
+  const [oppDetail, setOppDetail] = useState(null);   // {opp} | null
+  const [oppAssigns, setOppAssigns] = useState([]);
+  const [oppAssignsLoading, setOppAssignsLoading] = useState(false);
+  const [rateAssignment, setRateAssignment] = useState(null); // {assignment, opp} | null
+  const [rateStars, setRateStars] = useState(0);
+  const [rateComment, setRateComment] = useState("");
+  const [rateLoading, setRateLoading] = useState(false);
+
+  const openOppDetail = async (opp) => {
+    setOppDetail({opp});
+    setOppAssigns([]);
+    setOppAssignsLoading(true);
+    try { setOppAssigns(await listAssignmentsByOpportunity(opp.id)); }
+    catch(e) { console.error(e); }
+    finally { setOppAssignsLoading(false); }
+  };
+  const reloadOppAssigns = async () => {
+    if(!oppDetail?.opp?.id) return;
+    setOppAssignsLoading(true);
+    try { setOppAssigns(await listAssignmentsByOpportunity(oppDetail.opp.id)); }
+    finally { setOppAssignsLoading(false); }
+  };
+
+  const submitRateWorker = async () => {
+    if(rateStars<1) { alert("Escolha de 1 a 5 estrelas."); return; }
+    setRateLoading(true);
+    try {
+      await submitRating({
+        assignmentId: rateAssignment.assignment.id,
+        rater: "company",
+        stars: rateStars,
+        comment: rateComment.trim() || null,
+        visibility: "private",
+      });
+      setRateAssignment(null); setRateStars(0); setRateComment("");
+      await reloadOppAssigns();
+    } catch(e) { alert("Erro ao avaliar: "+(e.message||e)); }
+    finally { setRateLoading(false); }
+  };
+
   const cancelShift = async (id, dataStr, horaIni) => {
     const start = new Date(`${dataStr}T${horaIni}:00`);
     const hoursDiff = (start - new Date()) / (1000*60*60);
@@ -4237,9 +4370,12 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                       {s.exp_minima>0 && <span style={{...B,fontSize:10.5,color:C.muted}}>Exp. min.: {s.exp_minima===2?"6m":s.exp_minima===3?"1a":s.exp_minima===4?"3a":"5a"}+</span>}
                     </div>
                     {s.observacoes && <div style={{...B,fontSize:11.5,color:C.sub,padding:"6px 10px",background:C.bg,borderRadius:6,marginBottom:10,fontStyle:"italic"}}>"{s.observacoes}"</div>}
-                    {isCancellable && (
-                      <button onClick={()=>cancelShift(s.id, s.data, s.hora_inicio)} style={{...H,fontSize:12,fontWeight:700,color:C.red,background:"transparent",border:`1px solid ${C.redBorder}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",width:"100%"}}>Cancelar turno</button>
-                    )}
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      <button onClick={()=>openOppDetail(s)} style={{flex:1,...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"8px 10px",cursor:"pointer",whiteSpace:"nowrap"}}>👥 Ver acompanhamento</button>
+                      {isCancellable && (
+                        <button onClick={()=>cancelShift(s.id, s.data, s.hora_inicio)} style={{flex:1,...H,fontSize:12,fontWeight:700,color:C.red,background:"transparent",border:`1px solid ${C.redBorder}`,borderRadius:8,padding:"8px 10px",cursor:"pointer",whiteSpace:"nowrap"}}>Cancelar</button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -4292,6 +4428,105 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                 <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
                   <button disabled={savingShift} onClick={()=>setNewShiftOpen(false)} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:savingShift?"default":"pointer",opacity:savingShift?.6:1}}>Cancelar</button>
                   <button disabled={savingShift} onClick={submitNewShift} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:8,padding:"10px 18px",cursor:savingShift?"default":"pointer",opacity:savingShift?.6:1}}>{savingShift?"Publicando…":"Publicar turno"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: acompanhamento do turno (workers + código + status) */}
+          {oppDetail && !rateAssignment && (()=>{
+            const opp = oppDetail.opp;
+            const spec = SPECS.find(x=>x.id===opp.spec_id) || {icon:"⭐",label:opp.custom_spec_label||"Função"};
+            const dataLabel = opp.data ? new Date(opp.data+"T00:00").toLocaleDateString("pt-BR") : "—";
+            const horaLabel = `${(opp.hora_inicio||"").slice(0,5)}–${(opp.hora_fim||"").slice(0,5)}`;
+            const ASTATUS = {
+              confirmed:         {label:"Confirmado",       color:C.green,   bg:C.greenBg},
+              in_progress:       {label:"Em andamento",     color:"#1D4ED8", bg:"#DBEAFE"},
+              awaiting_review:   {label:"Aguardando avaliação", color:"#92400E", bg:"#FEF3C7"},
+              completed:         {label:"Concluído",        color:C.muted,   bg:C.bg},
+              cancelled_worker:  {label:"Cancelado pelo worker", color:C.red, bg:C.redBg},
+              cancelled_company: {label:"Cancelado pela empresa", color:C.red, bg:C.redBg},
+              no_show:           {label:"Falta",            color:C.red,     bg:C.redBg},
+            };
+            return (
+              <div onClick={()=>setOppDetail(null)} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+                <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:24,maxWidth:600,width:"100%",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                    <div>
+                      <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:3,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:22}}>{spec.icon}</span>{spec.label}</h3>
+                      <div style={{...B,fontSize:12,color:C.muted}}>{opp.unit?.nome||"—"} · {dataLabel} · {horaLabel}</div>
+                    </div>
+                    <button onClick={()=>setOppDetail(null)} style={{background:"none",border:"none",fontSize:22,color:C.muted,cursor:"pointer",lineHeight:1}}>×</button>
+                  </div>
+
+                  {oppAssignsLoading && <div style={{...B,fontSize:12,color:C.muted,padding:24,textAlign:"center"}}>Carregando workers…</div>}
+
+                  {!oppAssignsLoading && oppAssigns.length===0 && (
+                    <div style={{padding:32,textAlign:"center"}}>
+                      <div style={{fontSize:38,marginBottom:10}}>🌱</div>
+                      <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:4}}>Nenhum worker aceitou ainda</div>
+                      <div style={{...B,fontSize:12,color:C.muted}}>Workers compatíveis verão a vaga no feed deles.</div>
+                    </div>
+                  )}
+
+                  {!oppAssignsLoading && oppAssigns.length>0 && (
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {oppAssigns.map(a=>{
+                        const w = a.worker;
+                        const sti = ASTATUS[a.status] || {label:a.status,color:C.muted,bg:C.bg};
+                        const showCode = a.status==="confirmed" || a.status==="in_progress";
+                        return (
+                          <div key={a.id} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:14}}>
+                            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+                              {w?.foto_rosto ? <img src={w.foto_rosto} alt="" style={{width:42,height:42,borderRadius:21,objectFit:"cover"}} /> : <div style={{width:42,height:42,borderRadius:21,background:C.green,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{...H,fontSize:16,fontWeight:900,color:"#fff"}}>{w?.nome?.[0]||"?"}</span></div>}
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{...H,fontSize:14,fontWeight:800,color:C.navy}}>{w?.nome||"Worker"}</div>
+                                <div style={{...B,fontSize:11,color:C.muted}}>{w?.telefone||"—"}{w?.rating_avg ? <> · ★ {w.rating_avg}</> : null}</div>
+                              </div>
+                              <span style={{...B,fontSize:10.5,fontWeight:700,color:sti.color,background:sti.bg,border:`1px solid ${sti.color}40`,padding:"3px 9px",borderRadius:7,whiteSpace:"nowrap"}}>{sti.label}</span>
+                            </div>
+                            {showCode && (
+                              <div style={{padding:"10px 14px",background:"#fff",border:`1.5px dashed ${C.green}`,borderRadius:8,marginBottom:8,textAlign:"center"}}>
+                                <div style={{...B,fontSize:10.5,color:C.muted,marginBottom:3,textTransform:"uppercase",letterSpacing:.4,fontWeight:600}}>Código de check-in/out</div>
+                                <div style={{...H,fontSize:26,fontWeight:900,color:C.green,letterSpacing:8}}>{a.check_in_code||"—"}</div>
+                                <div style={{...B,fontSize:10.5,color:C.muted,marginTop:4}}>Compartilhe com o worker quando ele chegar.</div>
+                              </div>
+                            )}
+                            {a.check_in_at && (
+                              <div style={{...B,fontSize:11,color:C.sub,marginBottom:6}}>
+                                ✓ Check-in: {new Date(a.check_in_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
+                                {a.check_out_at && <> · Check-out: {new Date(a.check_out_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} ({a.horas_trabalhadas}h)</>}
+                              </div>
+                            )}
+                            {a.status==="awaiting_review" && (
+                              <button onClick={()=>{setRateAssignment({assignment:a,opp});setRateStars(0);setRateComment("");}} style={{...H,fontSize:12,fontWeight:800,color:"#fff",background:"#92400E",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",width:"100%"}}>★ Avaliar este worker</button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Modal: avaliar worker */}
+          {rateAssignment && (
+            <div onClick={()=>!rateLoading&&setRateAssignment(null)} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+              <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:24,maxWidth:460,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+                <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:6}}>★ Avaliar {rateAssignment.assignment.worker?.nome?.split(" ")[0]||"este worker"}</h3>
+                <p style={{...B,fontSize:12.5,color:C.sub,lineHeight:1.55,marginBottom:14}}>Como foi o desempenho dele(a) neste turno? Sua avaliação fica privada (só a curadoria Vorker vê).</p>
+                <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:14}}>
+                  {[1,2,3,4,5].map(n=>(
+                    <button key={n} onClick={()=>setRateStars(n)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:36,padding:4,lineHeight:1,color:n<=rateStars?"#FBBF24":"#CBD5E1"}}>★</button>
+                  ))}
+                </div>
+                <textarea value={rateComment} onChange={e=>setRateComment(e.target.value)} placeholder="Comentário (opcional, privado)" maxLength={400}
+                  style={{width:"100%",minHeight:80,padding:"10px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,...B,fontSize:13,marginBottom:14,outline:"none",resize:"vertical",fontFamily:"inherit"}} />
+                <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+                  <button disabled={rateLoading} onClick={()=>setRateAssignment(null)} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:rateLoading?"default":"pointer",opacity:rateLoading?.6:1}}>Cancelar</button>
+                  <button disabled={rateLoading} onClick={submitRateWorker} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:"#92400E",border:"none",borderRadius:8,padding:"10px 18px",cursor:rateLoading?"default":"pointer",opacity:rateLoading?.6:1}}>{rateLoading?"Enviando…":"Enviar avaliação"}</button>
                 </div>
               </div>
             </div>
@@ -4963,11 +5198,19 @@ function WorkerVagasTab({ worker, setW, flash }) {
   );
 }
 
-// ─── WORKER · TAB MEUS TURNOS (Sprint 2.2.d) ────────────────────
+// ─── WORKER · TAB MEUS TURNOS (Sprint 2.2.d + Sprint 3) ─────────
 function WorkerShiftsTab({ worker, flash }) {
   const [list, setList]    = useState([]);
   const [loading, setLoad] = useState(true);
   const [cancelling, setCancelling] = useState(null);
+  // Sprint 3: modais
+  const [checkInModal, setCheckInModal] = useState(null);   // {assignment} | null
+  const [checkOutModal, setCheckOutModal] = useState(null); // {assignment} | null
+  const [rateModal, setRateModal] = useState(null);         // {assignment} | null
+  const [modalCode, setModalCode] = useState("");
+  const [modalStars, setModalStars] = useState(0);
+  const [modalComment, setModalComment] = useState("");
+  const [modalLoading, setModalLoading] = useState(false);
 
   const reload = async () => {
     setLoad(true);
@@ -4976,6 +5219,60 @@ function WorkerShiftsTab({ worker, flash }) {
     finally { setLoad(false); }
   };
   useEffect(()=>{ reload(); /* eslint-disable-line */ },[]);
+
+  const openCheckIn = (a) => { setModalCode(""); setCheckInModal({assignment:a}); };
+  const openCheckOut = (a) => { setModalCode(""); setCheckOutModal({assignment:a}); };
+  const openRate = (a) => { setModalCode(""); setModalStars(0); setModalComment(""); setRateModal({assignment:a}); };
+  const closeAll = () => { setCheckInModal(null); setCheckOutModal(null); setRateModal(null); };
+
+  const submitCheckIn = async () => {
+    if(!modalCode || modalCode.length<4) { flash?.("error","Digite o código de 4 dígitos."); return; }
+    setModalLoading(true);
+    try {
+      // Captura GPS do navegador
+      const pos = await new Promise((res, rej) => {
+        if(!navigator.geolocation) return rej(new Error("Seu dispositivo não suporta geolocalização."));
+        navigator.geolocation.getCurrentPosition(p=>res(p), e=>rej(new Error("Permita o acesso à localização pra fazer check-in.")), {timeout:10000,enableHighAccuracy:true});
+      });
+      await workerCheckIn({
+        assignmentId: checkInModal.assignment.id,
+        code: modalCode,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      });
+      flash?.("success","✓ Check-in realizado! Bom turno.",4000);
+      closeAll(); reload();
+    } catch(e) { flash?.("error", e.message || "Erro no check-in."); }
+    finally { setModalLoading(false); }
+  };
+
+  const submitCheckOut = async () => {
+    if(!modalCode || modalCode.length<4) { flash?.("error","Digite o código de 4 dígitos."); return; }
+    setModalLoading(true);
+    try {
+      await workerCheckOut({ assignmentId: checkOutModal.assignment.id, code: modalCode });
+      flash?.("success","✓ Check-out feito! A empresa vai te avaliar e o pagamento entra na sua próxima semana.",5500);
+      closeAll(); reload();
+    } catch(e) { flash?.("error", e.message || "Erro no check-out."); }
+    finally { setModalLoading(false); }
+  };
+
+  const submitRate = async () => {
+    if(modalStars<1) { flash?.("error","Escolha de 1 a 5 estrelas."); return; }
+    setModalLoading(true);
+    try {
+      await submitRating({
+        assignmentId: rateModal.assignment.id,
+        rater: "worker",
+        stars: modalStars,
+        comment: modalComment.trim() || null,
+        visibility: "private",
+      });
+      flash?.("success","✓ Obrigado pela avaliação!",4000);
+      closeAll(); reload();
+    } catch(e) { flash?.("error", e.message || "Erro ao avaliar."); }
+    finally { setModalLoading(false); }
+  };
 
   const handleCancel = async (a) => {
     const opp = a.opportunity;
@@ -5040,8 +5337,14 @@ function WorkerShiftsTab({ worker, flash }) {
             const horaLabel = `${(opp.hora_inicio||"").slice(0,5)}–${(opp.hora_fim||"").slice(0,5)}`;
             const empresaNome = opp.company?.nome_fant || opp.company?.razao || "Empresa";
             const start = new Date(`${opp.data}T${opp.hora_inicio||"00:00"}`);
-            const isFuture = start > new Date();
+            const end   = new Date(`${opp.data}T${opp.hora_fim||"23:59"}`);
+            const now   = new Date();
+            const isFuture = start > now;
             const canCancel = a.status==="confirmed" && isFuture;
+            // Janela de check-in: de -60min antes do início a +60min depois do fim
+            const inCheckInWindow = a.status==="confirmed" && (start - now)/60000 <= 60 && (now - end)/60000 <= 60;
+            const canCheckOut = a.status==="in_progress";
+            const canRate     = a.status==="awaiting_review";
             const isCanc = cancelling === a.id;
             return (
               <div key={a.id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:16,display:"grid",gridTemplateColumns:"1fr auto",gap:14,alignItems:"flex-start"}} className="vorker-myshift-row">
@@ -5054,21 +5357,92 @@ function WorkerShiftsTab({ worker, flash }) {
                     </div>
                     <span style={{...B,fontSize:10.5,fontWeight:700,color:sti.color,background:sti.bg,border:`1px solid ${sti.border}`,padding:"3px 9px",borderRadius:7,whiteSpace:"nowrap"}}>{sti.label}</span>
                   </div>
-                  <div style={{display:"flex",gap:14,flexWrap:"wrap",...B,fontSize:12,color:C.sub}}>
+                  <div style={{display:"flex",gap:14,flexWrap:"wrap",...B,fontSize:12,color:C.sub,marginBottom:a.check_in_at?6:0}}>
                     <span style={{textTransform:"capitalize"}}>📅 {dataLabel}</span>
                     <span>🕐 {horaLabel}</span>
                     <span style={{color:C.green,fontWeight:700}}>💰 R$ {(parseFloat(a.valor_calculado||0)).toFixed(2).replace(".",",")}</span>
                     {opp.unit && <span>📍 {opp.unit.bairro}, {opp.unit.cidade}/{opp.unit.estado}</span>}
                   </div>
+                  {a.check_in_at && (
+                    <div style={{...B,fontSize:11,color:C.muted,marginTop:4}}>
+                      Check-in: {new Date(a.check_in_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
+                      {a.check_out_at && <> · Check-out: {new Date(a.check_out_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} · {a.horas_trabalhadas}h</>}
+                    </div>
+                  )}
                 </div>
-                {canCancel && (
-                  <button disabled={isCanc} onClick={()=>handleCancel(a)} style={{...H,fontSize:11.5,fontWeight:700,color:C.red,background:"transparent",border:`1px solid ${C.redBorder}`,borderRadius:7,padding:"7px 12px",cursor:isCanc?"default":"pointer",opacity:isCanc?.6:1,whiteSpace:"nowrap",alignSelf:"flex-start"}}>
-                    {isCanc?"Cancelando…":"Cancelar"}
-                  </button>
-                )}
+                <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
+                  {inCheckInWindow && (
+                    <button onClick={()=>openCheckIn(a)} style={{...H,fontSize:12,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>📍 Fazer check-in</button>
+                  )}
+                  {canCheckOut && (
+                    <button onClick={()=>openCheckOut(a)} style={{...H,fontSize:12,fontWeight:800,color:"#fff",background:"#1D4ED8",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>✓ Finalizar (check-out)</button>
+                  )}
+                  {canRate && (
+                    <button onClick={()=>openRate(a)} style={{...H,fontSize:12,fontWeight:800,color:"#fff",background:"#92400E",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>★ Avaliar empresa</button>
+                  )}
+                  {canCancel && (
+                    <button disabled={isCanc} onClick={()=>handleCancel(a)} style={{...H,fontSize:11.5,fontWeight:700,color:C.red,background:"transparent",border:`1px solid ${C.redBorder}`,borderRadius:7,padding:"7px 12px",cursor:isCanc?"default":"pointer",opacity:isCanc?.6:1,whiteSpace:"nowrap"}}>
+                      {isCanc?"Cancelando…":"Cancelar"}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal: Check-in */}
+      {checkInModal && (
+        <div onClick={()=>!modalLoading&&closeAll()} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:24,maxWidth:420,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+            <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:6}}>📍 Fazer check-in</h3>
+            <p style={{...B,fontSize:12.5,color:C.sub,lineHeight:1.55,marginBottom:14}}>Peça o <strong style={{color:C.navy}}>código de 4 dígitos</strong> pra empresa quando chegar na unidade. Vamos confirmar a localização do seu celular.</p>
+            <input value={modalCode} onChange={e=>setModalCode(e.target.value.replace(/\D/g,"").slice(0,4))} maxLength={4} inputMode="numeric" placeholder="0000"
+              style={{width:"100%",padding:"14px",borderRadius:9,border:`1.5px solid ${C.border2}`,...H,fontSize:24,fontWeight:900,textAlign:"center",letterSpacing:8,marginBottom:14,outline:"none",color:C.navy}} />
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button disabled={modalLoading} onClick={closeAll} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:modalLoading?"default":"pointer",opacity:modalLoading?.6:1}}>Cancelar</button>
+              <button disabled={modalLoading} onClick={submitCheckIn} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:8,padding:"10px 18px",cursor:modalLoading?"default":"pointer",opacity:modalLoading?.6:1}}>{modalLoading?"Validando…":"Confirmar"}</button>
+            </div>
+            <div style={{...B,fontSize:10.5,color:C.muted,marginTop:10,fontStyle:"italic",textAlign:"center"}}>O navegador vai pedir permissão pra acessar a localização — autorize.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Check-out */}
+      {checkOutModal && (
+        <div onClick={()=>!modalLoading&&closeAll()} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:24,maxWidth:420,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+            <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:6}}>✓ Finalizar turno</h3>
+            <p style={{...B,fontSize:12.5,color:C.sub,lineHeight:1.55,marginBottom:14}}>Digite o mesmo código pra confirmar o fim do turno. Após isso, a empresa vai te avaliar.</p>
+            <input value={modalCode} onChange={e=>setModalCode(e.target.value.replace(/\D/g,"").slice(0,4))} maxLength={4} inputMode="numeric" placeholder="0000"
+              style={{width:"100%",padding:"14px",borderRadius:9,border:`1.5px solid ${C.border2}`,...H,fontSize:24,fontWeight:900,textAlign:"center",letterSpacing:8,marginBottom:14,outline:"none",color:C.navy}} />
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button disabled={modalLoading} onClick={closeAll} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:modalLoading?"default":"pointer",opacity:modalLoading?.6:1}}>Cancelar</button>
+              <button disabled={modalLoading} onClick={submitCheckOut} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:"#1D4ED8",border:"none",borderRadius:8,padding:"10px 18px",cursor:modalLoading?"default":"pointer",opacity:modalLoading?.6:1}}>{modalLoading?"Confirmando…":"Confirmar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Avaliar empresa */}
+      {rateModal && (
+        <div onClick={()=>!modalLoading&&closeAll()} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:24,maxWidth:460,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+            <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:6}}>★ Avaliar a empresa</h3>
+            <p style={{...B,fontSize:12.5,color:C.sub,lineHeight:1.55,marginBottom:14}}>Como foi o atendimento e organização desta empresa? Sua avaliação ajuda outros Vorkers e o time de curadoria.</p>
+            <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:14}}>
+              {[1,2,3,4,5].map(n=>(
+                <button key={n} onClick={()=>setModalStars(n)} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:36,padding:4,lineHeight:1,color:n<=modalStars?"#FBBF24":"#CBD5E1"}}>★</button>
+              ))}
+            </div>
+            <textarea value={modalComment} onChange={e=>setModalComment(e.target.value)} placeholder="Comentário (opcional, privado)" maxLength={400}
+              style={{width:"100%",minHeight:80,padding:"10px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,...B,fontSize:13,marginBottom:14,outline:"none",resize:"vertical",fontFamily:"inherit"}} />
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button disabled={modalLoading} onClick={closeAll} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:modalLoading?"default":"pointer",opacity:modalLoading?.6:1}}>Cancelar</button>
+              <button disabled={modalLoading} onClick={submitRate} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:"#92400E",border:"none",borderRadius:8,padding:"10px 18px",cursor:modalLoading?"default":"pointer",opacity:modalLoading?.6:1}}>{modalLoading?"Enviando…":"Enviar avaliação"}</button>
+            </div>
+          </div>
         </div>
       )}
 
