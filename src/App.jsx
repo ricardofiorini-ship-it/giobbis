@@ -711,6 +711,62 @@ const submitRating = async ({ assignmentId, rater, stars, comment, visibility="p
   }
 };
 
+// Sprint 4 — Pagamento
+const getWeekRange = (date = new Date()) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const mondayOffset = day === 0 ? 6 : day - 1;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - mondayOffset);
+  monday.setHours(0,0,0,0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23,59,59,999);
+  return { monday, sunday };
+};
+const getNextFriday = (date = new Date()) => {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun..6=Sat
+  // próximo pagamento: sexta da semana SEGUINTE ao trabalho
+  // Lógica: se hoje é seg-qui, pagamento é sexta dessa semana. Se sex-dom, pagamento é sexta da próxima.
+  let daysUntilFriday;
+  if (day < 5) daysUntilFriday = 5 - day;        // seg(1)→sex=4, ter(2)→sex=3, etc
+  else daysUntilFriday = 7 - day + 5;            // sex(5)→7, sáb(6)→6, dom(0 já tratado)
+  if (day === 0) daysUntilFriday = 5;            // domingo → sexta = 5 dias
+  const fri = new Date(d);
+  fri.setDate(d.getDate() + daysUntilFriday);
+  fri.setHours(0,0,0,0);
+  return fri;
+};
+const listPendingPayouts = async () => {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*, worker:workers(id,nome,foto_rosto,pix_key,pix_key_type,telefone), opportunity:opportunities(data,hora_inicio,hora_fim,spec_id,custom_spec_label,unit:company_units(nome,bairro,cidade,estado),company:companies(razao,nome_fant))")
+    .eq("status","completed")
+    .is("paid_at", null)
+    .order("created_at",{ascending:true});
+  if(error) throw error;
+  return data || [];
+};
+const listPaidPayouts = async (limit=50) => {
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("*, worker:workers(id,nome,foto_rosto), opportunity:opportunities(data,company:companies(razao,nome_fant))")
+    .eq("status","completed")
+    .not("paid_at","is",null)
+    .order("paid_at",{ascending:false})
+    .limit(limit);
+  if(error) throw error;
+  return data || [];
+};
+const markAssignmentsPaid = async (assignmentIds) => {
+  if(!assignmentIds?.length) return;
+  const { error } = await supabase.from("assignments")
+    .update({ paid_at: new Date().toISOString(), paid_via: "pix" })
+    .in("id", assignmentIds);
+  if(error) throw error;
+};
+
 const listAssignmentsByOpportunity = async (oppId) => {
   const { data, error } = await supabase
     .from("assignments")
@@ -1311,6 +1367,7 @@ function Landing({ onNav }) {
           .vorker-exp-grid{grid-template-columns:1fr!important;gap:10px!important}
           .vorker-app-tabs-lbl{display:none!important}
           .vorker-myshift-row{grid-template-columns:1fr!important}
+          .vorker-receber-card{grid-template-columns:1fr!important}
           .vorker-worker-detail{grid-template-columns:1fr!important;gap:12px!important}
           .vorker-worker-rail{position:static!important}
           .vorker-worker-head{grid-template-columns:1fr!important;gap:14px!important}
@@ -2608,6 +2665,47 @@ function AdminPanel({ onLogout }) {
   const pending_wo  = workers.filter(w=>w.status==="pending").length;
   const approved_co = companies.filter(c=>c.status==="approved").length;
   const overdue     = companies.filter(c=>c.pay_status==="overdue").length;
+
+  // Sprint 4 — Pagamentos
+  const [pendingPayouts, setPendingPayouts] = useState([]);
+  const [paidPayouts, setPaidPayouts]       = useState([]);
+  const [payoutsLoading, setPayoutsLoading] = useState(false);
+  const [payingWorkerId, setPayingWorkerId] = useState(null);
+  const loadPayouts = async () => {
+    setPayoutsLoading(true);
+    try {
+      const [p, h] = await Promise.all([listPendingPayouts(), listPaidPayouts(50)]);
+      setPendingPayouts(p);
+      setPaidPayouts(h);
+    } catch(e) { console.error(e); }
+    finally { setPayoutsLoading(false); }
+  };
+  useEffect(()=>{ if(tab==="payouts") loadPayouts(); /* eslint-disable-line */ },[tab]);
+
+  const pendingByWorker = (() => {
+    const map = new Map();
+    for(const a of pendingPayouts) {
+      const wid = a.worker?.id || a.worker_id;
+      if(!wid) continue;
+      if(!map.has(wid)) map.set(wid, {worker:a.worker, total:0, items:[]});
+      const g = map.get(wid);
+      g.total += parseFloat(a.valor_calculado||0);
+      g.items.push(a);
+    }
+    return [...map.values()].sort((a,b)=>b.total-a.total);
+  })();
+
+  const totalPending = pendingByWorker.reduce((s,g)=>s+g.total,0);
+
+  const payAllForWorker = async (workerId, items) => {
+    if(!confirm(`Confirma pagamento de R$ ${items.reduce((s,a)=>s+parseFloat(a.valor_calculado||0),0).toFixed(2).replace(".",",")} para ${items[0]?.worker?.nome||"este worker"} via PIX?`)) return;
+    setPayingWorkerId(workerId);
+    try {
+      await markAssignmentsPaid(items.map(a=>a.id));
+      await loadPayouts();
+    } catch(e) { alert("Erro ao marcar como pago: "+(e.message||e)); }
+    finally { setPayingWorkerId(null); }
+  };
   const fmtDate     = iso => iso?new Date(iso).toLocaleDateString("pt-BR"):"—";
   const levelColors = ["#9CA3AF","#60A5FA","#FBBF24","#F97316","#16A34A"];
   const levelWidth  = [0,25,50,75,100];
@@ -2616,6 +2714,7 @@ function AdminPanel({ onLogout }) {
     {id:"dashboard",icon:"📊",label:"Dashboard"},
     {id:"companies",icon:"🏢",label:`Empresas${pending_co>0?` (${pending_co})`:""}`},
     {id:"workers",  icon:"👥",label:`Colaboradores${pending_wo>0?` (${pending_wo})`:""}`},
+    {id:"payouts",  icon:"💰",label:"Pagamentos"},
     {id:"billing",  icon:"💳",label:"Cobranças"},
   ];
 
@@ -3322,6 +3421,124 @@ function AdminPanel({ onLogout }) {
           </div>
           );
         })()}
+
+        {/* TAB: PAGAMENTOS — Sprint 4 */}
+        {tab==="payouts"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:12,flexWrap:"wrap"}}>
+              <div>
+                <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>Pagamentos a workers</h2>
+                <div style={{...B,fontSize:13,color:C.muted}}>Workers com turnos concluídos aguardando repasse via PIX. Vorker garante o pagamento.</div>
+              </div>
+              <button onClick={loadPayouts} disabled={payoutsLoading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"8px 14px",cursor:payoutsLoading?"default":"pointer",opacity:payoutsLoading?.6:1}}>↻ Atualizar</button>
+            </div>
+
+            {/* Resumo */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:18}}>
+              <div style={{background:`linear-gradient(135deg, ${C.green} 0%, #16A34A 100%)`,borderRadius:12,padding:"16px 20px",color:"#fff",boxShadow:"0 4px 16px rgba(22,163,74,.25)"}}>
+                <div style={{...B,fontSize:11,fontWeight:700,opacity:.9,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Total a pagar</div>
+                <div style={{...H,fontSize:26,fontWeight:900,letterSpacing:-1,lineHeight:1}}>R$ {totalPending.toFixed(2).replace(".",",")}</div>
+                <div style={{...B,fontSize:11,opacity:.85,marginTop:4}}>{pendingByWorker.length} worker{pendingByWorker.length!==1?"s":""}</div>
+              </div>
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px 20px"}}>
+                <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Turnos pendentes</div>
+                <div style={{...H,fontSize:26,fontWeight:900,color:C.navy,letterSpacing:-1,lineHeight:1}}>{pendingPayouts.length}</div>
+                <div style={{...B,fontSize:11,color:C.muted,marginTop:4}}>concluídos sem pagamento</div>
+              </div>
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:"16px 20px"}}>
+                <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Histórico</div>
+                <div style={{...H,fontSize:26,fontWeight:900,color:C.navy,letterSpacing:-1,lineHeight:1}}>{paidPayouts.length}</div>
+                <div style={{...B,fontSize:11,color:C.muted,marginTop:4}}>pagamentos confirmados</div>
+              </div>
+            </div>
+
+            {payoutsLoading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Carregando pagamentos…</div>}
+
+            {!payoutsLoading && pendingByWorker.length===0 && (
+              <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:48,textAlign:"center",marginBottom:18}}>
+                <div style={{fontSize:42,marginBottom:12}}>✓</div>
+                <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Nenhum pagamento pendente</div>
+                <div style={{...B,fontSize:13,color:C.muted}}>Todos os workers com turnos concluídos já foram pagos.</div>
+              </div>
+            )}
+
+            {/* Lista por worker */}
+            {!payoutsLoading && pendingByWorker.length>0 && (
+              <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:24}}>
+                {pendingByWorker.map(g=>{
+                  const w = g.worker;
+                  const isPaying = payingWorkerId === (w?.id);
+                  return (
+                    <div key={w?.id} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:18}}>
+                      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+                        {w?.foto_rosto ? <img src={w.foto_rosto} alt="" style={{width:48,height:48,borderRadius:24,objectFit:"cover"}} /> : <div style={{width:48,height:48,borderRadius:24,background:C.green,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{...H,fontSize:18,fontWeight:900,color:"#fff"}}>{w?.nome?.[0]||"?"}</span></div>}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{...H,fontSize:15,fontWeight:800,color:C.navy}}>{w?.nome||"Worker"}</div>
+                          <div style={{...B,fontSize:11.5,color:C.muted,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                            {w?.pix_key
+                              ? <><span>🔑 {w.pix_key_type||"pix"}: <strong style={{color:C.navy}}>{w.pix_key}</strong></span></>
+                              : <span style={{color:C.red}}>⚠ Chave PIX não cadastrada</span>}
+                            {w?.telefone && <span>· 📞 {w.telefone}</span>}
+                          </div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{...H,fontSize:22,fontWeight:900,color:C.green,letterSpacing:-.5,lineHeight:1}}>R$ {g.total.toFixed(2).replace(".",",")}</div>
+                          <div style={{...B,fontSize:10.5,color:C.muted,marginTop:2}}>{g.items.length} turno{g.items.length>1?"s":""}</div>
+                        </div>
+                      </div>
+
+                      <div style={{display:"flex",flexDirection:"column",gap:5,padding:"10px 12px",background:C.bg,borderRadius:8,marginBottom:12}}>
+                        {g.items.map(a=>{
+                          const opp = a.opportunity;
+                          const spec = SPECS.find(x=>x.id===opp?.spec_id) || {label:opp?.custom_spec_label||"Função",icon:"⭐"};
+                          const dataLabel = opp?.data ? new Date(opp.data+"T00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "—";
+                          return (
+                            <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,...B,fontSize:12,color:C.sub,flexWrap:"wrap"}}>
+                              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                                <span>{spec.icon}</span>
+                                <span style={{fontWeight:600,color:C.navy}}>{spec.label}</span>
+                                <span>·</span>
+                                <span>{opp?.company?.nome_fant || opp?.company?.razao || "—"}</span>
+                                <span>·</span>
+                                <span>{dataLabel}</span>
+                                {a.horas_trabalhadas && <><span>·</span><span>{a.horas_trabalhadas}h</span></>}
+                              </div>
+                              <span style={{...H,fontSize:12,fontWeight:700,color:C.green,whiteSpace:"nowrap"}}>R$ {parseFloat(a.valor_calculado||0).toFixed(2).replace(".",",")}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <button disabled={isPaying || !w?.pix_key} onClick={()=>payAllForWorker(w?.id, g.items)} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:!w?.pix_key?C.muted:C.green,border:"none",borderRadius:9,padding:"11px 16px",cursor:isPaying||!w?.pix_key?"default":"pointer",opacity:isPaying?.6:1,width:"100%"}}>
+                        {isPaying ? "Marcando como pago…" : !w?.pix_key ? "Sem chave PIX cadastrada" : "✓ Marcar todos como pagos via PIX"}
+                      </button>
+                      <div style={{...B,fontSize:10.5,color:C.muted,marginTop:6,textAlign:"center",lineHeight:1.5}}>Faça o PIX manualmente no seu banco e clique acima pra confirmar.</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Histórico */}
+            {!payoutsLoading && paidPayouts.length>0 && (
+              <div>
+                <h3 style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:10}}>Últimos pagamentos confirmados</h3>
+                <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+                  {paidPayouts.slice(0,15).map((a,i)=>(
+                    <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:i<paidPayouts.slice(0,15).length-1?`1px solid ${C.border}`:"none",flexWrap:"wrap"}}>
+                      {a.worker?.foto_rosto ? <img src={a.worker.foto_rosto} alt="" style={{width:30,height:30,borderRadius:15,objectFit:"cover"}} /> : <div style={{width:30,height:30,borderRadius:15,background:C.greenBg,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{...H,fontSize:11,fontWeight:900,color:C.green}}>{a.worker?.nome?.[0]||"?"}</span></div>}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{...B,fontSize:12.5,fontWeight:600,color:C.navy}}>{a.worker?.nome||"Worker"}</div>
+                        <div style={{...B,fontSize:10.5,color:C.muted}}>{a.opportunity?.company?.nome_fant || a.opportunity?.company?.razao || "—"} · pago em {new Date(a.paid_at).toLocaleDateString("pt-BR")}</div>
+                      </div>
+                      <span style={{...H,fontSize:13,fontWeight:700,color:C.green,whiteSpace:"nowrap"}}>R$ {parseFloat(a.valor_calculado||0).toFixed(2).replace(".",",")}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {tab==="billing"&&(
           <div>
@@ -5306,6 +5523,13 @@ function WorkerShiftsTab({ worker, flash }) {
     no_show:           {label:"Faltou",       bg:C.redBg,   color:C.red,     border:C.redBorder},
   };
 
+  // Sprint 4 — cálculo de "a receber"
+  const aReceber  = list.filter(a => a.status==="completed" && !a.paid_at)
+                        .reduce((s,a)=>s + parseFloat(a.valor_calculado||0), 0);
+  const recebido  = list.filter(a => a.paid_at)
+                        .reduce((s,a)=>s + parseFloat(a.valor_calculado||0), 0);
+  const proxSexta = getNextFriday();
+
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
@@ -5315,6 +5539,25 @@ function WorkerShiftsTab({ worker, flash }) {
         </div>
         <button onClick={reload} disabled={loading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"7px 14px",cursor:loading?"default":"pointer",opacity:loading?.6:1}}>↻ Atualizar</button>
       </div>
+
+      {/* Card A RECEBER (Sprint 4) */}
+      {(aReceber>0 || recebido>0) && (
+        <div className="vorker-receber-card" style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12,marginBottom:14}}>
+          <div style={{background:`linear-gradient(135deg, ${C.green} 0%, #16A34A 100%)`,borderRadius:14,padding:"18px 20px",color:"#fff",boxShadow:"0 6px 20px rgba(22,163,74,.25)"}}>
+            <div style={{...B,fontSize:11,fontWeight:700,opacity:.9,letterSpacing:.4,textTransform:"uppercase",marginBottom:5}}>💰 A receber</div>
+            <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:8}}>
+              <span style={{...H,fontSize:32,fontWeight:900,letterSpacing:-1.2,lineHeight:1}}>R$ {aReceber.toFixed(2).replace(".",",")}</span>
+            </div>
+            <div style={{...B,fontSize:11.5,opacity:.9,lineHeight:1.5}}>📅 Próximo pagamento: <strong>sexta {proxSexta.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</strong></div>
+            <div style={{...B,fontSize:10.5,opacity:.75,marginTop:5}}>Vorker garante o pagamento mesmo se a empresa atrasar.</div>
+          </div>
+          <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"18px 20px"}}>
+            <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.4,textTransform:"uppercase",marginBottom:5}}>✓ Já recebido</div>
+            <div style={{...H,fontSize:24,fontWeight:900,color:C.navy,letterSpacing:-.8,lineHeight:1}}>R$ {recebido.toFixed(2).replace(".",",")}</div>
+            <div style={{...B,fontSize:10.5,color:C.muted,marginTop:5}}>Acumulado de pagamentos confirmados</div>
+          </div>
+        </div>
+      )}
 
       {loading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Carregando…</div>}
 
