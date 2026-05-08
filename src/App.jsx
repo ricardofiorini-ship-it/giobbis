@@ -1445,6 +1445,7 @@ function Landing({ onNav }) {
           .vorker-app-tabs-lbl{display:none!important}
           .vorker-myshift-row{grid-template-columns:1fr!important}
           .vorker-receber-card{grid-template-columns:1fr!important}
+          .vorker-shifts-hero{grid-template-columns:1fr!important;padding:20px!important;gap:14px!important}
           .vorker-worker-detail{grid-template-columns:1fr!important;gap:12px!important}
           .vorker-worker-rail{position:static!important}
           .vorker-worker-head{grid-template-columns:1fr!important;gap:14px!important}
@@ -3765,7 +3766,7 @@ function CompanyLogin({ onLogin, onRegister, onBack }) {
 // BUSCAR TALENTO
 // ═══════════════════════════════════════════════════════════════
 function TalentBrowser({ company, onLogout, onUpdateCompany }) {
-  const [tab,       setTab]       = useState("profile");
+  const [tab,       setTab]       = useState("shifts");
   const [subTab,    setSubTab]    = useState("visao-geral");
   const [editingCompany, setEditingCompany] = useState(false);
   const [editData,  setEditData]  = useState(null);
@@ -4042,8 +4043,8 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   );
 
   const TABS = [
-    {id:"talent",  icon:"🔍", label:"Buscar Talento"},
-    {id:"shifts",  icon:"📅", label:"Turnos"},
+    {id:"shifts",  icon:"⚡", label:"Solicitar Vorker"},
+    {id:"talent",  icon:"👥", label:"Vorkers"},
     {id:"profile", icon:"🏢", label:"Meu Perfil"},
   ];
 
@@ -4628,15 +4629,18 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
           </>}
         </>}
 
-        {/* ── TAB: TURNOS (publicar e gerenciar) ── */}
+        {/* ── TAB: SOLICITAR VORKER (publicar e gerenciar) ── */}
         {tab==="shifts"&&<>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:12,flexWrap:"wrap"}}>
+          {/* HERO CARD — "Chame um Vorker agora" */}
+          <div className="vorker-shifts-hero" style={{background:`linear-gradient(135deg, ${C.green} 0%, #16A34A 100%)`,borderRadius:16,padding:"28px 32px",marginBottom:18,color:"#fff",boxShadow:"0 10px 32px rgba(22,163,74,.25)",display:"grid",gridTemplateColumns:"1fr auto",gap:24,alignItems:"center"}}>
             <div>
-              <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>Turnos publicados</h2>
-              <div style={{...B,fontSize:13,color:C.muted}}>Gerencie os turnos abertos e veja quem aceitou.</div>
+              <div style={{...B,fontSize:11,fontWeight:700,opacity:.85,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>⚡ Solicitar Vorker</div>
+              <h2 style={{...H,fontSize:26,fontWeight:900,letterSpacing:-.5,marginBottom:6,lineHeight:1.15}}>Precisa de alguém pra um turno?</h2>
+              <div style={{...B,fontSize:14,opacity:.95,lineHeight:1.55}}>Publique a vaga e Vorkers próximos compatíveis vão receber em segundos. O primeiro a aceitar leva.</div>
             </div>
-            <button onClick={()=>setNewShiftOpen(true)} style={{...H,fontSize:13,fontWeight:800,background:C.green,color:"#fff",border:"none",borderRadius:9,padding:"11px 18px",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7}}>
-              <span style={{fontSize:14}}>+</span> Publicar novo turno
+            <button disabled={units.length===0} onClick={()=>setNewShiftOpen(true)}
+              style={{...H,fontSize:15,fontWeight:800,background:"#fff",color:C.green,border:"none",borderRadius:12,padding:"16px 28px",cursor:units.length===0?"default":"pointer",opacity:units.length===0?.5:1,whiteSpace:"nowrap",boxShadow:"0 6px 16px rgba(0,0,0,.15)",display:"inline-flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>+</span> Publicar turno
             </button>
           </div>
 
@@ -4646,14 +4650,42 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
             </div>
           )}
 
+          {/* Resumo numérico */}
+          {shifts.length>0 && (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10,marginBottom:18}}>
+              {(()=>{
+                const open      = shifts.filter(s=>s.status==="open"||s.status==="partial").length;
+                const filled    = shifts.filter(s=>s.status==="filled").length;
+                const concluded = shifts.filter(s=>s.status==="completed").length;
+                const cards = [
+                  {label:"Aguardando aceite",value:open,    color:C.green},
+                  {label:"Em andamento",      value:filled,  color:"#1D4ED8"},
+                  {label:"Concluídos",        value:concluded, color:C.muted},
+                ];
+                return cards.map(c=>(
+                  <div key={c.label} style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px"}}>
+                    <div style={{...B,fontSize:11,color:C.muted,marginBottom:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{c.label}</div>
+                    <div style={{...H,fontSize:22,fontWeight:900,color:c.color,letterSpacing:-.5,lineHeight:1}}>{c.value}</div>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+
+          {shifts.length>0 && (
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+              <h3 style={{...H,fontSize:16,fontWeight:800,color:C.navy,margin:0}}>Seus turnos</h3>
+              <button onClick={loadShifts} disabled={shiftsLoading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:7,padding:"6px 12px",cursor:shiftsLoading?"default":"pointer",opacity:shiftsLoading?.6:1}}>↻ Atualizar</button>
+            </div>
+          )}
+
           {shiftsLoading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Carregando turnos…</div>}
 
           {!shiftsLoading && shifts.length===0 && (
             <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:48,textAlign:"center"}}>
-              <div style={{fontSize:42,marginBottom:12}}>📅</div>
-              <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Nenhum turno publicado ainda</div>
-              <div style={{...B,fontSize:13,color:C.muted,marginBottom:16}}>Publique seu primeiro turno e os Vorkers próximos verão na hora.</div>
-              {units.length>0 && <button onClick={()=>setNewShiftOpen(true)} style={{...H,fontSize:13,fontWeight:800,background:C.green,color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",cursor:"pointer"}}>+ Publicar turno</button>}
+              <div style={{fontSize:42,marginBottom:12}}>⚡</div>
+              <div style={{...H,fontSize:16,fontWeight:700,color:C.navy,marginBottom:6}}>Você ainda não chamou nenhum Vorker</div>
+              <div style={{...B,fontSize:13,color:C.muted,marginBottom:16}}>Use o botão acima pra publicar uma vaga. Vorkers próximos compatíveis vão receber em segundos.</div>
             </div>
           )}
 
@@ -4662,11 +4694,11 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
               {shifts.map(s=>{
                 const spec = SPECS.find(x=>x.id===s.spec_id) || {icon:"⭐",label:s.custom_spec_label||"Função"};
                 const statusInfo = {
-                  open:      {label:"Aberto",     bg:C.greenBg, color:C.green,   border:C.greenBorder},
-                  partial:   {label:"Parcial",    bg:"#FEF3C7", color:"#92400E", border:"#FDE68A"},
-                  filled:    {label:"Completo",   bg:C.bg,      color:C.sub,     border:C.border},
-                  cancelled: {label:"Cancelado",  bg:C.redBg,   color:C.red,     border:C.redBorder},
-                  completed: {label:"Concluído",  bg:C.bg,      color:C.muted,   border:C.border},
+                  open:      {label:"⏳ Procurando Vorker",   bg:C.greenBg, color:C.green,   border:C.greenBorder, pulse:true},
+                  partial:   {label:"⏳ Faltam Vorkers",      bg:"#FEF3C7", color:"#92400E", border:"#FDE68A", pulse:true},
+                  filled:    {label:"✓ Vorker(s) confirmado(s)", bg:"#DBEAFE", color:"#1D4ED8", border:"#BFDBFE"},
+                  cancelled: {label:"Cancelado",                bg:C.redBg,   color:C.red,     border:C.redBorder},
+                  completed: {label:"Concluído",                bg:C.bg,      color:C.muted,   border:C.border},
                 }[s.status] || {label:s.status, bg:C.bg, color:C.muted, border:C.border};
                 const dataLabel = s.data ? new Date(s.data+"T00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "—";
                 const horaLabel = `${(s.hora_inicio||"").slice(0,5)}–${(s.hora_fim||"").slice(0,5)}`;
@@ -5462,12 +5494,19 @@ function WorkerVagasTab({ worker, setW, flash }) {
 
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+      {/* Header tipo Uber driver — chamados ativos */}
+      <div style={{background:list.length>0?C.greenBg:C.bg,border:`1.5px solid ${list.length>0?C.greenBorder:C.border}`,borderRadius:14,padding:"16px 22px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
         <div>
-          <h2 style={{...H,fontSize:20,fontWeight:900,color:C.navy,marginBottom:2}}>Vagas próximas</h2>
-          <div style={{...B,fontSize:12,color:C.muted}}>Turnos compatíveis com suas funções e experiência. Quem aceita primeiro leva.</div>
+          <div style={{...B,fontSize:11,fontWeight:700,color:list.length>0?C.green:C.muted,letterSpacing:.4,textTransform:"uppercase",marginBottom:4,display:"inline-flex",alignItems:"center",gap:6}}>
+            <span style={{width:8,height:8,borderRadius:4,background:list.length>0?C.green:C.muted,animation:list.length>0?"pulse 1.6s infinite":"none",display:"inline-block"}} />
+            {list.length>0 ? "Você está disponível" : "Sem chamados no momento"}
+          </div>
+          <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:2,lineHeight:1.15}}>
+            {list.length>0 ? `${list.length} chamado${list.length>1?"s":""} pra você` : "Aguardando chamados…"}
+          </h2>
+          <div style={{...B,fontSize:12,color:C.sub}}>Vagas compatíveis com suas funções. Quem aceita primeiro leva.</div>
         </div>
-        <button onClick={reload} disabled={loading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"7px 14px",cursor:loading?"default":"pointer",opacity:loading?.6:1}}>↻ Atualizar</button>
+        <button onClick={reload} disabled={loading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:"#fff",border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"8px 14px",cursor:loading?"default":"pointer",opacity:loading?.6:1}}>↻ Atualizar</button>
       </div>
 
       {loading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Buscando vagas…</div>}
@@ -5518,8 +5557,8 @@ function WorkerVagasTab({ worker, setW, flash }) {
                 {o.unit && <div style={{...B,fontSize:11,color:C.sub,marginBottom:10,display:"flex",alignItems:"center",gap:5}}><span>📍</span>{o.unit.bairro}, {o.unit.cidade}/{o.unit.estado}</div>}
                 {o.observacoes && <div style={{...B,fontSize:11,color:C.sub,padding:"6px 9px",background:C.bg,borderRadius:6,marginBottom:10,fontStyle:"italic"}}>"{o.observacoes}"</div>}
                 <button disabled={isAcc} onClick={()=>handleAccept(o)}
-                  style={{...H,fontSize:14,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:9,padding:"12px 14px",cursor:isAcc?"default":"pointer",opacity:isAcc?.6:1,marginTop:"auto"}}>
-                  {isAcc?"Aceitando…":"Aceitar turno"}
+                  style={{...H,fontSize:15,fontWeight:900,color:"#fff",background:`linear-gradient(135deg, ${C.green} 0%, #16A34A 100%)`,border:"none",borderRadius:10,padding:"14px 16px",cursor:isAcc?"default":"pointer",opacity:isAcc?.6:1,marginTop:"auto",boxShadow:"0 4px 12px rgba(22,163,74,.3)",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  {isAcc?"Aceitando…":<><span style={{fontSize:17}}>⚡</span> Aceitar turno</>}
                 </button>
                 <div style={{...B,fontSize:10,color:C.muted,textAlign:"center",marginTop:6}}>{o.vagas_disponiveis} de {o.vagas_total} vaga{o.vagas_total>1?"s":""} restante{o.vagas_disponiveis!==1?"s":""}</div>
               </div>
