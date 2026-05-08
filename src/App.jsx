@@ -5823,6 +5823,7 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
     if(section==="empresas")        data = {empresas_selected:[...(w.empresas_selected||[])], empresas_custom:[...(w.empresas_custom||[])]};
     if(section==="perfil")          data = {perfil_trabalho: JSON.parse(JSON.stringify(w.perfil_trabalho||{}))};
     if(section==="outros")          data = {pcd:!!w.pcd, pcd_tipo:w.pcd_tipo||"", trabalho_equipe:w.trabalho_equipe||"", atend_cliente:w.atend_cliente||"", tipo_trabalho:w.tipo_trabalho||""};
+    if(section==="pagamento")       data = {pix_key:w.pix_key||"", pix_key_type:w.pix_key_type||"cpf"};
     setD(data); setEditing(section); setEmpresaNew("");
   };
 
@@ -5950,6 +5951,11 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
       if(!w.trabalho_equipe) list.push("preferência de trabalho em equipe");
       if(!w.atend_cliente)   list.push("experiência com atendimento");
       if(!w.tipo_trabalho)   list.push("tipo de trabalho preferido");
+      return list;
+    }
+    if(section==="pagamento"){
+      const list=[];
+      if(!w.pix_key || w.pix_key.trim().length<4) list.push("sua chave PIX (sem ela o pagamento não roda)");
       return list;
     }
     return [];
@@ -6508,6 +6514,43 @@ function WorkerProfile({ worker, onLogout, onUpdate }) {
               <SelectField label="Você gosta de atender clientes?" value={d.atend_cliente} onChange={v=>setD({...d,atend_cliente:v})} options={["Gosto e tenho experiência","Gosto, mas tenho pouca experiência","Prefiro funções de bastidor"]} />
               <SelectField label="Onde você prefere trabalhar?" value={d.tipo_trabalho} onChange={v=>setD({...d,tipo_trabalho:v})} options={["Loja / atendimento","Estoque / depósito","Centro de distribuição","Dark store / delivery","Tanto faz"]} />
               {renderSaveCancel()}
+            </div>
+          )}
+        </div>
+
+        {/* PAGAMENTO — Chave PIX (Sprint 4) */}
+        <div style={sectionStyle}>
+          {renderSectionHeader({id:"pagamento", icon:"💰", color:"green", title:"Forma de pagamento", subtitle:"Chave PIX usada pelo Vorker pra te pagar todo ciclo"})}
+          {renderMissing("pagamento")}
+          {editing!=="pagamento" ? (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+              <WInfoLine icon="🔑" label="Tipo da chave" value={
+                w.pix_key_type==="cpf"?"CPF":w.pix_key_type==="email"?"E-mail":w.pix_key_type==="phone"?"Celular":w.pix_key_type==="random"?"Aleatória":""
+              } />
+              <WInfoLine icon="💳" label="Chave PIX" value={w.pix_key||""} />
+            </div>
+          ) : (
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:12,marginBottom:8}}>
+                <SelectField label="Tipo" value={d.pix_key_type} onChange={v=>{
+                  const upd = {...d, pix_key_type:v};
+                  // Pré-preenche se chave estiver vazia
+                  if(!d.pix_key?.trim()) {
+                    if(v==="cpf"   && w.cpf)      upd.pix_key = w.cpf;
+                    if(v==="email" && w.email)    upd.pix_key = w.email;
+                    if(v==="phone" && w.telefone) upd.pix_key = w.telefone;
+                  }
+                  setD(upd);
+                }} options={[
+                  {value:"cpf",   label:"CPF"},
+                  {value:"email", label:"E-mail"},
+                  {value:"phone", label:"Celular"},
+                  {value:"random",label:"Aleatória"},
+                ]} />
+                <Field label="Chave" placeholder={d.pix_key_type==="cpf"?"000.000.000-00":d.pix_key_type==="email"?"seu@email.com":d.pix_key_type==="phone"?"(11) 99999-9999":"chave aleatória do banco"} value={d.pix_key} onChange={v=>setD({...d,pix_key:v})} />
+              </div>
+              <div style={{...B,fontSize:11.5,color:C.muted,marginBottom:14,lineHeight:1.5}}>💡 Pagamentos toda sexta da semana seguinte ao trabalho realizado, garantidos pelo Vorker.</div>
+              {renderSaveCancel(!!(d.pix_key && d.pix_key.trim().length>=4))}
             </div>
           )}
         </div>
