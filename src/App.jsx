@@ -623,34 +623,57 @@ const listAvailableOpportunitiesForWorker = async (worker) => {
 };
 
 const acceptOpportunityByWorker = async (oppId, worker) => {
-  // Re-fetch p/ checar concorrência
-  const { data: opp, error: e0 } = await supabase.from("opportunities").select("*").eq("id",oppId).single();
-  if(e0) throw e0;
-  if(!opp || opp.status==="cancelled" || opp.status==="filled") throw new Error("Esta vaga não está mais disponível.");
-  if(opp.vagas_disponiveis<=0) throw new Error("Sem vagas restantes neste turno.");
-
-  const valor_calculado = parseFloat(opp.valor_bruto) * 0.75;
-  const taxa_vorker     = parseFloat(opp.valor_bruto) * 0.25;
-  const check_in_code   = String(Math.floor(1000 + Math.random()*9000));
-
-  const { data: assign, error: e1 } = await supabase.from("assignments").insert({
-    opportunity_id: oppId,
-    worker_id: worker.id,
-    status: "confirmed",
-    valor_calculado,
-    taxa_vorker,
-    check_in_code,
-    pix_key_snapshot: worker.pix_key || null,
-  }).select().single();
-  if(e1) {
-    if(e1.code==="23505") throw new Error("Você já aceitou este turno.");
-    throw e1;
+  // BUG 4: suspensão server-side (defesa em camadas — UI já bloqueia, mas reforço aqui)
+  if(worker.suspended_until && new Date(worker.suspended_until) > new Date()) {
+    throw new Error("Sua conta está suspensa até " + new Date(worker.suspended_until).toLocaleDateString("pt-BR") + ".");
   }
 
-  const newVagas = (opp.vagas_disponiveis||1) - 1;
-  const newStatus = newVagas<=0 ? "filled" : "partial";
-  await supabase.from("opportunities").update({ vagas_disponiveis: newVagas, status: newStatus }).eq("id", oppId);
-  return assign;
+  const check_in_code = String(Math.floor(1000 + Math.random()*9000));
+
+  // BUG 6: aceite atômico via Postgres function (race-safe — SELECT FOR UPDATE)
+  const { data: assignmentId, error } = await supabase.rpc("accept_opportunity", {
+    p_opp_id: oppId,
+    p_worker_id: worker.id,
+    p_check_in_code: check_in_code,
+    p_pix_key_snapshot: worker.pix_key || null,
+  });
+
+  if(!error) return { id: assignmentId, check_in_code };
+
+  // Erros conhecidos da função
+  const msg = error.message || "";
+  if(msg.includes("opportunity_unavailable")) throw new Error("Esta vaga não está mais disponível.");
+  if(msg.includes("no_vagas_remaining"))      throw new Error("Sem vagas restantes neste turno.");
+  if(msg.includes("opportunity_not_found"))   throw new Error("Vaga não encontrada.");
+  if(error.code === "23505")                  throw new Error("Você já aceitou este turno.");
+
+  // Fallback caso a função RPC ainda não foi criada no Supabase (não atômico)
+  if(error.code === "PGRST202" || msg.includes("Could not find the function") || msg.includes("schema cache")) {
+    console.warn("[accept_opportunity] RPC não encontrada, usando fallback não-atômico. Rode o SQL da função no Supabase.");
+    const { data: opp, error: e0 } = await supabase.from("opportunities").select("*").eq("id",oppId).single();
+    if(e0) throw e0;
+    if(!opp || opp.status==="cancelled" || opp.status==="filled") throw new Error("Esta vaga não está mais disponível.");
+    if(opp.vagas_disponiveis<=0) throw new Error("Sem vagas restantes neste turno.");
+    const valor_calculado = Math.round(parseFloat(opp.valor_bruto) * 0.75 * 100)/100;
+    const taxa_vorker     = Math.round(parseFloat(opp.valor_bruto) * 0.25 * 100)/100;
+    const { data: assign, error: e1 } = await supabase.from("assignments").insert({
+      opportunity_id: oppId, worker_id: worker.id, status:"confirmed",
+      valor_calculado, taxa_vorker, check_in_code,
+      pix_key_snapshot: worker.pix_key || null,
+    }).select().single();
+    if(e1) {
+      if(e1.code==="23505") throw new Error("Você já aceitou este turno.");
+      throw e1;
+    }
+    const newVagas = (opp.vagas_disponiveis||1) - 1;
+    await supabase.from("opportunities").update({
+      vagas_disponiveis: newVagas,
+      status: newVagas<=0 ? "filled" : "partial",
+    }).eq("id", oppId);
+    return assign;
+  }
+
+  throw error;
 };
 
 const listAssignmentsByWorker = async (workerId) => {
@@ -738,6 +761,27 @@ const submitRating = async ({ assignmentId, rater, stars, comment, visibility="p
         const arr = (rs||[]);
         const avg = arr.length>0 ? Math.round((arr.reduce((s,r)=>s+r.stars,0)/arr.length)*100)/100 : null;
         await supabase.from("workers").update({ rating_avg: avg, total_atendimentos: arr.length }).eq("id", workerId);
+      }
+    }
+  }
+  // BUG 5: quando worker avalia, atualiza rating_avg da empresa também
+  if(rater === "worker") {
+    const { data: a } = await supabase.from("assignments")
+      .select("opportunity:opportunities(company_id)")
+      .eq("id", assignmentId).single();
+    const companyId = a?.opportunity?.company_id;
+    if(companyId) {
+      const { data: opps } = await supabase.from("opportunities").select("id").eq("company_id", companyId);
+      const oppIds = (opps||[]).map(o=>o.id);
+      if(oppIds.length>0) {
+        const { data: assigns } = await supabase.from("assignments").select("id").in("opportunity_id", oppIds);
+        const assignIds = (assigns||[]).map(x=>x.id);
+        if(assignIds.length>0) {
+          const { data: rs } = await supabase.from("ratings").select("stars").in("assignment_id", assignIds).eq("rater","worker");
+          const arr = (rs||[]);
+          const avg = arr.length>0 ? Math.round((arr.reduce((s,r)=>s+r.stars,0)/arr.length)*100)/100 : null;
+          await supabase.from("companies").update({ rating_avg: avg, total_assignments: assignIds.length }).eq("id", companyId);
+        }
       }
     }
   }
