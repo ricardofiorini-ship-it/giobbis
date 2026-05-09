@@ -542,9 +542,41 @@ const updateWorkerDB  = async (id, changes) => { const {error}=await supabase.fr
 
 // ─── OPPORTUNITIES (Sprint 2 — turnos publicados) ───────────────
 const createOpportunity = async (data) => {
-  const { data: opp, error } = await supabase.from("opportunities").insert(data).select().single();
-  if(error) throw error;
-  return opp;
+  // Sprint 5: cria via RPC que valida saldo + reserva atomicamente
+  const { data: oppId, error } = await supabase.rpc("create_opportunity_with_reserve", {
+    p_company_id:  data.company_id,
+    p_unit_id:     data.unit_id,
+    p_spec_id:     data.spec_id,
+    p_data:        data.data,
+    p_hora_inicio: data.hora_inicio,
+    p_hora_fim:    data.hora_fim,
+    p_duracao:     data.duracao_horas || null,
+    p_valor_bruto: data.valor_bruto,
+    p_vagas:       data.vagas_total,
+    p_exp_minima:  data.exp_minima || 0,
+    p_observacoes: data.observacoes || null,
+  });
+  if(!error) return { id: oppId };
+
+  const msg = error.message || "";
+  if(msg.startsWith("insufficient_balance")) {
+    const need = parseFloat((msg.split(":")[1]||"0").replace(",","."));
+    const err = new Error("Saldo insuficiente. Adicione R$ " + need.toFixed(2).replace(".",",") + " pra publicar este turno.");
+    err.code = "INSUFFICIENT_BALANCE";
+    err.faltam = need;
+    throw err;
+  }
+  if(msg.includes("invalid_input"))     throw new Error("Dados inválidos no formulário.");
+  if(msg.includes("company_not_found")) throw new Error("Empresa não encontrada.");
+
+  // Fallback se o user ainda não rodou o SQL do Sprint 5 (insert direto, sem reserva)
+  if(error.code==="PGRST202" || msg.includes("Could not find the function") || msg.includes("schema cache")) {
+    console.warn("[create_opportunity_with_reserve] RPC não encontrada, fallback sem reserva. Rode o SQL do Sprint 5.");
+    const { data: opp, error: ef } = await supabase.from("opportunities").insert(data).select().single();
+    if(ef) throw ef;
+    return opp;
+  }
+  throw error;
 };
 const listOpportunitiesByCompany = async (companyId) => {
   const { data, error } = await supabase
@@ -557,6 +589,25 @@ const listOpportunitiesByCompany = async (companyId) => {
   return data || [];
 };
 const cancelOpportunity = async (oppId) => {
+  // Sprint 5: tenta RPC atômica que cascateia + multa + refund de saldo
+  const { data: result, error: rpcErr } = await supabase.rpc("cancel_opportunity_with_refund", {
+    p_opportunity_id: oppId,
+  });
+  if(!rpcErr) {
+    return {
+      cascaded: result?.cascaded || 0,
+      multa:    parseFloat(result?.multa_per_worker || 0),
+      refund:   parseFloat(result?.refund || 0),
+    };
+  }
+  const rpcMsg = rpcErr.message || "";
+  if(rpcMsg.includes("opportunity_not_found")) throw new Error("Turno não encontrado.");
+  // Se RPC ainda não existe no Supabase, cai pro fallback (cascade sem refund de saldo)
+  if(rpcErr.code !== "PGRST202" && !rpcMsg.includes("Could not find the function") && !rpcMsg.includes("schema cache")) {
+    throw rpcErr;
+  }
+  console.warn("[cancel_opportunity_with_refund] RPC não encontrada, fallback sem refund de saldo.");
+
   // Busca a opp pra calcular multa baseada na janela
   const { data: opp, error: e0 } = await supabase.from("opportunities").select("*").eq("id", oppId).single();
   if(e0) throw e0;
@@ -748,11 +799,16 @@ const submitRating = async ({ assignmentId, rater, stars, comment, visibility="p
     if(e1.code==="23505") throw new Error("Você já avaliou este turno.");
     throw e1;
   }
-  // Quando empresa avalia: marca assignment como completed + atualiza rating_avg do worker
+  // Quando empresa avalia: marca assignment como completed + atualiza rating_avg do worker + consome saldo da empresa
   if(rater === "company") {
     const { data: a } = await supabase.from("assignments").select("worker_id").eq("id", assignmentId).single();
     const workerId = a?.worker_id;
     await supabase.from("assignments").update({ status:"completed" }).eq("id", assignmentId);
+    // Sprint 5: consome saldo_reservado da empresa (turno foi pago do saldo pré-pago)
+    {
+      const { error: cErr } = await supabase.rpc("consume_for_assignment", { p_assignment_id: assignmentId });
+      if(cErr) console.warn("[consume_for_assignment] falhou:", cErr.message||cErr);
+    }
     if(workerId) {
       const { data: ids } = await supabase.from("assignments").select("id").eq("worker_id", workerId);
       const assignIds = (ids||[]).map(x=>x.id);
@@ -785,6 +841,36 @@ const submitRating = async ({ assignmentId, rater, stars, comment, visibility="p
       }
     }
   }
+};
+
+// Sprint 5 — Carteira da empresa
+const getCompanyWallet = async (companyId) => {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("saldo, saldo_reservado")
+    .eq("id", companyId)
+    .single();
+  if(error) throw error;
+  return { saldo: parseFloat(data?.saldo||0), saldo_reservado: parseFloat(data?.saldo_reservado||0) };
+};
+const listCompanyTransactions = async (companyId, limit=100) => {
+  const { data, error } = await supabase
+    .from("company_transactions")
+    .select("*, opportunity:opportunities(spec_id,custom_spec_label,data,hora_inicio)")
+    .eq("company_id", companyId)
+    .order("created_at",{ascending:false})
+    .limit(limit);
+  if(error) throw error;
+  return data || [];
+};
+const addCompanyCreditByAdmin = async (companyId, amount, adminNote="") => {
+  const { data, error } = await supabase.rpc("add_company_credit", {
+    p_company_id: companyId,
+    p_amount: amount,
+    p_admin_note: adminNote,
+  });
+  if(error) throw error;
+  return parseFloat(data);
 };
 
 // Sprint 4 — Pagamento
@@ -2737,6 +2823,24 @@ function AdminPanel({ onLogout }) {
   const [saving,  setSaving]  = useState(false);
   const [search,  setSearch]  = useState("");
   const [adminNotes, setAdminNotes] = useState("");
+  // Sprint 5 — recarga manual de saldo
+  const [creditCompanyModal, setCreditCompanyModal] = useState(null); // {company} | null
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditNote, setCreditNote] = useState("");
+  const [creditLoading, setCreditLoading] = useState(false);
+  const submitCreditCompany = async () => {
+    const amt = parseFloat(creditAmount.replace(",","."));
+    if(!amt || amt<=0) { alert("Informe um valor válido."); return; }
+    setCreditLoading(true);
+    try {
+      const newSaldo = await addCompanyCreditByAdmin(creditCompanyModal.company.id, amt, creditNote||null);
+      // Atualiza estado local
+      setCompanies(cs => cs.map(c => c.id===creditCompanyModal.company.id ? {...c, saldo: newSaldo} : c));
+      setSelCompany(s => s?.id===creditCompanyModal.company.id ? {...s, saldo: newSaldo} : s);
+      setCreditAmount(""); setCreditNote(""); setCreditCompanyModal(null);
+    } catch(e) { alert("Erro: "+(e.message||e)); }
+    finally { setCreditLoading(false); }
+  };
   useEffect(()=>{
     if(selWorker?.id){
       try { setAdminNotes(localStorage.getItem(`vorker:notes:${selWorker.id}`) || ""); } catch { setAdminNotes(""); }
@@ -2889,6 +2993,25 @@ function AdminPanel({ onLogout }) {
     <div style={{display:"grid",gridTemplateColumns:"220px 1fr",minHeight:"calc(100vh - 60px)"}}>
       {rejectModal&&<RejectModal />}
       {deleteModal&&<AdminDeleteModal />}
+      {creditCompanyModal && (
+        <div onClick={()=>!creditLoading&&setCreditCompanyModal(null)} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:26,maxWidth:440,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+            <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy,marginBottom:6}}>+ Adicionar saldo</h3>
+            <p style={{...B,fontSize:12.5,color:C.sub,marginBottom:14}}>Empresa: <strong style={{color:C.navy}}>{creditCompanyModal.company.nome_fant||creditCompanyModal.company.razao}</strong></p>
+            <Field label="Valor a creditar (R$)" type="number" placeholder="500.00" required value={creditAmount} onChange={setCreditAmount} />
+            <div style={{marginBottom:14}}>
+              <label style={{...B,fontSize:12,fontWeight:600,color:C.sub,display:"block",marginBottom:6}}>Observação interna (opcional)</label>
+              <textarea value={creditNote} onChange={e=>setCreditNote(e.target.value)} placeholder="Ex: comprovante recebido por e-mail em DD/MM, valor batendo, conferido por X..."
+                style={{width:"100%",minHeight:70,padding:"10px 12px",borderRadius:8,border:`1.5px solid ${C.border2}`,...B,fontSize:13,outline:"none",resize:"vertical",fontFamily:"inherit"}} />
+            </div>
+            <div style={{...B,fontSize:11,color:C.sub,padding:"10px 12px",background:C.bg,borderRadius:7,marginBottom:14,lineHeight:1.5}}>💡 Confirme antes que o PIX caiu na conta. Esse crédito é refletido imediatamente no saldo da empresa.</div>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button disabled={creditLoading} onClick={()=>setCreditCompanyModal(null)} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:creditLoading?"default":"pointer",opacity:creditLoading?.6:1}}>Cancelar</button>
+              <button disabled={creditLoading} onClick={submitCreditCompany} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:8,padding:"10px 18px",cursor:creditLoading?"default":"pointer",opacity:creditLoading?.6:1}}>{creditLoading?"Creditando…":"+ Adicionar saldo"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       <aside style={{background:C.white,borderRight:`1px solid ${C.border}`,padding:"20px 0",position:"sticky",top:60,height:"calc(100vh - 60px)",overflowY:"auto"}}>
         <div style={{padding:"0 16px 18px",borderBottom:`1px solid ${C.border}`,marginBottom:10}}>
           <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Painel Interno</div>
@@ -3018,6 +3141,14 @@ function AdminPanel({ onLogout }) {
                   </div>
                 </div>)}
                 {selCompany.status==="approved"&&<>
+                  {/* Saldo da empresa (Sprint 5) */}
+                  <div style={{background:`linear-gradient(135deg, ${C.green} 0%, #16A34A 100%)`,borderRadius:12,padding:20,color:"#fff",boxShadow:"0 6px 18px rgba(22,163,74,.2)"}}>
+                    <div style={{...B,fontSize:11,fontWeight:700,opacity:.9,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>💰 Saldo</div>
+                    <div style={{...H,fontSize:24,fontWeight:900,letterSpacing:-.6,lineHeight:1,marginBottom:4}}>R$ {parseFloat(selCompany.saldo||0).toFixed(2).replace(".",",")}</div>
+                    <div style={{...B,fontSize:11,opacity:.85}}>Reservado: R$ {parseFloat(selCompany.saldo_reservado||0).toFixed(2).replace(".",",")}</div>
+                    <button onClick={()=>setCreditCompanyModal({company:selCompany})} style={{marginTop:12,width:"100%",...H,fontSize:12,fontWeight:800,color:C.green,background:"#fff",border:"none",borderRadius:7,padding:"9px 12px",cursor:"pointer"}}>+ Adicionar saldo</button>
+                  </div>
+
                   <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:20}}>
                     <div style={{...H,fontSize:14,fontWeight:700,color:C.navy,marginBottom:10}}>Plano</div>
                     {PLANS.map(p=>(
@@ -3799,6 +3930,27 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const fDist  = useState(0);       const [fDistV,  setFDist]  = [fDist[0],  fDist[1]];
 
   // Sprint 2.1 — Turnos (opportunities) lado empresa
+  // Sprint 5 — Carteira da empresa
+  const [wallet, setWallet] = useState({ saldo:0, saldo_reservado:0 });
+  const [walletTx, setWalletTx] = useState([]);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [creditModal, setCreditModal] = useState(false);
+
+  const reloadWallet = async () => {
+    if(!company?.id) return;
+    setWalletLoading(true);
+    try {
+      const [w, tx] = await Promise.all([
+        getCompanyWallet(company.id),
+        listCompanyTransactions(company.id, 100),
+      ]);
+      setWallet(w);
+      setWalletTx(tx);
+    } catch(e) { console.warn("wallet load",e); }
+    finally { setWalletLoading(false); }
+  };
+  useEffect(()=>{ if(tab==="shifts" || tab==="wallet") reloadWallet(); /* eslint-disable-line */ },[tab]);
+
   const [shifts, setShifts] = useState([]);
   const [shiftsLoading, setShiftsLoading] = useState(false);
   const [newShiftOpen, setNewShiftOpen] = useState(false);
@@ -3823,6 +3975,12 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
     if(f.hora_fim <= f.hora_inicio) { alert("A hora final precisa ser maior que a inicial."); return; }
     const today = new Date().toISOString().slice(0,10);
     if(f.data < today) { alert("Data não pode ser no passado."); return; }
+    // Sprint 5: validação client-side de saldo
+    const totalNeeded = parseFloat(f.valor) * parseInt(f.vagas);
+    if(wallet.saldo < totalNeeded) {
+      alert(`Saldo insuficiente. Você tem R$ ${wallet.saldo.toFixed(2).replace(".",",")} disponível, e este turno precisa de R$ ${totalNeeded.toFixed(2).replace(".",",")}. Adicione saldo na aba Carteira.`);
+      return;
+    }
     setSavingShift(true);
     try {
       const [hi,mi] = f.hora_inicio.split(":").map(Number);
@@ -3845,8 +4003,14 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
       });
       setShiftForm(emptyShiftForm);
       setNewShiftOpen(false);
-      await loadShifts();
-    } catch(e) { alert("Erro ao publicar turno: "+(e.message||e)); }
+      await Promise.all([loadShifts(), reloadWallet()]);
+    } catch(e) {
+      if(e.code === "INSUFFICIENT_BALANCE") {
+        alert(e.message + "\nAdicione saldo na aba Carteira.");
+      } else {
+        alert("Erro ao publicar turno: "+(e.message||e));
+      }
+    }
     finally { setSavingShift(false); }
   };
 
@@ -4045,6 +4209,7 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
   const TABS = [
     {id:"shifts",  icon:"⚡", label:"Solicitar Vorker"},
     {id:"talent",  icon:"👥", label:"Vorkers"},
+    {id:"wallet",  icon:"💰", label:"Carteira"},
     {id:"profile", icon:"🏢", label:"Meu Perfil"},
   ];
 
@@ -4631,6 +4796,24 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
 
         {/* ── TAB: SOLICITAR VORKER (publicar e gerenciar) ── */}
         {tab==="shifts"&&<>
+          {/* Mini banner de saldo (Sprint 5) */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,padding:"12px 18px",background:wallet.saldo<=0?"#FEF3C7":C.greenBg+"60",border:`1px solid ${wallet.saldo<=0?"#FDE68A":C.greenBorder}`,borderRadius:10,marginBottom:12,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+              <span style={{fontSize:18}}>💰</span>
+              <div>
+                <div style={{...B,fontSize:11,fontWeight:600,color:C.muted,marginBottom:2}}>Saldo disponível</div>
+                <div style={{...H,fontSize:18,fontWeight:900,color:wallet.saldo<=0?"#92400E":C.green,letterSpacing:-.3,lineHeight:1}}>R$ {wallet.saldo.toFixed(2).replace(".",",")}</div>
+              </div>
+              {wallet.saldo_reservado>0 && (
+                <div>
+                  <div style={{...B,fontSize:11,fontWeight:600,color:C.muted,marginBottom:2}}>Reservado em turnos</div>
+                  <div style={{...H,fontSize:14,fontWeight:700,color:C.sub,lineHeight:1}}>R$ {wallet.saldo_reservado.toFixed(2).replace(".",",")}</div>
+                </div>
+              )}
+            </div>
+            <button onClick={()=>setTab("wallet")} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:"#fff",border:`1px solid ${C.greenBorder}`,borderRadius:7,padding:"8px 14px",cursor:"pointer"}}>+ Adicionar saldo</button>
+          </div>
+
           {/* HERO CARD — "Chame um Vorker agora" */}
           <div className="vorker-shifts-hero" style={{background:`linear-gradient(135deg, ${C.green} 0%, #16A34A 100%)`,borderRadius:16,padding:"28px 32px",marginBottom:18,color:"#fff",boxShadow:"0 10px 32px rgba(22,163,74,.25)",display:"grid",gridTemplateColumns:"1fr auto",gap:24,alignItems:"center"}}>
             <div>
@@ -4893,6 +5076,109 @@ function TalentBrowser({ company, onLogout, onUpdateCompany }) {
                   <button disabled={rateLoading} onClick={()=>setRateAssignment(null)} style={{...H,fontSize:13,fontWeight:600,color:C.sub,background:"transparent",border:`1.5px solid ${C.border2}`,borderRadius:8,padding:"10px 18px",cursor:rateLoading?"default":"pointer",opacity:rateLoading?.6:1}}>Cancelar</button>
                   <button disabled={rateLoading} onClick={submitRateWorker} style={{...H,fontSize:13,fontWeight:800,color:"#fff",background:"#92400E",border:"none",borderRadius:8,padding:"10px 18px",cursor:rateLoading?"default":"pointer",opacity:rateLoading?.6:1}}>{rateLoading?"Enviando…":"Enviar avaliação"}</button>
                 </div>
+              </div>
+            </div>
+          )}
+        </>}
+
+        {/* ── TAB: CARTEIRA — Sprint 5 ── */}
+        {tab==="wallet"&&<>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,gap:10,flexWrap:"wrap"}}>
+            <div>
+              <h2 style={{...H,fontSize:22,fontWeight:900,color:C.navy,marginBottom:2}}>Carteira da empresa</h2>
+              <div style={{...B,fontSize:13,color:C.muted}}>Saldo pré-pago usado pra publicar turnos. Vorker garante o pagamento ao trabalhador.</div>
+            </div>
+            <button onClick={reloadWallet} disabled={walletLoading} style={{...H,fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8,padding:"7px 14px",cursor:walletLoading?"default":"pointer",opacity:walletLoading?.6:1}}>↻ Atualizar</button>
+          </div>
+
+          {/* Cards de saldo */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:18}}>
+            <div style={{background:`linear-gradient(135deg, ${C.green} 0%, #16A34A 100%)`,borderRadius:14,padding:"20px 24px",color:"#fff",boxShadow:"0 8px 24px rgba(22,163,74,.25)"}}>
+              <div style={{...B,fontSize:11,fontWeight:700,opacity:.9,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Saldo disponível</div>
+              <div style={{...H,fontSize:30,fontWeight:900,letterSpacing:-1.2,lineHeight:1}}>R$ {wallet.saldo.toFixed(2).replace(".",",")}</div>
+              <div style={{...B,fontSize:11,opacity:.85,marginTop:6}}>Pode usar pra novos turnos</div>
+            </div>
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"20px 24px"}}>
+              <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Reservado em turnos</div>
+              <div style={{...H,fontSize:30,fontWeight:900,color:C.navy,letterSpacing:-1.2,lineHeight:1}}>R$ {wallet.saldo_reservado.toFixed(2).replace(".",",")}</div>
+              <div style={{...B,fontSize:11,color:C.muted,marginTop:6}}>Em turnos abertos ou em andamento</div>
+            </div>
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:14,padding:"20px 24px"}}>
+              <div style={{...B,fontSize:11,fontWeight:700,color:C.muted,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Saldo total</div>
+              <div style={{...H,fontSize:30,fontWeight:900,color:C.navy,letterSpacing:-1.2,lineHeight:1}}>R$ {(wallet.saldo+wallet.saldo_reservado).toFixed(2).replace(".",",")}</div>
+              <div style={{...B,fontSize:11,color:C.muted,marginTop:6}}>Disponível + reservado</div>
+            </div>
+          </div>
+
+          {/* CTA recarga */}
+          <div style={{background:C.white,border:`2px solid ${C.greenBorder}`,borderRadius:14,padding:24,marginBottom:18}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+              <div>
+                <div style={{...H,fontSize:16,fontWeight:800,color:C.navy,marginBottom:4}}>+ Adicionar saldo</div>
+                <div style={{...B,fontSize:13,color:C.sub,lineHeight:1.55}}>Recarga via PIX. A equipe Vorker confirma em até 1 hora útil.</div>
+              </div>
+              <button onClick={()=>setCreditModal(true)} style={{...H,fontSize:14,fontWeight:800,color:"#fff",background:C.green,border:"none",borderRadius:9,padding:"12px 22px",cursor:"pointer"}}>Solicitar recarga</button>
+            </div>
+          </div>
+
+          {/* Extrato */}
+          <h3 style={{...H,fontSize:15,fontWeight:800,color:C.navy,marginBottom:10}}>Extrato</h3>
+          {walletLoading && <div style={{...B,fontSize:13,color:C.muted,padding:24,textAlign:"center"}}>Carregando…</div>}
+          {!walletLoading && walletTx.length===0 && (
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,padding:32,textAlign:"center"}}>
+              <div style={{...B,fontSize:13,color:C.muted}}>Sem movimentações ainda. Solicite a primeira recarga acima.</div>
+            </div>
+          )}
+          {!walletLoading && walletTx.length>0 && (
+            <div style={{background:C.white,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+              {walletTx.map((t,i)=>{
+                const tipoInfo = {
+                  credit:     {label:"Recarga",       color:C.green,   bg:C.greenBg, icon:"+"},
+                  reserve:    {label:"Reserva",       color:"#92400E", bg:"#FEF3C7", icon:"⏳"},
+                  consume:    {label:"Pago ao Vorker",color:"#1D4ED8", bg:"#DBEAFE", icon:"→"},
+                  refund:     {label:"Reembolso",     color:C.green,   bg:C.greenBg, icon:"+"},
+                  multa:      {label:"Multa cancel.", color:C.red,     bg:C.redBg,   icon:"⚠"},
+                  withdrawal: {label:"Saque",         color:C.muted,   bg:C.bg,      icon:"−"},
+                }[t.tipo] || {label:t.tipo,color:C.muted,bg:C.bg,icon:"·"};
+                const valor = parseFloat(t.valor);
+                const isPositive = valor > 0;
+                return (
+                  <div key={t.id} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 18px",borderBottom:i<walletTx.length-1?`1px solid ${C.border}`:"none"}}>
+                    <div style={{width:32,height:32,borderRadius:8,background:tipoInfo.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,...H,fontSize:14,fontWeight:800,color:tipoInfo.color}}>{tipoInfo.icon}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{...H,fontSize:13,fontWeight:700,color:C.navy}}>{tipoInfo.label}</div>
+                      <div style={{...B,fontSize:11,color:C.muted}}>{t.description||"—"} · {new Date(t.created_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{...H,fontSize:14,fontWeight:800,color:isPositive?C.green:C.red,whiteSpace:"nowrap"}}>{isPositive?"+":""}R$ {Math.abs(valor).toFixed(2).replace(".",",")}</div>
+                      {t.saldo_apos!=null && <div style={{...B,fontSize:10,color:C.muted}}>saldo: R$ {parseFloat(t.saldo_apos).toFixed(2).replace(".",",")}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Modal: solicitar recarga (informativo) */}
+          {creditModal && (
+            <div onClick={()=>setCreditModal(false)} style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+              <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:26,maxWidth:480,width:"100%",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                  <h3 style={{...H,fontSize:18,fontWeight:900,color:C.navy}}>+ Solicitar recarga via PIX</h3>
+                  <button onClick={()=>setCreditModal(false)} style={{background:"none",border:"none",fontSize:22,color:C.muted,cursor:"pointer",lineHeight:1}}>×</button>
+                </div>
+                <div style={{padding:"14px 16px",background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:9,marginBottom:14}}>
+                  <div style={{...B,fontSize:11,fontWeight:600,color:C.green,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Chave PIX da Vorker</div>
+                  <div style={{...H,fontSize:15,fontWeight:800,color:C.navy,fontFamily:"monospace"}}>contato@vorker.com</div>
+                  <div style={{...B,fontSize:11,color:C.sub,marginTop:6,lineHeight:1.5}}>Faça o PIX no valor desejado e envie o comprovante por WhatsApp ou e-mail pra equipe Vorker. A recarga é confirmada em até 1 hora útil.</div>
+                </div>
+                <div style={{...B,fontSize:12,color:C.muted,lineHeight:1.6,marginBottom:14}}>
+                  Identificação no PIX: empresa <strong style={{color:C.navy}}>{company.nome_fant||company.razao}</strong> · CNPJ <strong style={{color:C.navy,fontFamily:"monospace"}}>{company.cnpj}</strong>
+                </div>
+                <div style={{...B,fontSize:11.5,color:C.amber,padding:"10px 14px",background:C.amberBg,border:`1px solid ${C.amberBorder}`,borderRadius:8,marginBottom:14}}>
+                  ⚠ Em breve: recarga automática via gateway (Asaas / Stark). Por enquanto, processo manual.
+                </div>
+                <button onClick={()=>setCreditModal(false)} style={{...H,fontSize:13,fontWeight:700,color:"#fff",background:C.green,border:"none",borderRadius:8,padding:"11px 18px",cursor:"pointer",width:"100%"}}>Entendi</button>
               </div>
             </div>
           )}
